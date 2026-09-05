@@ -1,0 +1,19 @@
+# --- Alma : dependances du mode VOIX --------------------------------------
+# A installer depuis WINDOWS (pas depuis WSL : sous Linux il n y a ni micro
+# Windows, ni controle du volume, ni ouverture d applications) :
+#     pip install -r requirements-voice.txt
+#
+# edge-tts : voix feminine NEURONALE, tres naturelle. Gratuite, SANS cle API
+#   ni compte ; necessite une connexion internet. Lecture audio via MCI
+#   (inclus dans Windows), donc aucune bibliotheque audio supplementaire.
+# pyttsx3 : voix locale SAPI5, repli automatique quand edge-tts est injoignable.
+#   100% hors ligne, mais plus robotique.
+# SpeechRecognition : reconnaissance vocale ; le moteur Google utilise ici est
+#   gratuit et ne demande AUCUNE cle API.
+# PyAudio : capture micro (roue precompilee sous Windows, aucune compilation).
+
+edge-tts>=6.1
+pyttsx3>=2.90
+SpeechRecognition>=3.10
+PyAudio>=0.2.14
+# vosk>=0.3.45         # decommentez pour la reconnaissance 100% hors ligne

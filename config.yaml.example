@@ -1,0 +1,135 @@
+# ---------------------------------------------------------------------------
+# Configuration de Alma
+#
+# Ce fichier est FACULTATIF : sans lui, Alma utilise ses valeurs par defaut.
+# Pour personnaliser : copiez-le en « config.yaml » et ne gardez que les
+# sections que vous voulez changer (la fusion est recursive).
+# ---------------------------------------------------------------------------
+
+general:
+  assistant_name: Alma
+  user_name: ""              # votre prenom, utilise dans les salutations
+  language: fr               # fr ou en
+  wake_words:                # prefixes ignores en debut de phrase
+    - alma
+    - ok alma
+    - hey alma
+  confirm_dangerous_actions: true   # NE PAS desactiver a la legere
+
+voice:
+  enabled: false             # false = mode texte (defaut). true = micro actif
+  speak_responses: true      # lire les reponses a voix haute
+  rate: 175                  # vitesse de la voix
+  volume: 1.0
+  voice_id: ""               # « python main.py --list-voices » pour les lister
+  stt_engine: google         # "google" (gratuit, en ligne) ou "vosk" (hors ligne)
+  stt_language: fr-FR
+  vosk_model_path: ""        # ex: models/vosk-model-small-fr-0.22
+  energy_threshold: 300      # sensibilite du micro
+  pause_threshold: 0.8
+  timeout: 6                 # secondes d attente avant d abandonner l ecoute
+  phrase_time_limit: 12
+
+paths:
+  notes: data/notes.json
+  reminders: data/reminders.json
+  history: data/history.json
+  screenshots: screenshots
+  music: ""                  # vide = dossier Musique de Windows
+
+weather:
+  default_city: Bruxelles    # ville utilisee si vous n en precisez pas
+
+notifications:
+  sound: true                # bip a l echeance des rappels
+  popup: true                # fenetre de notification Windows
+
+# ---------------------------------------------------------------------------
+# Fallback IA - DESACTIVE PAR DEFAUT.
+#
+# Tant que `enabled` vaut false : aucun appel reseau, aucun sous-processus,
+# aucun cout. Les demandes non reconnues recoivent un message poli.
+#
+# Quand vous l activerez, Alma transmettra la demande non reconnue au CLI
+# Claude Code deja installe sur votre machine :
+#     claude -p "votre demande" --output-format text
+#
+# Ce que cela implique :
+#   - Alma n a AUCUNE capacite en plus de celles de Claude Code. Il peut
+#     faire exactement ce que vous feriez en tapant la commande vous-meme.
+#   - Les PERMISSIONS et outils autorises restent ceux configures pour Claude
+#     Code sur cette machine. Alma n ajoute aucun drapeau d autorisation.
+#   - La facturation suit votre abonnement Claude tant qu aucune variable
+#     ANTHROPIC_API_KEY n est definie. Si elle l est, Claude Code facturera
+#     l API : Alma vous en avertit mais ne modifie jamais cette variable.
+#
+# C est la SEULE porte d entree IA du projet : aucun autre canal vers une API.
+# ---------------------------------------------------------------------------
+ai_fallback:
+  enabled: false             # passez a true quand vous serez pret
+  provider: claude_code      # none | claude_code
+  claude_code:
+    command: claude          # binaire du CLI, doit etre dans le PATH
+    # Dossier dans lequel Claude Code aura le droit d agir (lecture, ecriture,
+    # execution). OBLIGATOIRE : volontairement vide par defaut pour vous forcer
+    # a choisir explicitement un perimetre. Tant qu il est vide, le provider
+    # refuse de s executer et vous l explique.
+    working_dir: ""          # ex: C:/Users/moi/projets/bac-a-sable
+    timeout_seconds: 120     # l appel est bloquant ; augmentez si besoin
+
+# ---------------------------------------------------------------------------
+# Applications lancables. Pour en ajouter une, copiez un bloc et adaptez-le :
+#   - aliases : les facons de la nommer a l oral ou au clavier
+#   - paths   : candidats essayes dans l ordre (chemin complet, exe du PATH,
+#               ou URI shell comme ms-settings:)
+#   - process : nom du processus, utilise par « ferme X »
+# Les variables Windows (%ProgramFiles%, %APPDATA%...) sont developpees.
+# ---------------------------------------------------------------------------
+applications:
+  chrome:
+    aliases: [chrome, google chrome, navigateur]
+    paths:
+      - chrome.exe
+      - "%ProgramFiles%/Google/Chrome/Application/chrome.exe"
+      - "%LOCALAPPDATA%/Google/Chrome/Application/chrome.exe"
+    process: chrome.exe
+
+  spotify:
+    aliases: [spotify]
+    paths:
+      - "%APPDATA%/Spotify/Spotify.exe"
+      - spotify.exe
+    process: Spotify.exe
+
+  # Exemple d ajout personnel :
+  # obsidian:
+  #   aliases: [obsidian, mes notes markdown]
+  #   paths: ["%LOCALAPPDATA%/Obsidian/Obsidian.exe"]
+  #   process: Obsidian.exe
+
+# ---------------------------------------------------------------------------
+# Sites web. Format : cle -> { aliases, url }
+# ---------------------------------------------------------------------------
+websites:
+  youtube:
+    aliases: [youtube, you tube]
+    url: https://www.youtube.com
+  gmail:
+    aliases: [gmail, mes emails, ma boite mail]
+    url: https://mail.google.com
+
+  # Exemple d ajout personnel :
+  # monintranet:
+  #   aliases: [intranet, le portail]
+  #   url: https://intranet.exemple.be
+
+# ---------------------------------------------------------------------------
+# Dossiers ouvrables par « ouvre le dossier X »
+# ---------------------------------------------------------------------------
+folders:
+  telechargements: "%USERPROFILE%/Downloads"
+  documents: "%USERPROFILE%/Documents"
+  bureau: "%USERPROFILE%/Desktop"
+  images: "%USERPROFILE%/Pictures"
+  musique: "%USERPROFILE%/Music"
+  # projets: "C:/Users/moi/projets"

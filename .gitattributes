@@ -1,0 +1,16 @@
+# Normalisation des fins de ligne : le depot stocke du LF, Git rend a chaque
+# systeme ce qui lui convient. Evite les diffs parasites entre machines.
+* text=auto eol=lf
+
+# Les scripts Windows doivent garder des CRLF pour etre executes correctement.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Fichiers binaires : jamais de conversion.
+*.ico binary
+*.png binary
+*.jpg binary
+*.mp3 binary
+*.wav binary
+*.exe binary

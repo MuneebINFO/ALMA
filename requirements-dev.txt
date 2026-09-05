@@ -1,0 +1,3 @@
+# --- Alma : dependances de developpement ---------------------------------
+-r requirements.txt
+pytest>=7.4

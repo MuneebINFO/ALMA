@@ -1,0 +1,7 @@
+# --- Alma : dependances pour construire l executable ---------------------
+# Necessaire uniquement si vous voulez generer Alma.exe :
+#     pip install -r requirements-build.txt
+#     python build_exe.py
+-r requirements.txt
+-r requirements-voice.txt
+pyinstaller>=6.0

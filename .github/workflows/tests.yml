@@ -1,0 +1,41 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    # Alma pilote Windows (volume, applications, captures) : c est la seule
+    # plateforme cible, donc la seule sur laquelle il est utile de tester.
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Installer les dépendances
+        # Les dépendances vocales (micro, synthèse) ne sont pas nécessaires :
+        # les tests utilisent des doublures et ne touchent ni au micro ni au
+        # réseau.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lancer les tests
+        run: pytest -q
+
+      - name: Vérifier qu'aucune IA n'est activée par défaut
+        run: |
+          python -c "from config import load_config; c = load_config(); assert c.get('ai_fallback.enabled') is False, 'le fallback IA doit rester desactive par defaut'; assert c.get('voice.enabled') is False; print('OK : aucun appel IA par defaut')"

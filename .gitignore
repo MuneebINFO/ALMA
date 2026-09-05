@@ -1,0 +1,43 @@
+# --- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+
+# --- Configuration et secrets locaux ---------------------------------------
+# Seuls config.yaml.example et .env.example sont versionnes.
+config.yaml
+.env
+
+# --- Donnees produites par Alma a l usage --------------------------------
+data/*.json
+screenshots/*.png
+models/
+
+# --- Construction de l executable ------------------------------------------
+build/
+dist/
+*.spec
+
+# Raccourci Windows : il contient des chemins absolus propres a chaque
+# machine, il doit etre regenere avec « python creer_raccourci.py ».
+Alma.lnk
+
+# Captures d ecran de developpement
+*.png
+!assets/*.png
+
+# --- Editeurs et systeme ---------------------------------------------------
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store

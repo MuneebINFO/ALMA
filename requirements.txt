@@ -1,0 +1,12 @@
+# --- Alma : dependances du mode TEXTE (installation minimale) -------------
+# Aucune API d IA payante. Tout ce qui suit est gratuit et local, sauf
+# Open-Meteo (meteo) qui est une API web gratuite et SANS cle.
+
+PyYAML>=6.0            # lecture de config.yaml
+requests>=2.31         # meteo (Open-Meteo, gratuit, sans cle)
+wikipedia>=1.4.0       # repli Wikipedia (facultatif : l API REST est utilisee d abord)
+pyperclip>=1.8.2       # presse-papiers
+Pillow>=10.0           # captures d ecran
+pycaw>=20240210        # controle du volume Windows
+comtypes>=1.2          # dependance de pycaw
+screen-brightness-control>=0.22   # luminosite de l ecran
