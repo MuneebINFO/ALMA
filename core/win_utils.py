@@ -373,3 +373,50 @@ def open_folder(path: str) -> tuple[bool, str]:
     except Exception:
         ok, _ = run_command(["explorer", target])
         return ok, target
+
+
+# --------------------------------------------------------------------------
+# Combinaisons de touches et saisie de texte
+# --------------------------------------------------------------------------
+VK_CONTROL = 0x11
+VK_RETURN = 0x0D
+VK_L = 0x4C
+VK_V = 0x56
+KEYEVENTF_KEYUP = 2
+
+
+def press_combo(*codes) -> bool:
+    """
+    Appuie sur une combinaison (ex: Ctrl+L), puis relache dans l ordre inverse.
+    """
+    try:
+        import ctypes
+
+        for code in codes:
+            ctypes.windll.user32.keybd_event(code, 0, 0, 0)
+        for code in reversed(codes):
+            ctypes.windll.user32.keybd_event(code, 0, KEYEVENTF_KEYUP, 0)
+        return True
+    except Exception as exc:
+        log.debug("press_combo a echoue : %s", exc)
+        return False
+
+
+def type_text(texte: str, restaurer_presse_papiers: bool = True) -> bool:
+    """
+    Saisit un texte via le presse-papiers (Ctrl+V).
+
+    On passe par le presse-papiers plutot que par une frappe caractere par
+    caractere : c est instantane et cela gere correctement les accents et
+    les dispositions de clavier autres que QWERTY.
+    """
+    ancien = get_clipboard() if restaurer_presse_papiers else ""
+    if not set_clipboard(texte):
+        return False
+    ok = press_combo(VK_CONTROL, VK_V)
+    if restaurer_presse_papiers and ancien:
+        # On laisse le temps au collage avant de rendre le presse-papiers.
+        import threading
+
+        threading.Timer(1.0, set_clipboard, args=(ancien,)).start()
+    return ok

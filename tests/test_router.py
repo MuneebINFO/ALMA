@@ -21,9 +21,11 @@ CAS_NOMINAUX = [
     ("va sur GitHub", "open_website"),
     ("ouvre Netflix", "open_website"),
     # Recherches
-    ("ouvre YouTube et cherche lofi hip hop", "search_youtube"),
-    ("cherche une recette de crepes sur YouTube", "search_youtube"),
-    ("cherche les dernieres nouvelles sur l IA sur Google", "search_google"),
+    ("ouvre YouTube et cherche lofi hip hop", "site_search"),
+    ("cherche une recette de crepes sur YouTube", "site_search"),
+    ("va sur Netflix et mets Fast and Furious", "site_search"),
+    ("mets Interstellar sur Prime Video", "site_search"),
+    ("cherche les dernieres nouvelles sur l IA sur Google", "site_search"),
     ("cherche des idees de cadeaux", "search_google"),
     ("demande a Claude comment fonctionne un moteur de recherche", "ask_claude"),
     ("cherche Alan Turing sur Wikipedia", "search_wikipedia"),
@@ -56,6 +58,11 @@ CAS_NOMINAUX = [
     ("quel temps fait-il a Bruxelles", "weather"),
     # Musique
     ("mets de la musique", "play_music"),
+    ("mets pause sur l ecran 2", "media_pause_ecran"),
+    ("arrete la video sur le deuxieme ecran", "media_pause_ecran"),
+    ("reprends la lecture sur l ecran 2", "media_reprise_ecran"),
+    ("mets tout en pause", "media_pause_tout"),
+    ("qu est-ce qui joue", "media_what_is_playing"),
     ("chanson suivante", "media_next"),
     ("chanson precedente", "media_previous"),
     ("arrete la musique", "media_stop"),
@@ -165,3 +172,42 @@ def test_la_liste_des_modules_est_a_jour():
         "Manquants : " + str(sorted(sur_disque - declares)) + " ; "
         "en trop : " + str(sorted(declares - sur_disque))
     )
+
+
+# Formulations libres : ni mot pour mot, ni dans l ordre attendu.
+PHRASES_APPROXIMATIVES = [
+    ("je voudrais que tu montes le son", "volume_up"),
+    ("tu peux baisser le volume stp", "volume_down"),
+    ("fais moi une capture", "screenshot"),
+    ("j aimerais savoir quelle heure il est", "get_time"),
+    ("note quelque part que je dois appeler le dentiste", "add_note"),
+    ("peux-tu me dire la météo", "weather"),
+    ("est-ce que tu peux mettre en pause", "media_play_pause"),
+    ("ferme moi Chrome s il te plait", "close_app"),
+    ("montre moi mes notes", "read_notes"),
+    ("balance de la musique", "play_music"),
+    ("verrouille moi cette machine", "lock_session"),
+    ("programme un minuteur de 3 minutes", "set_timer"),
+    ("coupe le son sur le deuxième écran", "media_pause_ecran"),
+]
+
+
+@pytest.mark.parametrize("phrase,attendu", PHRASES_APPROXIMATIVES)
+def test_les_formulations_approximatives_sont_comprises(router, config, phrase, attendu):
+    """
+    L'assistant doit comprendre une intention même mal formulée : c'est ce qui
+    sépare un moteur de règles utilisable d'un moteur qui exige la phrase exacte.
+    """
+    resolution = resolve(router, config, phrase)
+    assert resolution is not None, "aucune commande trouvée pour : " + phrase
+    assert resolution.command.name == attendu
+
+
+def test_une_phrase_hors_sujet_reste_ignoree(router, config):
+    """
+    La tolérance ne doit pas virer au déclenchement systématique : une phrase
+    sans rapport doit continuer à ne rien déclencher.
+    """
+    for phrase in ("il fait beau aujourd hui", "j ai mangé une pomme ce matin",
+                   "xyzzy plover blorb"):
+        assert resolve(router, config, phrase) is None, phrase

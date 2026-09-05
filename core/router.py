@@ -18,6 +18,7 @@ from core.registry import Command, all_commands
 log = logging.getLogger(__name__)
 
 
+
 @dataclass
 class Resolution:
     """Resultat de la resolution : quelle commande, avec quel match regex."""
@@ -58,7 +59,7 @@ class Router:
                     continue
                 return Resolution(cmd, match, float(cmd.priority), "regex")
 
-        # Passe 2 : mots-cles avec tolerance aux fautes de frappe.
+        # Passe 2 : mots-cles, tous presents (tolerance aux fautes de frappe).
         best: Resolution | None = None
         for cmd in candidates:
             for group in cmd.keywords:

@@ -29,6 +29,11 @@ IMPORTS_CACHES = [
     # Dependances chargees a la demande dans le code (imports paresseux).
     "core.providers.claude_code_provider",
     "core.wake",
+    "core.desktop",
+    "core.media_control",
+    "winsdk",
+    "winsdk.windows.media.control",
+    "psutil",
     "core.voice_neural",
     "edge_tts",
     "pyttsx3.drivers",

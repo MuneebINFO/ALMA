@@ -32,15 +32,13 @@ LANGUAGES = {
 
 @command(
     name="search_youtube",
-    patterns=[
-        r"^ouvre?\s+youtube\s+et\s+" + SEARCH_VERBS + r"\s+(.+)$",
-        r"^" + SEARCH_VERBS + r"\s+(.+?)\s+sur\s+youtube$",
-        r"^youtube\s+(.+)$",
-        r"^(?:joue|met|mets|lance)\s+(.+?)\s+sur\s+youtube$",
-    ],
+    # Les formes « cherche X sur YouTube » et « mets X sur YouTube » sont
+    # traitees par site_search, qui reutilise en plus l onglet deja ouvert.
+    # Il ne reste ici que le raccourci direct.
+    patterns=[r"^youtube\s+(.+)$"],
     category="Recherche",
-    description="Rechercher sur YouTube",
-    examples=["ouvre YouTube et cherche lofi hip hop", "cherche une recette sur YouTube"],
+    description="Rechercher sur YouTube (raccourci)",
+    examples=["youtube lofi hip hop"],
     priority=95,
 )
 def search_youtube(ctx: CommandContext) -> Response:
@@ -223,7 +221,7 @@ def translate(ctx: CommandContext) -> Response:
     ],
     category="Recherche",
     description="Rechercher sur Google",
-    examples=["cherche les dernières nouvelles sur l IA sur Google", "google météo Bruxelles"],
+    examples=["cherche des idées de cadeaux", "google météo Bruxelles"],
     priority=80,
 )
 def search_google(ctx: CommandContext) -> Response:

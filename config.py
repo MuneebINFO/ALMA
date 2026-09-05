@@ -341,3 +341,108 @@ def load_config(path: str | Path | None = None) -> Config:
 
     DATA_DIR.mkdir(exist_ok=True)
     return Config(data, source)
+
+
+# --- Recherche a l interieur des sites --------------------------------------
+# `search_url` permet a « va sur Netflix et mets Fast and Furious » d aller
+# directement au bon resultat. {q} est remplace par la requete, encodee.
+_RECHERCHES = {
+    "youtube": "https://www.youtube.com/results?search_query={q}",
+    "netflix": "https://www.netflix.com/search?q={q}",
+    "google": "https://www.google.com/search?q={q}",
+    "github": "https://github.com/search?q={q}",
+    "wikipedia": "https://fr.wikipedia.org/w/index.php?search={q}",
+    "amazon": "https://www.amazon.fr/s?k={q}",
+    "twitch": "https://www.twitch.tv/search?term={q}",
+    "reddit": "https://www.reddit.com/search/?q={q}",
+    "leboncoin": "https://www.leboncoin.fr/recherche?text={q}",
+    "maps": "https://www.google.com/maps/search/{q}",
+    "linkedin": "https://www.linkedin.com/search/results/all/?keywords={q}",
+    "stackoverflow": "https://stackoverflow.com/search?q={q}",
+    "instagram": "https://www.instagram.com/explore/search/keyword/?q={q}",
+    "twitter": "https://x.com/search?q={q}",
+    "drive": "https://drive.google.com/drive/search?q={q}",
+    "gmail": "https://mail.google.com/mail/u/0/#search/{q}",
+}
+for _cle, _url in _RECHERCHES.items():
+    if _cle in DEFAULTS["websites"]:
+        DEFAULTS["websites"][_cle]["search_url"] = _url
+
+# --- Plateformes supplementaires --------------------------------------------
+DEFAULTS["websites"].update({
+    "primevideo": {
+        "aliases": ["prime video", "amazon prime", "prime"],
+        "url": "https://www.primevideo.com",
+        "search_url": "https://www.primevideo.com/search/ref=atv_nb_sr?phrase={q}",
+    },
+    "disney": {
+        "aliases": ["disney plus", "disney+", "disney"],
+        "url": "https://www.disneyplus.com",
+        "search_url": "https://www.disneyplus.com/search?q={q}",
+    },
+    "crunchyroll": {
+        "aliases": ["crunchyroll", "crunchy"],
+        "url": "https://www.crunchyroll.com",
+        "search_url": "https://www.crunchyroll.com/search?q={q}",
+    },
+    "spotifyweb": {
+        "aliases": ["spotify web", "spotify en ligne"],
+        "url": "https://open.spotify.com",
+        "search_url": "https://open.spotify.com/search/{q}",
+    },
+    "deezer": {
+        "aliases": ["deezer"],
+        "url": "https://www.deezer.com",
+        "search_url": "https://www.deezer.com/search/{q}",
+    },
+    "soundcloud": {
+        "aliases": ["soundcloud", "sound cloud"],
+        "url": "https://soundcloud.com",
+        "search_url": "https://soundcloud.com/search?q={q}",
+    },
+    "dailymotion": {
+        "aliases": ["dailymotion", "daily motion"],
+        "url": "https://www.dailymotion.com",
+        "search_url": "https://www.dailymotion.com/search/{q}",
+    },
+    "tiktok": {
+        "aliases": ["tiktok", "tik tok"],
+        "url": "https://www.tiktok.com",
+        "search_url": "https://www.tiktok.com/search?q={q}",
+    },
+    "imdb": {
+        "aliases": ["imdb"],
+        "url": "https://www.imdb.com",
+        "search_url": "https://www.imdb.com/find/?q={q}",
+    },
+    "allocine": {
+        "aliases": ["allocine", "allo cine"],
+        "url": "https://www.allocine.fr",
+        "search_url": "https://www.allocine.fr/rechercher/?q={q}",
+    },
+    "auvio": {
+        "aliases": ["auvio", "rtbf", "la rtbf"],
+        "url": "https://auvio.rtbf.be",
+        "search_url": "https://auvio.rtbf.be/recherche?q={q}",
+    },
+    "francetv": {
+        "aliases": ["france tv", "francetv"],
+        "url": "https://www.france.tv",
+        "search_url": "https://www.france.tv/recherche/?q={q}",
+    },
+    "ebay": {
+        "aliases": ["ebay"],
+        "url": "https://www.ebay.fr",
+        "search_url": "https://www.ebay.fr/sch/i.html?_nkw={q}",
+    },
+    "pinterest": {
+        "aliases": ["pinterest"],
+        "url": "https://www.pinterest.com",
+        "search_url": "https://www.pinterest.com/search/pins/?q={q}",
+    },
+    "booking": {
+        "aliases": ["booking", "booking com"],
+        "url": "https://www.booking.com",
+        "search_url": "https://www.booking.com/searchresults.fr.html?ss={q}",
+    },
+})

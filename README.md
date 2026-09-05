@@ -264,6 +264,63 @@ cherche des images de montagne
 où est la gare centrale
 ```
 
+### Media, per screen or per app
+
+ALMA controls each player **separately**, through the Windows media sessions
+API. Global media keys only ever reach one application: if Chrome and Firefox
+are both playing, they cannot be told apart. Media sessions can.
+
+```
+mets pause sur l'écran 2              pause what is playing on screen 2
+arrête la vidéo sur le deuxième écran
+reprends la lecture sur l'écran 2
+mets tout en pause                    every player at once
+qu'est-ce qui joue                    lists what is playing, and where
+pause / chanson suivante / précédente
+```
+
+Screens are numbered left to right, then top to bottom, so "écran 1" is always
+the leftmost. "écran de droite", "le deuxième écran" and "l'autre écran" work
+too.
+
+Players that expose a media session (Chrome, Firefox, Spotify, Edge…) are paused
+precisely, without stealing focus. Streaming sites whose custom player registers
+no session fall back to bringing the window forward and sending the pause key —
+the same thing you would do by hand.
+
+### Opening a site and searching inside it
+
+```
+va sur Netflix et mets Fast and Furious
+mets Interstellar sur Prime Video
+sur YouTube, mets lofi hip hop
+va sur Disney+ et cherche Star Wars
+```
+
+ALMA first looks for a browser window **already showing that site**. If it finds
+one, it brings that window forward and navigates its current tab, instead of
+opening yet another one — and it stays in the browser where the site was open,
+not in your default browser. Otherwise it opens the site normally.
+
+Around 30 platforms support in-site search: Netflix, YouTube, Prime Video,
+Disney+, Crunchyroll, Twitch, Spotify, Deezer, SoundCloud, Dailymotion, TikTok,
+IMDb, AlloCiné, RTBF Auvio, france.tv, Amazon, eBay, Leboncoin, GitHub, Reddit,
+LinkedIn, Pinterest, Booking and more. Add your own with a `search_url` in
+`config.yaml`:
+
+```yaml
+websites:
+  monsite:
+    aliases: [mon site]
+    url: https://example.com
+    search_url: https://example.com/search?q={q}
+```
+
+> **One honest limitation:** Windows only exposes the title of a browser
+> window's **active** tab. A site open in a background tab is invisible to any
+> program, ALMA included — it will open a new tab rather than find the hidden
+> one.
+
 ### System
 ```
 mets le volume à 30%          coupe le son / remets le son
@@ -433,6 +490,8 @@ alma/
 │   ├── text_utils.py       aligned normalisation and fuzzy matching
 │   ├── input_sources.py    input sources (text, voice, gestures later)
 │   ├── wake.py             wake word and listening state machine
+│   ├── desktop.py          screens, windows, focus and tab navigation
+│   ├── media_control.py    per-application playback control
 │   ├── tts.py              speech synthesis (neural, SAPI5 fallback)
 │   ├── voice_neural.py     edge-tts neural voice
 │   ├── stt.py              speech recognition and microphone level metering
@@ -498,7 +557,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-146 tests cover:
+188 tests cover:
 
 - normalisation and fuzzy matching (`test_text_utils.py`);
 - **routing**: every sentence must reach the right handler, including the
@@ -512,6 +571,14 @@ pytest -q
 - **the "no AI without your consent" guarantee**: with `enabled: false`, an
   unrecognised request gets a polite message **without ever launching `claude`**
   and without any network call (`test_ai_fallback.py`);
+- **screen targeting**: with two players running on two screens, only the one
+  on the requested screen is paused; the keyboard fallback is used when no media
+  session exists (`test_desktop_media.py`);
+- **site search**: tab reuse, query not truncated at the first "sur", and
+  Wikipedia still handled by its dedicated summary-reading command
+  (`test_site_search.py`);
+- **loose phrasings**: "je voudrais que tu montes le son" must work, while
+  "il fait beau aujourd'hui" must still trigger nothing (`test_router.py`);
 - **the Claude Code provider**: exact call arguments, mandatory `working_dir`,
   absence of permission flags, `ANTHROPIC_API_KEY` detection, timeout and error
   handling (`test_claude_code_provider.py`).
