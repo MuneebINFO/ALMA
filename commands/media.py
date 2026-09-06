@@ -323,8 +323,11 @@ def media_lecture(ctx: CommandContext) -> Response:
     """Relance ce qui est en pause, sans basculer si ça joue déjà."""
     repris = media_control.reprendre_tout()
     if repris:
-        return Response.action("Lecture : " + ", ".join(s.application for s in repris) + ".")
-    return Response.action("C'est parti.")
+        return Response(
+            text="Lecture : " + ", ".join(s.application for s in repris) + ".",
+            speak=False,
+        )
+    return Response(text="C'est parti.", speak=False)
 
 
 @command(
@@ -347,5 +350,8 @@ def media_mettre_en_pause(ctx: CommandContext) -> Response:
     """Met en pause sans relancer si c'était déjà arrêté."""
     arretes = media_control.mettre_en_pause_tout()
     if arretes:
-        return Response.action("En pause : " + ", ".join(s.application for s in arretes) + ".")
-    return Response.action("C'est en pause.")
+        return Response(
+            text="En pause : " + ", ".join(s.application for s in arretes) + ".",
+            speak=False,
+        )
+    return Response(text="C'est en pause.", speak=False)
