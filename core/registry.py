@@ -37,6 +37,9 @@ class Command:
     guard: Guard | None = None
     sources: tuple = ALL_SOURCES
     hidden: bool = False
+    # True quand la commande ne se declenche que si un contexte existe
+    # (« recherche Damso » n a de sens qu apres « va sur YouTube »).
+    contextuel: bool = False
 
     def accepts_source(self, source: str) -> bool:
         return source in self.sources
@@ -57,6 +60,7 @@ def command(
     guard: Guard | None = None,
     sources: Sequence = ALL_SOURCES,
     hidden: bool = False,
+    contextuel: bool = False,
 ):
     """
     Decorateur d enregistrement d'une commande.
@@ -88,6 +92,7 @@ def command(
             guard=guard,
             sources=tuple(sources),
             hidden=hidden,
+            contextuel=contextuel,
         )
         _REGISTRY.append(cmd)
         func.command = cmd

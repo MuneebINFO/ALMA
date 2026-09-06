@@ -13,6 +13,7 @@ from config import load_config
 from core.context import SOURCE_TEXT, Response, Utterance
 from core.registry import load_commands
 from core.router import Router
+from core.wake import MoteurEcoute
 from core.scheduler import Scheduler
 from core.storage import Storage
 from core.tts import TextToSpeech
@@ -33,6 +34,12 @@ class Assistant:
         self.stt = stt
         self.router = Router()
         self.scheduler = Scheduler(self)
+        # Session d ecoute : partagee par le mode texte et le mode voix, pour
+        # que les commandes puissent savoir si un echange est en cours.
+        self.moteur = MoteurEcoute(self.config)
+        # Memoire de court terme : le site ou l application dont on vient de
+        # parler, afin que « recherche Damso » suive « va sur YouTube ».
+        self.contexte: dict = {}
         self.running = True
         self.last_utterance: Utterance | None = None
         self.last_command_text: str = ""
@@ -55,6 +62,41 @@ class Assistant:
     def speaks(self) -> bool:
         """La lecture a voix haute est-elle activé ?"""
         return bool(self.config.get("voice.speak_responses", True)) and self.tts.available
+
+    # -- memoire de court terme -----------------------------------------------
+    @property
+    def duree_contexte(self) -> float:
+        """Duree de validite du contexte, alignee sur la session d ecoute."""
+        return float(self.config.get("voice.armed_seconds", 60))
+
+    def memoriser(self, cle: str, valeur) -> None:
+        """Retient un element de contexte (le site en cours, par exemple)."""
+        import time
+
+        self.contexte[cle] = (valeur, time.monotonic())
+
+    def rappeler(self, cle: str, defaut=None):
+        """
+        Relit un element de contexte, s il est encore recent.
+
+        Le contexte expire avec la session : passe ce delai, « recherche X »
+        redevient une recherche web ordinaire et non une recherche sur le
+        dernier site visite.
+        """
+        import time
+
+        entree = self.contexte.get(cle)
+        if entree is None:
+            return defaut
+        valeur, pose_a = entree
+        if time.monotonic() - pose_a > self.duree_contexte:
+            del self.contexte[cle]
+            return defaut
+        return valeur
+
+    def oublier_contexte(self) -> None:
+        """Vide la memoire de court terme (fin de session)."""
+        self.contexte.clear()
 
     # -- sorties --------------------------------------------------------------
     def emit(self, text: str, speak: bool = True) -> None:

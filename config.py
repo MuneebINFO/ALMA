@@ -56,7 +56,7 @@ DEFAULTS: dict = {
         "min_threshold": 0.004,
         "noise_factor": 3.5,
         # Duree pendant laquelle Alma reste receptif apres un « Alma » seul.
-        "armed_seconds": 12,
+        "armed_seconds": 60,
         "energy_threshold": 300,
         "pause_threshold": 0.8,
         "timeout": 6,

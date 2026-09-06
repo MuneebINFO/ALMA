@@ -214,3 +214,82 @@ def test_formulations_centrees_sur_l_onglet(router, config, phrase):
     utterance = Utterance.parse(phrase, wake_words=config.get("general.wake_words"))
     resolution = router.resolve(utterance, None)
     assert resolution is not None and resolution.command.name == "open_website", phrase
+
+
+# --------------------------------------------------------------------------
+# Suivi de conversation : « va sur YouTube » puis « recherche Damso »
+# --------------------------------------------------------------------------
+def test_enchainement_sans_repeter_le_site(assistant, router, monkeypatch):
+    """
+    Le scénario demandé : ouvrir un site, puis enchaîner une recherche dessus
+    sans le nommer à nouveau.
+    """
+    from core import browser_tabs
+
+    monkeypatch.setattr(browser_tabs, "trouver_onglet", lambda *a, **k: None)
+    monkeypatch.setattr(desktop, "trouver_fenetre", lambda *a, **k: None)
+    ouvertes = []
+    monkeypatch.setattr(websites, "open_url", lambda url: ouvertes.append(url) or True)
+
+    executer(router, assistant, "va sur YouTube")
+    assert assistant.rappeler("site") == "youtube"
+
+    reponse, resolution = executer(router, assistant, "recherche Damso")
+    assert resolution.command.name == "site_search_contextuel"
+    assert reponse.ok
+    assert "youtube.com/results" in ouvertes[-1]
+    assert "Damso" in ouvertes[-1]
+
+
+def test_le_contexte_suit_le_dernier_site(assistant, router, monkeypatch):
+    """Changer de site doit déplacer le contexte."""
+    from core import browser_tabs
+
+    monkeypatch.setattr(browser_tabs, "trouver_onglet", lambda *a, **k: None)
+    monkeypatch.setattr(desktop, "trouver_fenetre", lambda *a, **k: None)
+    ouvertes = []
+    monkeypatch.setattr(websites, "open_url", lambda url: ouvertes.append(url) or True)
+
+    executer(router, assistant, "va sur YouTube")
+    executer(router, assistant, "va sur Netflix")
+    executer(router, assistant, "cherche Interstellar")
+    assert "netflix.com/search" in ouvertes[-1]
+
+
+def test_sans_contexte_la_recherche_reste_generale(assistant, router, config):
+    """Hors session, « recherche X » doit redevenir une recherche web."""
+    from core.context import Utterance
+
+    assistant.oublier_contexte()
+    utterance = Utterance.parse("recherche Damso", wake_words=config.get("general.wake_words"))
+    assert router.resolve(utterance, assistant).command.name == "search_google"
+
+
+def test_le_contexte_expire(assistant, router, monkeypatch):
+    """
+    Passé le délai de session, le contexte ne doit plus s'appliquer : sinon
+    une recherche faite une heure plus tard partirait sur le mauvais site.
+    """
+    import time
+
+    from core.context import Utterance
+
+    assistant.config.set("voice.armed_seconds", 0.3)
+    assistant.memoriser("site", "youtube")
+    time.sleep(0.5)
+    assert assistant.rappeler("site") is None
+    utterance = Utterance.parse("recherche Damso",
+                                wake_words=assistant.config.get("general.wake_words"))
+    assert router.resolve(utterance, assistant).command.name == "search_google"
+
+
+def test_stop_efface_le_contexte(assistant, monkeypatch):
+    """Refermer la session doit aussi oublier le site en cours."""
+    from core import wake
+
+    assistant.memoriser("site", "youtube")
+    assistant.moteur.armer()
+    analyse = assistant.moteur.analyser("stop")
+    assert analyse.etat == wake.FIN_SESSION
+    assistant.oublier_contexte()
+    assert assistant.rappeler("site") is None

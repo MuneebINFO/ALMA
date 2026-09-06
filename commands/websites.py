@@ -134,6 +134,8 @@ def open_website(ctx: CommandContext) -> Response:
     if resolved is None:
         return Response.error("Je ne connais pas ce site.")
     key, url = resolved
+    # On retient le site : « recherche Damso » juste apres devra s y appliquer.
+    ctx.assistant.memoriser("site", key)
     ok, mode = afficher_site(ctx.config, key, url, naviguer=False)
     if not ok:
         return Response.error("Je n'ai pas réussi à ouvrir " + url + ".")
@@ -238,6 +240,7 @@ def site_search(ctx: CommandContext) -> Response:
     modele = entree.get("search_url") if isinstance(entree, dict) else None
     cible = modele.replace("{q}", quote_plus(requete)) if modele else url
 
+    ctx.assistant.memoriser("site", cle)
     ok, mode = afficher_site(ctx.config, cle, cible, naviguer=True)
     if not ok:
         return Response.error("Je n'ai pas réussi à ouvrir " + cle + ".")
@@ -247,3 +250,49 @@ def site_search(ctx: CommandContext) -> Response:
         )
     prefixe = ("Je reprends l'onglet " + cle) if mode != "ouvert" else ("J'ouvre " + cle)
     return Response(text=prefixe + " et je cherche « " + requete + " ».")
+
+
+def _site_en_contexte(ctx: CommandContext) -> bool:
+    """Guard : un site a-t-il ete ouvert recemment ?"""
+    return bool(ctx.assistant.rappeler("site"))
+
+
+@command(
+    name="site_search_contextuel",
+    patterns=[
+        r"^(?:cherche|chercher|recherche|rechercher|trouve|trouver|met[s]?|joue|jouer|"
+        r"lance|lancer|regarde|regarder|affiche|montre)\s+(?:moi\s+)?(.+)$",
+    ],
+    category="Sites web",
+    description="Poursuivre sur le site en cours (« va sur YouTube » puis « recherche Damso »)",
+    examples=["recherche Damso"],
+    priority=85,
+    guard=_site_en_contexte,
+    contextuel=True,
+)
+def site_search_contextuel(ctx: CommandContext) -> Response:
+    """
+    Applique la recherche au site dont on vient de parler.
+
+    C est ce qui permet d enchainer « va sur YouTube » puis « recherche
+    Damso » sans repeter le nom du site. Le contexte expire avec la session
+    d ecoute : passe ce delai, la meme phrase redevient une recherche web.
+    """
+    from urllib.parse import quote_plus
+
+    cle = ctx.assistant.rappeler("site")
+    requete = ctx.arg.strip()
+    if not cle or not requete:
+        return Response.error("Que dois-je chercher ?")
+
+    entree = (ctx.config.get("websites", {}) or {}).get(cle, {})
+    modele = entree.get("search_url") if isinstance(entree, dict) else None
+    if not modele:
+        return Response.error("Je ne sais pas chercher directement sur " + cle + ".")
+
+    cible = modele.replace("{q}", quote_plus(requete))
+    ctx.assistant.memoriser("site", cle)          # on reste sur ce site
+    ok, mode = afficher_site(ctx.config, cle, cible, naviguer=True)
+    if not ok:
+        return Response.error("Je n'ai pas réussi à chercher sur " + cle + ".")
+    return Response(text="Je cherche « " + requete + " » sur " + cle + ".")

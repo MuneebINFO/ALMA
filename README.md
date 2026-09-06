@@ -101,12 +101,48 @@ listening. There is no text field — everything goes through speech.
 | You say | What happens |
 |---|---|
 | "**Alma, quelle heure est-il**" | the command runs immediately |
-| "**Alma**" then a pause | it answers "Oui ?" and stays receptive for 12 s — chain your request without repeating the name |
+| "**Alma**" then a pause | it answers "Oui ?" and waits for your request |
 | "il fait beau aujourd'hui" | **ignored** — no accidental triggering |
 
 The name is still recognised when the transcription mangles it (*almat*,
-*almas*, *halma*), but a nearby word such as *alba* will not wake it. The
-receptive window is set by `voice.armed_seconds`.
+*almas*, *halma*), but a nearby word such as *alba* will not wake it.
+
+### The listening session
+
+Saying the name opens a **session that lasts one minute**, and every sentence
+you say restarts the countdown. Inside it you speak normally, without repeating
+the name:
+
+```
+You  — Alma, va sur YouTube
+ALMA — Je bascule sur l'onglet youtube.        (60 s)
+You  — recherche Damso                          ← no wake word needed
+ALMA — Je cherche « Damso » sur youtube.       (countdown restarts)
+You  — stop
+ALMA — Très bien.                               ← session closed at once
+```
+
+The session ends after a minute of silence, or immediately if you say **"stop"**
+(also "c'est bon", "laisse tomber", "annule", "silence"). Once closed, nothing
+runs until you say the name again — so a conversation in the room can never
+trigger anything.
+
+Length is set by `voice.armed_seconds` (60 by default).
+
+### Following the conversation
+
+ALMA remembers what you were just talking about. After "va sur YouTube",
+a bare "recherche Damso" searches **on YouTube**, in that tab — not on Google.
+Naming another site moves the context:
+
+```
+va sur Netflix        →  cherche Interstellar   searches Netflix
+va sur YouTube        →  mets du lofi           plays on YouTube
+```
+
+That memory lives exactly as long as the session. Once it expires, "recherche
+Damso" is an ordinary web search again — so a request made an hour later never
+lands on the wrong site by accident.
 
 ### Renaming the assistant
 
@@ -569,7 +605,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-198 tests cover:
+211 tests cover:
 
 - normalisation and fuzzy matching (`test_text_utils.py`);
 - **routing**: every sentence must reach the right handler, including the
@@ -586,6 +622,12 @@ pytest -q
 - **screen targeting**: with two players running on two screens, only the one
   on the requested screen is paused; the keyboard fallback is used when no media
   session exists (`test_desktop_media.py`);
+- **the session**: it lasts through several exchanges, the countdown restarts
+  when you speak, "stop" closes it at once, and nothing runs afterwards without
+  the wake word (`test_wake.py`);
+- **conversation follow-up**: "va sur YouTube" then "recherche Damso" searches
+  YouTube; the context moves with the last site named and expires with the
+  session (`test_site_search.py`);
 - **tab reuse**: a background tab is activated rather than duplicated, showing
   a site never reloads it, and searching does navigate (`test_site_search.py`);
 - **site search**: query not truncated at the first "sur", and

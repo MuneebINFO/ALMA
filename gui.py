@@ -193,11 +193,10 @@ class AlmaApp:
         self.stt = None
         self.nom = assistant.name          # nom affiche, issu de la config
 
-        from core.wake import MoteurEcoute
-
-        # Le mot d appel, ses variantes et les prefixes viennent tous de la
-        # configuration : renommer l assistant ne demande aucun changement ici.
-        self.moteur = MoteurEcoute(assistant.config)
+        # La session d ecoute vit dans l assistant : les commandes peuvent
+        # ainsi consulter le contexte (« recherche Damso » apres « va sur
+        # YouTube »), et le mode texte en profite aussi.
+        self.moteur = assistant.moteur
 
         root.title(assistant.name)
         root.configure(bg=FOND)
@@ -344,7 +343,20 @@ class AlmaApp:
                     return
         except queue.Empty:
             pass
+        self._rafraichir_compte_a_rebours()
         self.root.after(40, self._traiter_evenements)
+
+    def _rafraichir_compte_a_rebours(self) -> None:
+        """Affiche le temps restant de la session, tant qu elle est ouverte."""
+        if self.orbe.etat != "arme":
+            return
+        restant = int(self.moteur.secondes_restantes())
+        if restant <= 0:
+            self.definir_statut("veille")
+            return
+        self.etiquette_statut.configure(
+            text="Je vous écoute — " + str(restant) + " s", fg=ETATS["arme"][0]
+        )
 
     # -- execution ------------------------------------------------------------
     def _executer(self, texte: str, source: str) -> None:
@@ -468,6 +480,17 @@ class AlmaApp:
                 continue
 
             self.evenements.put(("entendu", texte))
+
+            if analyse.etat == wake.FIN_SESSION:
+                reponse = wake.accuse_fin()
+                self.assistant.oublier_contexte()
+                self.evenements.put(("journal", ("Vous", texte)))
+                self.evenements.put(("journal", (self.nom, reponse)))
+                self.evenements.put(("entendu", ""))
+                self.evenements.put(("statut", ("veille", "")))
+                if self.assistant.speaks:
+                    self.assistant.tts.say(reponse, blocking=True, cacher=True)
+                continue
 
             if analyse.etat == wake.REVEIL_SEUL:
                 reponse = wake.accuse_reception()

@@ -39,11 +39,21 @@ ACCUSES = (
     "À votre service.",
 )
 
+# Mots qui ferment la session d ecoute avant la fin du compte a rebours.
+MOTS_FIN_SESSION = {
+    "stop", "stoppe", "c est bon", "laisse tomber", "annule", "rien",
+    "merci c est tout", "termine", "fini", "silence",
+}
+
+# Repliques de fin de session.
+ACCUSES_FIN = ("Très bien.", "D'accord.", "Je me remets en veille.")
+
 # Etats renvoyes par l analyse.
 IGNORE = "ignore"
 REVEIL_SEUL = "reveil"
 REVEIL_COMMANDE = "reveil_commande"
 COMMANDE = "commande"
+FIN_SESSION = "fin_session"
 
 
 @dataclass
@@ -202,8 +212,19 @@ class MoteurEcoute:
     def secondes_restantes(self) -> float:
         return max(0.0, self._arme_jusqu_a - time.monotonic())
 
+    def est_fin_de_session(self, texte: str) -> bool:
+        """La phrase demande-t-elle de refermer la session d ecoute ?"""
+        norme = " ".join(text_utils.tokenize(text_utils.normalize(texte)))
+        return norme in MOTS_FIN_SESSION
+
     def analyser(self, texte: str) -> Analyse:
-        """Decide quoi faire d une phrase entendue."""
+        """
+        Decide quoi faire d une phrase entendue.
+
+        La session d ecoute se PROLONGE apres chaque echange : une fois
+        reveille, l assistant reste receptif et le compte a rebours repart a
+        chaque phrase. Il ne se referme qu au silence, ou sur un « stop ».
+        """
         texte = (texte or "").strip()
         if not texte:
             return Analyse(IGNORE)
@@ -211,13 +232,17 @@ class MoteurEcoute:
         appel, reste = self.separer_mot_appel(texte)
 
         if appel and reste:
-            self.desarmer()
+            self.armer()
             return Analyse(REVEIL_COMMANDE, reste, True)
         if appel:
             self.armer()
             return Analyse(REVEIL_SEUL, "", True)
         if self.arme:
-            self.desarmer()
+            # « stop » ferme la session immediatement.
+            if self.est_fin_de_session(texte):
+                self.desarmer()
+                return Analyse(FIN_SESSION, "", False)
+            self.armer()           # on reparle : le compte a rebours repart
             return Analyse(COMMANDE, texte, False)
         return Analyse(IGNORE, texte, False)
 
@@ -233,3 +258,8 @@ def _fin_du_mot(norm: str, tokens: list, index: int) -> int:
         if i == index:
             return curseur
     return curseur
+
+
+def accuse_fin() -> str:
+    """Replique quand la session se referme sur demande."""
+    return random.choice(ACCUSES_FIN)

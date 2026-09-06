@@ -13,6 +13,7 @@ from config import Config
 from core.wake import (
     ACCUSES,
     COMMANDE,
+    FIN_SESSION,
     IGNORE,
     REVEIL_COMMANDE,
     REVEIL_SEUL,
@@ -68,12 +69,50 @@ def test_commande_acceptee_apres_un_reveil_seul(moteur):
     assert analyse.commande == "quelle heure est-il"
 
 
-def test_l_armement_se_consomme(moteur):
-    """Une seule commande par réveil : ensuite il faut redire le nom."""
+def test_la_session_se_prolonge(moteur):
+    """
+    La session ne se consomme pas : après chaque échange l'assistant reste
+    réceptif, pour qu'on puisse enchaîner sans répéter son nom.
+    """
     moteur.analyser("Alma")
+    assert moteur.analyser("quelle heure est-il").etat == COMMANDE
+    assert moteur.arme is True
+    assert moteur.analyser("ouvre Chrome").etat == COMMANDE
+    assert moteur.arme is True
+
+
+def test_le_compte_a_rebours_repart_quand_on_reparle(moteur):
+    """Chaque phrase relance le délai : une conversation ne s'interrompt pas."""
+    import time
+
+    moteur.duree_armement = 1.0
+    moteur.analyser("Alma")
+    time.sleep(0.6)
     moteur.analyser("quelle heure est-il")
+    time.sleep(0.6)
+    # Sans relance, la session serait close depuis 0,2 s.
+    assert moteur.arme is True
+
+
+def test_stop_referme_la_session(moteur):
+    """« Stop » doit rendre la main immédiatement, sans attendre le délai."""
+    moteur.analyser("Alma")
+    assert moteur.arme is True
+    assert moteur.analyser("stop").etat == FIN_SESSION
     assert moteur.arme is False
-    assert moteur.analyser("ouvre Chrome").etat == IGNORE
+    # Il faut de nouveau prononcer le nom.
+    assert moteur.analyser("quelle heure est-il").etat == IGNORE
+
+
+@pytest.mark.parametrize("phrase", ["stop", "c'est bon", "laisse tomber", "annule", "silence"])
+def test_plusieurs_facons_de_refermer_la_session(moteur, phrase):
+    moteur.analyser("Alma")
+    assert moteur.analyser(phrase).etat == FIN_SESSION
+
+
+def test_stop_hors_session_ne_fait_rien(moteur):
+    """Sans session ouverte, « stop » ne doit pas être intercepté."""
+    assert moteur.analyser("stop").etat == IGNORE
 
 
 def test_l_armement_expire(config):

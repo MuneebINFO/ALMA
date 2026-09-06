@@ -148,6 +148,10 @@ def test_les_exemples_documentes_sont_routes_vers_leur_commande(router, config):
     """Chaque exemple affiche dans l aide doit reellement fonctionner."""
     echecs = []
     for cmd in router.commands:
+        if cmd.contextuel:
+            # Ces commandes exigent un contexte (« recherche Damso » suppose
+            # un site ouvert) : elles sont couvertes par test_site_search.py.
+            continue
         for exemple in cmd.examples:
             resolution = resolve(router, config, exemple)
             if resolution is None or resolution.command.name != cmd.name:

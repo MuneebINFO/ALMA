@@ -27,6 +27,11 @@ voice:
   vosk_model_path: ""        # ex: models/vosk-model-small-fr-0.22
   energy_threshold: 300      # sensibilite du micro
   pause_threshold: 0.8
+  # Duree de la session d ecoute. Apres chaque echange l assistant reste
+  # receptif, et le compte a rebours repart des qu on reparle. Dites « stop »
+  # pour la refermer avant la fin. C est aussi la duree de validite du
+  # contexte (« va sur YouTube » puis « recherche Damso »).
+  armed_seconds: 60
   timeout: 6                 # secondes d attente avant d abandonner l ecoute
   phrase_time_limit: 12
 
