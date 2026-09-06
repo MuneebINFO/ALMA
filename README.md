@@ -452,10 +452,16 @@ quel temps fait-il à Bruxelles                (free weather API, no key)
 
 ### Music
 ```
-mets de la musique            pause
+mets de la musique            lance la vidéo
+pause                         mets pause à la vidéo
 chanson suivante              chanson précédente
 arrête la musique
 ```
+
+"lance la vidéo" and "mets pause à la vidéo" are **explicit**: the first only
+resumes, the second only pauses. Bare "pause" or "play" stays a toggle. The
+object must end the sentence — "lance la vidéo Interstellar" names a specific
+video, so it is treated as a search rather than a playback command.
 
 ### Miscellaneous
 ```

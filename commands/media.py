@@ -174,14 +174,13 @@ def media_what_is_playing(ctx: CommandContext) -> Response:
     patterns=[
         r"^(?:play|pause)$",
         r"^" + VERBES_PAUSE + r"\s*(?:la\s+)?(?:musique|video|lecture|le\s+son|ca|tout\s+ca)?$",
-        r"(?:met[s]?|mettre)\s+(?:la\s+)?(?:musique|video|lecture)\s+en\s+pause",
         r"^(?:reprend[s]?|continue|relance)\s*(?:la\s+)?(?:musique|video|lecture)?$",
         r"(?:appuie|clique)\s+sur\s+pause",
     ],
     keywords=[["pause"], ["pause", "musique"], ["pause", "video"]],
     category="Musique",
     description="Lecture ou pause du lecteur actif",
-    examples=["pause", "mets la musique en pause"],
+    examples=["pause", "play"],
     priority=86,
 )
 def media_play_pause(ctx: CommandContext) -> Response:
@@ -294,3 +293,59 @@ def play_music(ctx: CommandContext) -> Response:
         "Aucune musique dans " + str(dossier) + " et Spotify est introuvable. "
         "Renseignez paths.music dans config.yaml."
     )
+
+
+# Ce sur quoi peut porter une demande de lecture ou de pause.
+# « son » est volontairement absent : « remets le son » veut dire retablir
+# le volume, pas relancer la lecture.
+OBJET_LECTURE = r"(?:video|videos|film|musique|chanson|lecture|serie|episode|podcast)"
+
+
+@command(
+    name="media_lecture",
+    patterns=[
+        # L objet doit terminer la phrase : « lance la video Interstellar »
+        # reste une recherche, pas une commande de lecture.
+        r"^(?:lance|lancer|joue|jouer|demarre|demarrer|relance|relancer|remet[s]?|"
+        r"reprend[s]?|reprendre|continue|continuer)\s+"
+        r"(?:la\s+|le\s+|l\s+)?" + OBJET_LECTURE + r"$",
+        r"^(?:met[s]?|mettre)\s+(?:la\s+|le\s+)?" + OBJET_LECTURE + r"\s+en\s+(?:marche|lecture|route)$",
+        r"^(?:appuie|appuyer)\s+sur\s+(?:le\s+bouton\s+)?(?:play|lecture)$",
+    ],
+    # Pas de mots-cles de secours ici : « lance » + « video » captureraient
+    # « lance la video Interstellar », qui designe une video precise.
+    category="Musique",
+    description="Lancer la lecture de la vidéo ou de la musique",
+    examples=["lance la vidéo", "reprends la lecture"],
+    priority=93,
+)
+def media_lecture(ctx: CommandContext) -> Response:
+    """Relance ce qui est en pause, sans basculer si ça joue déjà."""
+    repris = media_control.reprendre_tout()
+    if repris:
+        return Response.action("Lecture : " + ", ".join(s.application for s in repris) + ".")
+    return Response.action("C'est parti.")
+
+
+@command(
+    name="media_mettre_en_pause",
+    patterns=[
+        r"^(?:met[s]?|mettre)\s+(?:en\s+)?pause\s+(?:a\s+|sur\s+)?"
+        r"(?:la\s+|le\s+|l\s+)?" + OBJET_LECTURE + r"$",
+        r"^(?:met[s]?|mettre)\s+(?:la\s+|le\s+|l\s+)?" + OBJET_LECTURE + r"\s+en\s+pause$",
+        r"^pause\s+(?:a\s+)?(?:la\s+|le\s+|l\s+)?" + OBJET_LECTURE + r"$",
+        # « arrête la musique » garde sa commande dediee (media_stop) : on ne
+        # l intercepte pas ici.
+    ],
+    keywords=[["pause", "video"], ["pause", "musique"]],
+    category="Musique",
+    description="Mettre la vidéo ou la musique en pause",
+    examples=["mets pause à la vidéo", "mets la vidéo en pause"],
+    priority=93,
+)
+def media_mettre_en_pause(ctx: CommandContext) -> Response:
+    """Met en pause sans relancer si c'était déjà arrêté."""
+    arretes = media_control.mettre_en_pause_tout()
+    if arretes:
+        return Response.action("En pause : " + ", ".join(s.application for s in arretes) + ".")
+    return Response.action("C'est en pause.")

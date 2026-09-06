@@ -58,6 +58,16 @@ CAS_NOMINAUX = [
     ("quel temps fait-il a Bruxelles", "weather"),
     # Musique
     ("mets de la musique", "play_music"),
+    # Lecture et pause explicites, distinctes de la bascule « pause » seule.
+    ("lance la vidéo", "media_lecture"),
+    ("joue la vidéo", "media_lecture"),
+    ("démarre la vidéo", "media_lecture"),
+    ("remets la vidéo", "media_lecture"),
+    ("mets la vidéo en marche", "media_lecture"),
+    ("mets pause à la vidéo", "media_mettre_en_pause"),
+    ("mets la vidéo en pause", "media_mettre_en_pause"),
+    ("pause la vidéo", "media_mettre_en_pause"),
+    ("mets pause à la musique", "media_mettre_en_pause"),
     ("mets pause sur l ecran 2", "media_pause_ecran"),
     ("arrete la video sur le deuxieme ecran", "media_pause_ecran"),
     ("reprends la lecture sur l ecran 2", "media_reprise_ecran"),
@@ -215,3 +225,38 @@ def test_une_phrase_hors_sujet_reste_ignoree(router, config):
     for phrase in ("il fait beau aujourd hui", "j ai mangé une pomme ce matin",
                    "xyzzy plover blorb"):
         assert resolve(router, config, phrase) is None, phrase
+
+
+# Formulations voisines qui doivent garder leur commande d'origine : c'est
+# la contrepartie des motifs de lecture et de pause explicites.
+VOISINS_A_NE_PAS_CAPTURER = [
+    ("remets le son", "volume_unmute"),        # rétablir le volume, pas relire
+    ("arrête la musique", "media_stop"),       # arrêt, pas mise en pause
+    ("arrête la vidéo", "media_stop"),
+    ("pause", "media_play_pause"),             # bascule, sans objet précisé
+    ("play", "media_play_pause"),
+    ("mets de la musique", "play_music"),      # lancer une lecture depuis zéro
+    ("mets pause sur l écran 2", "media_pause_ecran"),
+    ("lance un minuteur de 5 minutes", "set_timer"),
+    ("clique sur la vidéo Interstellar", "cliquer_sur"),
+]
+
+
+@pytest.mark.parametrize("phrase,attendu", VOISINS_A_NE_PAS_CAPTURER)
+def test_les_commandes_voisines_ne_sont_pas_capturees(router, config, phrase, attendu):
+    """
+    « lance la vidéo » et « mets pause à la vidéo » sont des motifs larges :
+    ils ne doivent pas déborder sur les commandes proches.
+    """
+    resolution = resolve(router, config, phrase)
+    assert resolution is not None, phrase
+    assert resolution.command.name == attendu
+
+
+def test_un_titre_apres_l_objet_reste_une_recherche(router, config):
+    """
+    « lance la vidéo » lance la lecture, mais « lance la vidéo Interstellar »
+    désigne une vidéo précise : l'objet doit terminer la phrase.
+    """
+    resolution = resolve(router, config, "lance la vidéo Interstellar")
+    assert resolution is None or resolution.command.name != "media_lecture"
