@@ -25,6 +25,60 @@ ORDINAUX = {
 }
 
 
+# Nature de l element, selon le mot employe. « le bouton lecture » ne doit pas
+# tomber sur un titre de video qui contient le mot « lecture ».
+TYPES_PAR_MOT = {
+    "bouton": (interaction.BOUTON,),
+    "boutons": (interaction.BOUTON,),
+    "lien": (interaction.LIEN,),
+    "image": (interaction.IMAGE,),
+    "vignette": (interaction.IMAGE,),
+    "onglet": (interaction.ONGLET,),
+    "case": (interaction.CASE,),
+    "champ": (interaction.CHAMP,),
+    "video": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE, interaction.ITEM_LISTE),
+    "film": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE, interaction.ITEM_LISTE),
+    "serie": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE, interaction.ITEM_LISTE),
+    "episode": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE, interaction.ITEM_LISTE),
+    "clip": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE),
+    "chanson": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE),
+    "musique": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE),
+    "titre": (interaction.LIEN, interaction.GROUPE),
+    "resultat": (interaction.LIEN, interaction.GROUPE, interaction.ITEM_LISTE),
+    "proposition": (interaction.LIEN, interaction.GROUPE, interaction.ITEM_LISTE),
+}
+
+# Les interfaces sont souvent en anglais, meme quand on parle francais :
+# « le bouton lecture » doit trouver « Play ».
+SYNONYMES_CONTROLE = {
+    "lecture": ("lecture", "lire", "play", "jouer", "demarrer"),
+    "pause": ("pause", "suspendre", "mettre en pause"),
+    "suivant": ("suivant", "suivante", "next"),
+    "precedent": ("precedent", "precedente", "previous"),
+    "plein ecran": ("plein ecran", "fullscreen", "full screen", "agrandir"),
+    "muet": ("muet", "mute", "couper le son"),
+    "son": ("son", "volume", "unmute"),
+    "recherche": ("recherche", "rechercher", "search"),
+    "accueil": ("accueil", "home"),
+    "abonnements": ("abonnements", "subscriptions", "s abonner", "subscribe"),
+    "parametres": ("parametres", "settings", "options"),
+    "fermer": ("fermer", "close", "quitter"),
+    "suivre": ("suivre", "follow", "s abonner"),
+    "aime": ("aime", "j aime", "like"),
+    "partager": ("partager", "share"),
+}
+
+
+def variantes_libelle(libelle: str) -> list:
+    """Le libelle demande, plus ses equivalents anglais s il en a."""
+    norme = text_utils.normalize(libelle).strip()
+    for canonique, synonymes in SYNONYMES_CONTROLE.items():
+        if norme in synonymes or norme == canonique:
+            return list(dict.fromkeys([libelle] + list(synonymes)))
+    return [libelle]
+
+
+
 def fenetre_visee(ctx: CommandContext):
     """
     Fenetre sur laquelle agir : celle du site en cours si on en a un en
@@ -159,30 +213,64 @@ def cliquer_ordinal(ctx: CommandContext) -> Response:
 @command(
     name="cliquer_sur",
     patterns=[
-        r"^(?:clique|cliquer|clic|appuie|appuyer)\s+(?:sur\s+)?(.+)$",
-        r"^(?:selectionne|selectionner|choisis|choisir)\s+(.+)$",
+        # Le type est optionnel : « clique sur le bouton lecture »,
+        # « clique sur la video Interstellar », « clique sur Abonnements ».
+        # Uniquement des verbes de clic : « ouvre », « lance » ou « mets »
+        # appartiennent aux applications et aux sites, pas ici.
+        r"^(?:clique|cliquer|clic|appuie|appuyer|selectionne|selectionner|"
+        r"choisis|choisir|tape\s+sur)\s+(?:sur\s+)?"
+        r"(?:le\s+|la\s+|les\s+|l\s+|un\s+|une\s+)?"
+        r"(?P<type>bouton|boutons|lien|image|vignette|onglet|case|champ|video|film|"
+        r"serie|episode|clip|chanson|musique|titre|resultat|proposition)?\s*"
+        r"(?P<label>.+)$",
     ],
     category="Navigation",
     description="Cliquer sur un élément visible, en le nommant",
-    examples=["clique sur Abonnements"],
+    examples=["clique sur Abonnements", "clique sur le bouton lecture"],
     priority=91,
 )
 def cliquer_sur(ctx: CommandContext) -> Response:
-    """Clique sur l'élément dont le nom correspond à ce qui est demandé."""
-    voulu = ctx.arg.strip()
-    if not voulu:
+    """
+    Clique sur l'élément nommé.
+
+    Le type éventuellement précisé (« le bouton », « la vidéo ») restreint la
+    recherche : « le bouton lecture » ne doit pas atterrir sur un titre de
+    vidéo contenant le mot « lecture ».
+    """
+    libelle = ctx.group("label").strip()
+    mot_type = text_utils.normalize(ctx.group("type")).strip()
+    if not libelle:
         return Response.error("Sur quoi dois-je cliquer ?")
 
     fenetre = fenetre_visee(ctx)
     if fenetre is None:
         return Response.error("Je ne vois aucune fenêtre où cliquer.")
 
-    cibles = interaction.elements_cliquables(fenetre)
-    cible = interaction.chercher_cible(cibles, voulu)
+    types = TYPES_PAR_MOT.get(mot_type)
+    variantes = variantes_libelle(libelle)
+
+    def chercher():
+        cibles = interaction.elements_cliquables(fenetre)
+        for variante in variantes:
+            trouve = interaction.chercher_cible(cibles, variante, types=types)
+            if trouve is not None:
+                return trouve
+        return None
+
+    cible = chercher()
     if cible is None:
+        # Les pages se chargent en asynchrone : ce qu on cherche peut n etre
+        # pas encore apparu. On laisse une seconde chance avant d abandonner.
+        import time
+
+        time.sleep(1.2)
+        cible = chercher()
+
+    if cible is None:
+        quoi = (mot_type + " ") if mot_type else ""
         return Response.error(
-            "Je ne trouve pas « " + voulu + " » à l'écran. "
-            "Dites « clique sur la première vidéo » si vous préférez par position."
+            "Je ne trouve pas " + quoi + "« " + libelle + " » à l'écran. "
+            "Dites « clique sur la première vidéo » pour choisir par position."
         )
     if interaction.cliquer(cible):
         return Response(text="Je clique sur « " + cible.nom[:60] + " ».")

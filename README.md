@@ -371,12 +371,16 @@ something ("mets X sur YouTube").
 ### Scrolling and clicking
 
 ```
-scrolle                       scroll down (the default)
-fais défiler vers le haut     scroll up
+scrolle                            scroll down (the default)
+fais défiler vers le haut          scroll up
 descends / remonte la page
-arrête                        stops the scrolling
-clique sur Abonnements        clicks the element with that name
-clique sur la première vidéo  clicks by position instead
+arrête                             stops the scrolling
+
+clique sur Abonnements             clicks the element with that name
+clique sur la vidéo Interstellar   names the kind, then the title
+clique sur le film Interstellar
+clique sur le bouton lecture       restricts the search to buttons
+clique sur la première vidéo       picks by position instead
 ```
 
 Scrolling is **continuous**: the command returns immediately and ALMA keeps
@@ -401,6 +405,19 @@ so "Damso" targets the link named *Damso* rather than an 80-character title
 that merely mentions him. Only elements **actually on screen** are considered;
 anything scrolled out of view is ignored, since clicking it would land
 somewhere else.
+
+**Naming the kind narrows the search.** "clique sur le bouton lecture" looks at
+buttons first, so it will not land on a video title that happens to contain the
+word. Recognised kinds: *bouton, lien, image, vignette, onglet, case, champ,
+vidéo, film, série, épisode, clip, chanson, musique, titre, résultat*. If
+nothing matches within that kind, ALMA widens the search rather than giving up.
+
+**English labels are matched too.** Interfaces are often in English even when
+you speak French, so "le bouton lecture" also finds *Play*, "plein écran" finds
+*Full screen*, and "abonnements" finds *Subscriptions*.
+
+Pages load asynchronously, so if nothing is found ALMA waits a moment and looks
+once more before answering.
 
 > "clique sur la première vidéo" is a heuristic: nothing distinguishes a video
 > from any other link, so ALMA takes the elements in reading order and skips
@@ -645,7 +662,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-238 tests cover:
+251 tests cover:
 
 - normalisation and fuzzy matching (`test_text_utils.py`);
 - **routing**: every sentence must reach the right handler, including the
@@ -662,6 +679,9 @@ pytest -q
 - **screen targeting**: with two players running on two screens, only the one
   on the requested screen is paused; the keyboard fallback is used when no media
   session exists (`test_desktop_media.py`);
+- **naming a target**: "la vidéo Interstellar" searches for *Interstellar*,
+  the kind restricts the search, and English labels are matched
+  (`test_interaction.py`);
 - **scrolling and clicking**: default direction, cursor restored afterwards,
   "arrête" stops the scroll instead of closing the session, and the ambiguous
   verbs "monte"/"descends" still reach volume and brightness

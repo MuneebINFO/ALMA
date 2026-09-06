@@ -210,18 +210,29 @@ def _rectangle_fenetre(handle) -> tuple | None:
 # --------------------------------------------------------------------------
 # Clic sur un element de la page
 # --------------------------------------------------------------------------
-# Types d elements sur lesquels un clic a du sens.
-TYPE_BOUTON = 50000
-TYPES_CLIQUABLES = (50005, 50006, 50033, 50026, 50000)   # bouton, lien, image, item, ?
+# Identifiants de types UI Automation.
+BOUTON = 50000
+CASE = 50002
+CHAMP = 50004
+LIEN = 50005
+IMAGE = 50006
+ITEM_LISTE = 50007
+ONGLET = 50019
+GROUPE = 50026
+VOLET = 50033
+
+# Types sur lesquels un clic a du sens.
+TYPES_CLIQUABLES = (BOUTON, CASE, LIEN, IMAGE, ITEM_LISTE, ONGLET, GROUPE, VOLET)
 
 
 class Cible:
     """Un element cliquable de la page."""
 
-    def __init__(self, nom: str, rect: tuple, element) -> None:
+    def __init__(self, nom: str, rect: tuple, element, type_controle: int = 0) -> None:
         self.nom = nom
         self.rect = rect
         self.element = element
+        self.type_controle = type_controle
 
     @property
     def surface(self) -> int:
@@ -273,7 +284,7 @@ def elements_cliquables(fenetre, taille_min: int = 12,
                 continue
             if zone is not None and not _visible_dans(rect, zone):
                 continue
-            cible = Cible(nom, rect, element)
+            cible = Cible(nom, rect, element, element.CurrentControlType)
             cible.fenetre = fenetre
             cibles.append(cible)
         except Exception:
@@ -344,17 +355,27 @@ def cliquer(cible: Cible) -> bool:
     return _clic_physique(cible)
 
 
-def chercher_cible(cibles: list, termes: str):
+def chercher_cible(cibles: list, termes: str, types=None):
     """
     Retrouve l element correspondant a ce que l utilisateur a nomme.
+
     On prefere la correspondance la plus courte : « Damso » doit viser le
     lien « Damso » plutot qu un titre de 80 caracteres qui le contient.
+
+    `types` restreint la recherche a certaines natures d elements (« le
+    bouton lecture » ne doit pas tomber sur un titre de video). Si rien n est
+    trouve dans ces types, on elargit plutot que de repondre bredouille.
     """
     from core import text_utils
 
     voulu = text_utils.normalize(termes).strip()
     if not voulu:
         return None
+    if types:
+        restreint = [c for c in cibles if c.type_controle in types]
+        trouve = chercher_cible(restreint, termes) if restreint else None
+        if trouve is not None:
+            return trouve
     exacts, partiels = [], []
     for cible in cibles:
         nom = text_utils.normalize(cible.nom).strip()

@@ -196,3 +196,68 @@ def test_les_verbes_ambigus_restent_au_bon_endroit(assistant, router, phrase, at
     """
     resolution = resoudre(router, assistant, phrase)
     assert resolution is not None and resolution.command.name == attendu
+
+
+# --------------------------------------------------------------------------
+# Titre et type précisés : « la vidéo Interstellar », « le bouton lecture »
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("phrase,type_attendu,titre_attendu", [
+    ("clique sur la vidéo Interstellar", "video", "Interstellar"),
+    ("clique sur le film Interstellar", "film", "Interstellar"),
+    ("clique sur le bouton lecture", "bouton", "lecture"),
+    ("appuie sur le bouton pause", "bouton", "pause"),
+    ("sélectionne la série Breaking Bad", "serie", "Breaking Bad"),
+    ("clique sur Abonnements", "", "Abonnements"),
+    ("clique sur l'onglet Musique", "onglet", "Musique"),
+])
+def test_le_type_est_separe_du_titre(assistant, router, phrase, type_attendu, titre_attendu):
+    """« la vidéo Interstellar » doit chercher « Interstellar », pas la phrase entière."""
+    resolution = resoudre(router, assistant, phrase)
+    assert resolution is not None and resolution.command.name == "cliquer_sur", phrase
+    raw = Utterance.parse(phrase, wake_words=assistant.config.get("general.wake_words")).raw
+    groupes = {}
+    for nom in ("type", "label"):
+        debut, fin = resolution.match.span(nom)
+        groupes[nom] = raw[debut:fin] if debut >= 0 else ""
+    # Le motif s'applique au texte normalisé : le groupe capturé revient
+    # accentué (« vidéo »), c'est la commande qui le normalise ensuite.
+    from core import text_utils
+
+    assert text_utils.normalize(groupes["type"]).strip() == type_attendu
+    assert groupes["label"] == titre_attendu
+
+
+def test_le_type_restreint_la_recherche():
+    """« le bouton lecture » ne doit pas viser un titre de vidéo."""
+    cibles = [
+        interaction.Cible("Lecture d'un film culte", (0, 0, 300, 30), None, interaction.LIEN),
+        interaction.Cible("Lecture", (0, 40, 80, 70), None, interaction.BOUTON),
+    ]
+    trouve = interaction.chercher_cible(cibles, "lecture", types=(interaction.BOUTON,))
+    assert trouve.type_controle == interaction.BOUTON
+
+
+def test_la_recherche_s_elargit_si_le_type_ne_donne_rien():
+    """Mieux vaut trouver ailleurs que de répondre bredouille."""
+    cibles = [interaction.Cible("Interstellar", (0, 0, 300, 30), None, interaction.LIEN)]
+    trouve = interaction.chercher_cible(cibles, "Interstellar", types=(interaction.BOUTON,))
+    assert trouve is not None and trouve.nom == "Interstellar"
+
+
+@pytest.mark.parametrize("demande,nom_reel", [
+    ("lecture", "Play"),
+    ("pause", "Pause (k)"),
+    ("plein écran", "Full screen"),
+    ("abonnements", "Subscriptions"),
+])
+def test_les_libelles_anglais_sont_reconnus(demande, nom_reel):
+    """Les interfaces sont souvent en anglais même quand on parle français."""
+    from commands.interaction import variantes_libelle
+
+    cibles = [interaction.Cible(nom_reel, (0, 0, 100, 30), None, interaction.BOUTON)]
+    trouve = None
+    for variante in variantes_libelle(demande):
+        trouve = interaction.chercher_cible(cibles, variante)
+        if trouve is not None:
+            break
+    assert trouve is not None, demande + " devrait trouver " + nom_reel
