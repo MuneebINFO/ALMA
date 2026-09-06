@@ -258,7 +258,7 @@ class LevelMeterListener:
     """
 
     # Plancher absolu : en dessous, on considere que c est du bruit de fond.
-    PLANCHER = 0.004
+    PLANCHER = 0.0025
     # Multiplicateur applique au bruit ambiant mesure.
     FACTEUR = 3.5
 

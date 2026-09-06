@@ -548,12 +548,18 @@ class AlmaApp:
         if not en_cours.strip():
             return False
         for proposition in propositions:
+            # Un ordre court n est JAMAIS un echo. « Alma », « arrête »,
+            # « stop » doivent toujours passer -- d autant que nos propres
+            # phrases contiennent le nom de l assistant, ce qui les ferait
+            # prendre pour de l echo.
+            if self.moteur.separer_mot_appel(proposition)[0]:
+                return False
             mots = [m for m in text_utils.tokenize(text_utils.normalize(proposition))
                     if len(m) >= 4]
-            if not mots:
+            if len(mots) < 3:
                 continue
             communs = sum(1 for m in mots if m in en_cours)
-            if communs / len(mots) >= 0.6:
+            if communs / len(mots) >= 0.75:
                 return True
         return False
 

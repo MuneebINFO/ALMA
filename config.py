@@ -67,7 +67,10 @@ DEFAULTS: dict = {
             "click": "clique",
             "next": "suivant",
         },
-        "min_threshold": 0.004,
+        # Mesure sur un micro integre typique : bruit de fond moyen 0,0001,
+        # pics 0,0016. Un plancher a 0,004 passe au-dessus des voix faibles.
+        # Verifiez le votre avec « python diagnostic_micro.py ».
+        "min_threshold": 0.0025,
         "noise_factor": 3.5,
         # Duree pendant laquelle Alma reste receptif apres un « Alma » seul.
         "armed_seconds": 60,

@@ -164,3 +164,49 @@ def test_les_informations_restent_dites(assistant):
     """En revanche, une information sans effet visible doit être énoncée."""
     reponse = assistant.handle("quelle heure est-il")
     assert reponse.ok and reponse.speak is True
+
+
+# --------------------------------------------------------------------------
+# La garde anti-écho ne doit pas rendre l'assistant sourd
+# --------------------------------------------------------------------------
+def echo(assistant, texte_parle, entendu):
+    """Reproduit la décision de l'interface, sans ouvrir de fenêtre."""
+    from core import text_utils
+
+    en_cours = text_utils.normalize(texte_parle)
+    if not en_cours.strip():
+        return False
+    for proposition in entendu:
+        if assistant.moteur.separer_mot_appel(proposition)[0]:
+            return False
+        mots = [m for m in text_utils.tokenize(text_utils.normalize(proposition))
+                if len(m) >= 4]
+        if len(mots) < 3:
+            continue
+        communs = sum(1 for m in mots if m in en_cours)
+        if communs / len(mots) >= 0.75:
+            return True
+    return False
+
+
+ACCUEIL = "Je suis à l'écoute. Dites « ALMA » pour m'activer, ou « ALMA » suivi de votre demande."
+
+
+@pytest.mark.parametrize("ordre", ["Alma", "alma", "Alma quelle heure est-il", "arrête", "stop"])
+def test_un_ordre_nest_jamais_pris_pour_un_echo(assistant, ordre):
+    """
+    Le message d'accueil contient le nom de l'assistant : sans garde-fou, dire
+    « Alma » pendant qu'il parle était classé comme écho et ignoré.
+    """
+    assert echo(assistant, ACCUEIL, [ordre]) is False, ordre
+
+
+def test_sa_propre_phrase_reste_reconnue_comme_un_echo(assistant):
+    """Le garde-fou doit continuer à faire son travail sur une vraie reprise."""
+    parle = "Je cherche les meilleures recettes de crêpes sur YouTube"
+    assert echo(assistant, parle, ["je cherche les meilleures recettes de crêpes"]) is True
+
+
+def test_une_demande_differente_pendant_qu_il_parle_passe(assistant):
+    parle = "Je cherche les meilleures recettes de crêpes sur YouTube"
+    assert echo(assistant, parle, ["mets le volume à trente pour cent"]) is False
