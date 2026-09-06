@@ -316,10 +316,21 @@ websites:
     search_url: https://example.com/search?q={q}
 ```
 
-> **One honest limitation:** Windows only exposes the title of a browser
-> window's **active** tab. A site open in a background tab is invisible to any
-> program, ALMA included — it will open a new tab rather than find the hidden
-> one.
+**Background tabs are found too.** A window title only ever reflects the
+*active* tab, so ALMA also reads the tab strip through UI Automation — the
+accessibility API screen readers use. Saying "va sur l'onglet YouTube" switches
+to the YouTube tab even when TikTok is the one on screen, instead of opening a
+duplicate.
+
+Simply showing a site never reloads it: "va sur YouTube" activates the tab and
+leaves your video playing. Navigation only happens when you actually ask for
+something ("mets X sur YouTube").
+
+> **Two limitations worth knowing.** Firefox only exposes its active tab to UI
+> Automation, so background tabs are found in Chromium browsers (Chrome, Edge,
+> Brave, Vivaldi) but not in Firefox. And a tab is matched on its *title*: a
+> GitHub tab named "Your Repositories" contains no clue that it is GitHub, so
+> ALMA will open a new one.
 
 ### System
 ```
@@ -490,7 +501,8 @@ alma/
 │   ├── text_utils.py       aligned normalisation and fuzzy matching
 │   ├── input_sources.py    input sources (text, voice, gestures later)
 │   ├── wake.py             wake word and listening state machine
-│   ├── desktop.py          screens, windows, focus and tab navigation
+│   ├── desktop.py          screens, windows and focus
+│   ├── browser_tabs.py     reads and activates browser tabs (UI Automation)
 │   ├── media_control.py    per-application playback control
 │   ├── tts.py              speech synthesis (neural, SAPI5 fallback)
 │   ├── voice_neural.py     edge-tts neural voice
@@ -557,7 +569,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-188 tests cover:
+198 tests cover:
 
 - normalisation and fuzzy matching (`test_text_utils.py`);
 - **routing**: every sentence must reach the right handler, including the
@@ -574,7 +586,9 @@ pytest -q
 - **screen targeting**: with two players running on two screens, only the one
   on the requested screen is paused; the keyboard fallback is used when no media
   session exists (`test_desktop_media.py`);
-- **site search**: tab reuse, query not truncated at the first "sur", and
+- **tab reuse**: a background tab is activated rather than duplicated, showing
+  a site never reloads it, and searching does navigate (`test_site_search.py`);
+- **site search**: query not truncated at the first "sur", and
   Wikipedia still handled by its dedicated summary-reading command
   (`test_site_search.py`);
 - **loose phrasings**: "je voudrais que tu montes le son" must work, while

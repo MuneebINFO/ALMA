@@ -15,6 +15,7 @@ from core.registry import command
 _FILLERS = (
     "moi", "le", "la", "les", "l", "un", "une", "des", "mon", "ma", "mes",
     "the", "my", "app", "application", "logiciel", "programme", "stp",
+    "onglet", "onglets", "page", "site", "tab", "fenetre",
     "s'il te plaît", "s il vous plait", "please",
 )
 

@@ -20,7 +20,14 @@ def executer(router, assistant, phrase):
 
 @pytest.fixture
 def sans_navigateur(monkeypatch):
-    """Aucun site n'est ouvert : tout doit passer par une ouverture classique."""
+    """
+    Aucun site n'est ouvert : tout doit passer par une ouverture classique.
+    On neutralise aussi la lecture des onglets, sinon le résultat dépendrait
+    de ce qui est réellement ouvert sur la machine de test.
+    """
+    from core import browser_tabs
+
+    monkeypatch.setattr(browser_tabs, "trouver_onglet", lambda *a, **k: None)
     monkeypatch.setattr(desktop, "trouver_fenetre", lambda *a, **k: None)
     ouvertes = []
     monkeypatch.setattr(websites, "open_url", lambda url: ouvertes.append(url) or True)
@@ -60,9 +67,14 @@ def test_onglet_existant_reutilise(assistant, router, monkeypatch):
     Si le site est déjà l'onglet actif d'une fenêtre, on doit reprendre cette
     fenêtre plutôt que d'en ouvrir une nouvelle.
     """
+    from core import browser_tabs
+
     fenetre = desktop.Fenetre(handle=7, titre="Netflix - Google Chrome",
                               processus="chrome.exe", ecran=1)
+    # Aucun onglet detecte : on force le repli sur le titre de fenetre.
+    monkeypatch.setattr(browser_tabs, "trouver_onglet", lambda *a, **k: None)
     monkeypatch.setattr(desktop, "trouver_fenetre", lambda *a, **k: fenetre)
+    monkeypatch.setattr(desktop, "mettre_au_premier_plan", lambda h: True)
     naviguees = []
     monkeypatch.setattr(desktop, "naviguer_dans_fenetre",
                         lambda f, url: naviguees.append((f.handle, url)) or True)
@@ -101,3 +113,104 @@ def test_beaucoup_de_sites_ont_une_recherche_interne(config):
     assert len(avec_recherche) >= 25
     for attendu in ("netflix", "youtube", "primevideo", "disney", "spotifyweb", "twitch"):
         assert attendu in avec_recherche, attendu + " devrait supporter la recherche"
+
+
+# --------------------------------------------------------------------------
+# Onglets en arriere-plan
+# --------------------------------------------------------------------------
+class OngletFactice:
+    """Double d'un onglet : mémorise s'il a été activé."""
+
+    def __init__(self, nom, fenetre):
+        self.nom = nom
+        self.fenetre = fenetre
+        self.active = False
+
+    def activer(self):
+        self.active = True
+        return True
+
+
+@pytest.fixture
+def onglet_youtube(monkeypatch):
+    """Un onglet YouTube existe, mais en arrière-plan (titre de fenêtre = TikTok)."""
+    from core import browser_tabs
+
+    fenetre = desktop.Fenetre(handle=5, titre="TikTok - Google Chrome",
+                              processus="chrome.exe", ecran=1)
+    onglet = OngletFactice("YouTube - une vidéo", fenetre)
+    monkeypatch.setattr(browser_tabs, "trouver_onglet", lambda *a, **k: onglet)
+    monkeypatch.setattr(desktop, "trouver_fenetre", lambda *a, **k: None)
+    monkeypatch.setattr(desktop, "mettre_au_premier_plan", lambda h: True)
+    return onglet
+
+
+def test_onglet_en_arriere_plan_est_active(assistant, router, onglet_youtube, monkeypatch):
+    """
+    Le cas qui échouait : YouTube ouvert dans un onglet d'arrière-plan n'était
+    pas vu, car Windows n'expose que le titre de l'onglet actif.
+    """
+    monkeypatch.setattr(websites, "open_url",
+                        lambda url: pytest.fail("aucun onglet ne devait être ouvert"))
+    reponse, _ = executer(router, assistant, "va sur l'onglet YouTube")
+    assert reponse.ok
+    assert onglet_youtube.active is True
+    assert "onglet" in reponse.text.lower()
+
+
+def test_afficher_un_site_ne_recharge_pas_la_page(assistant, router, onglet_youtube, monkeypatch):
+    """
+    « va sur YouTube » doit seulement AFFICHER l'onglet. Y naviguer
+    rechargerait l'accueil et couperait la vidéo en cours.
+    """
+    monkeypatch.setattr(desktop, "naviguer_dans_fenetre",
+                        lambda f, url: pytest.fail("la page ne devait pas être rechargée"))
+    monkeypatch.setattr(websites, "open_url", lambda url: True)
+    reponse, _ = executer(router, assistant, "va sur YouTube")
+    assert reponse.ok
+
+
+def test_recherche_active_l_onglet_puis_navigue(assistant, router, onglet_youtube, monkeypatch):
+    """Avec une requête, en revanche, il faut bien charger la recherche."""
+    naviguees = []
+    monkeypatch.setattr(desktop, "naviguer_dans_fenetre",
+                        lambda f, url: naviguees.append(url) or True)
+    monkeypatch.setattr(websites, "open_url",
+                        lambda url: pytest.fail("un nouvel onglet ne devait pas être ouvert"))
+    reponse, _ = executer(router, assistant, "mets lofi hip hop sur YouTube")
+    assert reponse.ok
+    assert onglet_youtube.active is True
+    assert naviguees and "youtube.com/results" in naviguees[0]
+
+
+def test_sans_onglet_existant_on_ouvre(assistant, router, monkeypatch):
+    """Si le site n'est ouvert nulle part, on ouvre normalement."""
+    from core import browser_tabs
+
+    monkeypatch.setattr(browser_tabs, "trouver_onglet", lambda *a, **k: None)
+    monkeypatch.setattr(desktop, "trouver_fenetre", lambda *a, **k: None)
+    ouvertes = []
+    monkeypatch.setattr(websites, "open_url", lambda url: ouvertes.append(url) or True)
+    reponse, _ = executer(router, assistant, "va sur Netflix")
+    assert reponse.ok
+    assert ouvertes and "netflix.com" in ouvertes[0]
+
+
+def test_les_mentions_du_navigateur_sont_ignorees():
+    """Chrome ajoute « Utilisation de la mémoire » au nom des onglets."""
+    from core.browser_tabs import _nettoyer
+
+    assert "youtube" in _nettoyer("(2) YouTube - Utilisation de la mémoire - 444 Mo")
+    assert "memoire" not in _nettoyer("Netflix - Utilisation de la mémoire - 293 Mo")
+
+
+@pytest.mark.parametrize("phrase", [
+    "va sur l'onglet YouTube", "affiche l'onglet Netflix", "bascule sur Netflix",
+    "reviens sur YouTube", "onglet Prime Video",
+])
+def test_formulations_centrees_sur_l_onglet(router, config, phrase):
+    from core.context import Utterance
+
+    utterance = Utterance.parse(phrase, wake_words=config.get("general.wake_words"))
+    resolution = router.resolve(utterance, None)
+    assert resolution is not None and resolution.command.name == "open_website", phrase

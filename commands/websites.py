@@ -60,41 +60,71 @@ def termes_de_recherche(cle: str, entree) -> list:
     return [t for t in termes if t and " " not in t]
 
 
-def ouvrir_ou_reutiliser(config, cle: str, url: str) -> tuple:
+def afficher_site(config, cle: str, url: str, naviguer: bool = False) -> tuple:
     """
-    Affiche le site en reutilisant un onglet deja ouvert quand c est possible.
+    Affiche un site en reutilisant ce qui est deja ouvert.
 
-    Le titre d une fenetre de navigateur reflete son onglet ACTIF : si ce
-    titre mentionne le site, l onglet est deja affiche et on se contente de
-    ramener la fenetre au premier plan, puis d y naviguer. Sinon on ouvre
-    normalement dans le navigateur par defaut.
+    Trois strategies, de la plus precise a la moins bonne :
+      1. un ONGLET portant ce site existe (meme en arriere-plan) : on l active ;
+      2. une FENETRE affiche deja ce site : on la ramene au premier plan ;
+      3. sinon on ouvre normalement.
 
-    Retourne (succes, "reutilise" | "ouvert").
+    `naviguer` distingue deux intentions :
+      - « va sur YouTube » veut juste AFFICHER l onglet. Y naviguer rechargerait
+        la page d accueil et interromprait la video en cours ;
+      - « mets X sur YouTube » veut charger une recherche : la navigation est
+        alors necessaire.
+
+    Retourne (succes, "onglet" | "fenetre" | "ouvert").
     """
-    from core import desktop
+    from core import browser_tabs, desktop
 
     entree = (config.get("websites", {}) or {}).get(cle, {})
-    for terme in termes_de_recherche(cle, entree):
+    termes = termes_de_recherche(cle, entree)
+
+    # 1) Un onglet existe-t-il, y compris en arriere-plan ?
+    onglet = browser_tabs.trouver_onglet(termes)
+    if onglet is not None:
+        desktop.mettre_au_premier_plan(onglet.fenetre.handle)
+        if onglet.activer():
+            if naviguer and not desktop.naviguer_dans_fenetre(onglet.fenetre, url):
+                return open_url(url), "ouvert"
+            return True, "onglet"
+
+    # 2) Repli : une fenetre dont l onglet actif affiche deja le site.
+    for terme in termes:
         fenetre = desktop.trouver_fenetre(terme, navigateurs_seulement=True)
         if fenetre is None:
             continue
+        if not naviguer:
+            return desktop.mettre_au_premier_plan(fenetre.handle), "fenetre"
         if desktop.naviguer_dans_fenetre(fenetre, url):
-            return True, "reutilise"
-        # La fenetre existe mais le pilotage a echoue : au moins on l affiche.
+            return True, "fenetre"
         desktop.mettre_au_premier_plan(fenetre.handle)
         break
+
+    # 3) Rien d ouvert : ouverture classique.
     return open_url(url), "ouvert"
+
+
+def ouvrir_ou_reutiliser(config, cle: str, url: str) -> tuple:
+    """Compatibilite : ancien nom, navigation systematique."""
+    return afficher_site(config, cle, url, naviguer=True)
 
 
 @command(
     name="open_website",
     patterns=[
         r"^" + OPEN_VERBS + r"\s+(?:le\s+site\s+)?(.+)$",
-        r"^(?:va|vas|aller)\s+sur\s+(.+)$",
+        r"^(?:va|vas|aller|retourne|reviens|passe|bascule)\s+(?:sur|a|vers|dans)\s+(.+)$",
+        # Formulations centrees sur l onglet deja ouvert.
+        r"^(?:affiche|montre|reprends|remets|ramene)\s*(?:moi)?\s+(?:l\s+)?(?:onglet|page|site)\s+(.+)$",
+        r"^(?:onglet|page)\s+(.+)$",
+        r"^(?:reviens|retourne)\s+(?:sur|a)\s+(.+)$",
     ],
     category="Sites web",
     description="Ouvrir un site web (YouTube, Gmail, GitHub, Netflix...)",
-    examples=["ouvre YouTube", "va sur GitHub", "ouvre Gmail"],
+    examples=["ouvre YouTube", "va sur l'onglet YouTube", "bascule sur Netflix"],
     priority=55,
     guard=_is_known_site,
 )
@@ -104,11 +134,13 @@ def open_website(ctx: CommandContext) -> Response:
     if resolved is None:
         return Response.error("Je ne connais pas ce site.")
     key, url = resolved
-    ok, mode = ouvrir_ou_reutiliser(ctx.config, key, url)
+    ok, mode = afficher_site(ctx.config, key, url, naviguer=False)
     if not ok:
         return Response.error("Je n'ai pas réussi à ouvrir " + url + ".")
-    if mode == "reutilise":
-        return Response(text="Je reprends l'onglet " + key + ".")
+    if mode == "onglet":
+        return Response(text="Je bascule sur l'onglet " + key + ".")
+    if mode == "fenetre":
+        return Response(text="Je reviens sur " + key + ".")
     return Response(text="J'ouvre " + key + ".")
 
 
@@ -206,12 +238,12 @@ def site_search(ctx: CommandContext) -> Response:
     modele = entree.get("search_url") if isinstance(entree, dict) else None
     cible = modele.replace("{q}", quote_plus(requete)) if modele else url
 
-    ok, mode = ouvrir_ou_reutiliser(ctx.config, cle, cible)
+    ok, mode = afficher_site(ctx.config, cle, cible, naviguer=True)
     if not ok:
         return Response.error("Je n'ai pas réussi à ouvrir " + cle + ".")
     if not modele:
         return Response(
             text="J'ouvre " + cle + ", mais je ne sais pas y chercher directement."
         )
-    prefixe = "Je reprends l'onglet " + cle if mode == "reutilise" else "J'ouvre " + cle
+    prefixe = ("Je reprends l'onglet " + cle) if mode != "ouvert" else ("J'ouvre " + cle)
     return Response(text=prefixe + " et je cherche « " + requete + " ».")

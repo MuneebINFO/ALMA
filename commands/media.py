@@ -216,7 +216,10 @@ def media_next(ctx: CommandContext) -> Response:
     name="media_previous",
     patterns=[
         r"(?:chanson|morceau|musique|piste|titre|video)\s+(?:d\s+avant|precedente?)",
-        r"^(?:precedent|precedente|retour|previous|reviens)\b",
+        # « reviens » seul est ambigu (« reviens sur YouTube » vise un onglet) :
+        # on ne le prend qu accompagne d un mot du champ lexical de la lecture.
+        r"^(?:precedent|precedente|retour|previous)\b",
+        r"^reviens\s+(?:en\s+arriere|au\s+debut|a\s+la\s+precedente)",
         r"(?:remet[s]?|repasse)\s+(?:la\s+)?(?:chanson|musique)\s+(?:d\s+avant|precedente)",
     ],
     keywords=[["musique", "precedente"], ["chanson", "precedente"], ["precedent"]],
