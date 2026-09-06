@@ -112,13 +112,17 @@ class SpeechToText:
         return self._meter
 
     def listen_live(self, on_level=None, timeout: float = 8.0,
-                    phrase_limit: float = 12.0, doit_continuer=None) -> str:
+                    phrase_limit: float = 12.0, doit_continuer=None,
+                    toutes: bool = False):
         """
         Comme listen(), mais en remontant le NIVEAU SONORE en direct via
         `on_level(niveau, etat)`. Utilise par l interface graphique pour
         montrer que la voix est bien detectee pendant que l on parle.
 
         `doit_continuer()` permet d interrompre l ecoute proprement.
+        `toutes` renvoie toutes les hypotheses du moteur au lieu de la
+        meilleure : l assistant peut alors choisir celle qui correspond a une
+        commande connue.
         """
         if not self.available:
             return ""
@@ -133,13 +137,53 @@ class SpeechToText:
             phrase_limit=phrase_limit, doit_continuer=doit_continuer,
         )
         if not brut:
-            return ""
+            return [] if toutes else ""
         audio = sr.AudioData(brut, SAMPLE_RATE, SAMPLE_WIDTH)
+        if toutes:
+            return self._transcribe_all(audio)
         return self._transcribe(audio)
 
     def recalibrate(self, duration: float = 1.0, on_level=None) -> float:
         """Remesure le bruit ambiant (utile si l environnement change)."""
         return self._compteur().calibrate(duration, on_level=on_level)
+
+    def _transcribe_all(self, audio) -> list:
+        """
+        Toutes les hypotheses du moteur, de la plus probable a la moins.
+
+        La reconnaissance se trompe souvent sur les mots courts et les mots
+        anglais dans une phrase francaise (« scroll » entendu « Paul »). La
+        bonne transcription figure frequemment dans les hypotheses suivantes :
+        l assistant peut alors choisir celle qui correspond a une commande.
+        """
+        if self.engine == "vosk" and self._vosk_model is not None:
+            unique = self._transcribe(audio)
+            return [unique] if unique else []
+        try:
+            brut = self._recognizer.recognize_google(
+                audio, language=self.language, show_all=True
+            )
+        except Exception as exc:
+            log.debug("Hypotheses indisponibles : %s", exc)
+            unique = self._transcribe(audio)
+            return [unique] if unique else []
+
+        propositions = []
+        if isinstance(brut, dict):
+            for entree in brut.get("alternative", []) or []:
+                texte = str(entree.get("transcript", "")).strip()
+                if texte:
+                    propositions.append(texte)
+        elif isinstance(brut, list):
+            for entree in brut:
+                texte = str(getattr(entree, "transcript", entree) or "").strip()
+                if texte:
+                    propositions.append(texte)
+        elif isinstance(brut, str) and brut.strip():
+            propositions.append(brut.strip())
+
+        # On garde l ordre du moteur, sans doublon.
+        return list(dict.fromkeys(propositions))
 
     def _transcribe(self, audio) -> str:
         import speech_recognition as sr

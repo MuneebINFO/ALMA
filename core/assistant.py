@@ -111,6 +111,61 @@ class Assistant:
         """Vide la memoire de court terme (fin de session)."""
         self.contexte.clear()
 
+    # -- choix de la transcription --------------------------------------------
+    def corriger(self, texte: str) -> str:
+        """
+        Applique les corrections de transcription connues, mot a mot.
+
+        La reconnaissance bute sur les mots anglais dans une phrase francaise :
+        « scroll » revient souvent en « Paul ». La table est dans la config
+        (voice.corrections), donc completable sans toucher au code.
+        """
+        from core import text_utils
+
+        corrections = self.config.get("voice.corrections", {}) or {}
+        if not corrections:
+            return texte
+        table = {
+            text_utils.normalize(str(faux)).strip(): str(vrai)
+            for faux, vrai in corrections.items()
+        }
+        mots = texte.split()
+        corriges = [
+            table.get(text_utils.normalize(mot).strip(" .,!?"), mot) for mot in mots
+        ]
+        return " ".join(corriges)
+
+    def choisir_transcription(self, propositions) -> str:
+        """
+        Choisit, parmi les hypotheses du moteur, celle qui a du sens.
+
+        Le moteur classe ses hypotheses par probabilite acoustique, sans
+        savoir ce que l assistant sait faire. On retient donc la premiere qui
+        correspond a une commande connue -- ou a une correction connue --
+        plutot que la premiere tout court. A defaut, on garde son classement.
+        """
+        from core.context import SOURCE_VOICE, Utterance
+
+        if isinstance(propositions, str):
+            propositions = [propositions]
+        propositions = [p for p in propositions if p and p.strip()]
+        if not propositions:
+            return ""
+
+        wake_words = self.config.get("general.wake_words")
+        for brute in propositions:
+            for candidate in (brute, self.corriger(brute)):
+                appel, reste = self.moteur.separer_mot_appel(candidate)
+                if appel and not reste.strip():
+                    return candidate            # le nom seul suffit
+                phrase = reste if appel else candidate
+                if not phrase.strip():
+                    continue
+                utterance = Utterance.parse(phrase, source=SOURCE_VOICE, wake_words=wake_words)
+                if self.router.resolve(utterance, self) is not None:
+                    return candidate
+        return propositions[0]
+
     # -- sorties --------------------------------------------------------------
     def emit(self, text: str, speak: bool = True) -> None:
         """Affiche (et eventuellement lit) un message."""

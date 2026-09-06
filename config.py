@@ -53,6 +53,20 @@ DEFAULTS: dict = {
         # Seuil de detection de la voix. Beaucoup de micros integres ont un
         # gain faible : ce plancher volontairement bas evite que Alma reste
         # sourd. Voir « python diagnostic_micro.py ».
+        # Corrections de transcription. La reconnaissance bute sur les mots
+        # anglais dans une phrase francaise : « scroll » revient souvent en
+        # « Paul ». Une correction n est retenue que si elle donne une
+        # commande connue, donc « cherche Paul sur YouTube » reste intact.
+        "corrections": {
+            "paul": "scroll",
+            "scrawl": "scroll",
+            "school": "scroll",
+            "pose": "pause",
+            "poz": "pause",
+            "clik": "clique",
+            "click": "clique",
+            "next": "suivant",
+        },
         "min_threshold": 0.004,
         "noise_factor": 3.5,
         # Duree pendant laquelle Alma reste receptif apres un « Alma » seul.

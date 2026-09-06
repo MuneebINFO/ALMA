@@ -92,7 +92,7 @@ def media_pause_ecran(ctx: CommandContext) -> Response:
         )
     ok, detail = media_control.agir_sur_ecran(index, "pause")
     if ok:
-        return Response(text="Pause sur l'écran " + str(index) + " : " + detail + ".")
+        return Response.action("Pause sur l'écran " + str(index) + " : " + detail + ".")
     return Response.error("Rien à mettre en pause sur l'écran " + str(index) + " (" + detail + ").")
 
 
@@ -115,7 +115,7 @@ def media_reprise_ecran(ctx: CommandContext) -> Response:
         return Response.error("Quel écran ? Dites « écran 1 » ou « écran 2 ».")
     ok, detail = media_control.agir_sur_ecran(index, "play")
     if ok:
-        return Response(text="Lecture reprise sur l'écran " + str(index) + " : " + detail + ".")
+        return Response.action("Lecture reprise sur l'écran " + str(index) + " : " + detail + ".")
     return Response.error("Rien à relancer sur l'écran " + str(index) + " (" + detail + ").")
 
 
@@ -138,7 +138,7 @@ def media_pause_tout(ctx: CommandContext) -> Response:
     if not arretes:
         return Response(text="Rien ne jouait, mais j'ai envoyé la commande pause.", speak=False)
     noms = ", ".join(s.application for s in arretes)
-    return Response(text="J'ai mis en pause : " + noms + ".")
+    return Response.action("J'ai mis en pause : " + noms + ".")
 
 
 @command(
