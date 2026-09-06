@@ -210,3 +210,55 @@ def test_sa_propre_phrase_reste_reconnue_comme_un_echo(assistant):
 def test_une_demande_differente_pendant_qu_il_parle_passe(assistant):
     parle = "Je cherche les meilleures recettes de crêpes sur YouTube"
     assert echo(assistant, parle, ["mets le volume à trente pour cent"]) is False
+
+
+# --------------------------------------------------------------------------
+# Les durées d'écoute ne doivent pas dépendre de la fréquence du micro
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("taux", [16000, 22050, 44100, 48000])
+def test_l_amorce_dure_le_meme_temps_a_toute_frequence(taux):
+    """
+    Le tampon d'amorce garde le son AVANT le déclenchement, pour ne pas
+    amputer l'attaque du premier mot. Compté en blocs, il valait 256 ms à
+    16 kHz mais seulement 85 ms à 48 kHz : « Alma » devenait « lma », capté
+    mais incompréhensible. Il doit donc être exprimé en secondes.
+    """
+    from core.stt import CHUNK, PRE_BUFFER_SECONDES
+
+    blocs = max(2, int(PRE_BUFFER_SECONDES * taux / CHUNK))
+    duree_ms = blocs * CHUNK * 1000 / taux
+    assert 300 <= duree_ms <= 500, "amorce de %d ms à %d Hz" % (duree_ms, taux)
+
+
+@pytest.mark.parametrize("taux", [16000, 44100, 48000])
+def test_la_confirmation_de_voix_dure_le_meme_temps(taux):
+    """Même exigence pour la durée de son fort qui distingue une voix d'un clic."""
+    from core.stt import CHUNK
+
+    blocs = max(2, int(0.12 * taux / CHUNK))
+    duree_ms = blocs * CHUNK * 1000 / taux
+    assert 90 <= duree_ms <= 200, "confirmation de %d ms à %d Hz" % (duree_ms, taux)
+
+
+def test_les_hypotheses_multiples_ne_font_jamais_moins_bien(monkeypatch, config):
+    """
+    La voie « hypothèses multiples » doit toujours retomber sur la
+    transcription simple si elle ne renvoie rien : sinon une régression du
+    moteur rendrait l'assistant sourd.
+    """
+    from core.stt import SpeechToText
+
+    stt = SpeechToText.__new__(SpeechToText)
+    stt.engine = "google"
+    stt.language = "fr-FR"
+    stt._vosk_model = None
+
+    class RecognizerFactice:
+        def recognize_google(self, audio, language=None, show_all=False):
+            if show_all:
+                return {}          # le moteur ne renvoie aucune hypothèse
+            return "scroll"
+
+    stt._recognizer = RecognizerFactice()
+    monkeypatch.setattr(SpeechToText, "_transcribe", lambda self, audio: "scroll")
+    assert stt._transcribe_all(object()) == ["scroll"]

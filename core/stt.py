@@ -216,8 +216,14 @@ class SpeechToText:
         elif isinstance(brut, str) and brut.strip():
             propositions.append(brut.strip())
 
-        # On garde l ordre du moteur, sans doublon.
-        return list(dict.fromkeys(propositions))
+        propositions = list(dict.fromkeys(propositions))
+        if not propositions:
+            # Filet de securite : la voie « hypotheses multiples » ne doit
+            # jamais rendre moins que la transcription simple.
+            unique = self._transcribe(audio)
+            if unique:
+                propositions = [unique]
+        return propositions
 
     def _transcribe(self, audio) -> str:
         import speech_recognition as sr
@@ -251,7 +257,11 @@ SAMPLE_RATE = 16000
 CHUNK = 1024
 SAMPLE_WIDTH = 2          # int16
 SILENCE_SECONDS = 0.9     # silence qui marque la fin d une phrase
-PRE_BUFFER_CHUNKS = 4     # on garde le debut du mot, avant le declenchement
+# Duree de son conservee AVANT le declenchement, pour ne pas amputer l attaque
+# du premier mot. Exprimee en SECONDES et non en blocs : un nombre de blocs
+# fixe represente une duree differente selon la frequence d echantillonnage,
+# et couperait le debut des mots des que le micro tourne plus vite.
+PRE_BUFFER_SECONDES = 0.40
 
 # Etats remontes a l interface pendant l ecoute.
 STATE_CALIBRATING = "calibration"
@@ -502,6 +512,9 @@ class LevelMeterListener:
         max_attente = int(timeout * blocs_par_seconde)
         max_phrase = int(phrase_limit * blocs_par_seconde)
         blocs_silence_fin = int(SILENCE_SECONDS * blocs_par_seconde)
+        # Amorce et confirmation, calculees a partir de la frequence reelle.
+        blocs_amorce = max(2, int(PRE_BUFFER_SECONDES * blocs_par_seconde))
+        blocs_confirmation = max(2, int(0.12 * blocs_par_seconde))
 
         pre_buffer: list = []
         frames: list = []
@@ -521,14 +534,16 @@ class LevelMeterListener:
                     if on_level:
                         on_level(affiche, STATE_WAITING)
                     pre_buffer.append(bloc)
-                    del pre_buffer[:-PRE_BUFFER_CHUNKS]
+                    del pre_buffer[:-blocs_amorce]
                     # Le bruit ambiant est reestime en continu tant qu on se tait,
                     # pour suivre les changements d environnement.
                     if niveau < self.threshold:
                         self._appliquer_seuil(self.ambient * 0.98 + niveau * 0.02)
-                    # Deux blocs forts d affilee : c est une voix, pas un clic.
+                    # Un son bref est un clic, pas une voix : on exige une
+                    # DUREE de son fort, elle aussi independante de la
+                    # frequence d echantillonnage.
                     blocs_forts = blocs_forts + 1 if niveau > self.threshold else 0
-                    if blocs_forts >= 2:
+                    if blocs_forts >= blocs_confirmation:
                         parle = True
                         frames.extend(pre_buffer)
                     elif index >= max_attente:
