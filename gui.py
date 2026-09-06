@@ -230,6 +230,17 @@ class AlmaApp:
                                          bg=FOND, fg=TEXTE_DOUX)
         self.etiquette_statut.pack(pady=(0, 2))
 
+        # Vu-metre : sans lui, un micro trop faible donne un assistant muet
+        # sans que rien n indique pourquoi.
+        self.vumetre = tk.Canvas(self.root, width=320, height=6, bg=FOND,
+                                 highlightthickness=0)
+        self.vumetre.pack(pady=(2, 0))
+        self.etiquette_niveau = tk.Label(self.root, text="", font=police_texte,
+                                         bg=FOND, fg=TEXTE_DOUX)
+        self.etiquette_niveau.pack(pady=(1, 0))
+        self.niveau_courant = 0.0
+        self.niveau_pic = 0.0
+
         # Ce que Alma a compris.
         self.etiquette_entendu = tk.Label(self.root, text="", font=police_entendu,
                                           bg=FOND, fg=TEXTE, wraplength=640, height=2)
@@ -321,6 +332,8 @@ class AlmaApp:
                 type_evenement, charge = self.evenements.get_nowait()
                 if type_evenement == "niveau":
                     niveau, etat = charge
+                    self.niveau_courant = niveau
+                    self.niveau_pic = max(self.niveau_pic * 0.99, niveau)
                     self.orbe.definir_niveau(niveau)
                     if etat:
                         self.definir_statut(etat)
@@ -330,6 +343,8 @@ class AlmaApp:
                     self.etiquette_entendu.configure(
                         text=("« " + charge + " »") if charge else ""
                     )
+                elif type_evenement == "niveau_texte":
+                    self.etiquette_niveau.configure(text=charge)
                 elif type_evenement == "voyant":
                     couleur, texte = charge
                     self.voyant.configure(text="●  " + texte, fg=couleur)
@@ -344,7 +359,22 @@ class AlmaApp:
         except queue.Empty:
             pass
         self._rafraichir_compte_a_rebours()
+        self._rafraichir_vumetre()
         self.root.after(40, self._traiter_evenements)
+
+    def _rafraichir_vumetre(self) -> None:
+        """Montre en direct ce que le micro capte, et le seuil a franchir."""
+        self.vumetre.delete("all")
+        largeur, hauteur = 320, 6
+        self.vumetre.create_rectangle(0, 0, largeur, hauteur, fill=FOND_CARTE, outline="")
+        rempli = int(max(0.0, min(1.0, self.niveau_courant)) * largeur)
+        couleur = ETATS["voix"][0] if self.niveau_courant > 0.15 else ETATS["veille"][0]
+        if rempli:
+            self.vumetre.create_rectangle(0, 0, rempli, hauteur, fill=couleur, outline="")
+        # Repere du pic recent, pour voir si la voix approche du declenchement.
+        pic = int(max(0.0, min(1.0, self.niveau_pic)) * largeur)
+        if pic:
+            self.vumetre.create_line(pic, 0, pic, hauteur, fill=TEXTE_DOUX)
 
     def _rafraichir_compte_a_rebours(self) -> None:
         """Affiche le temps restant de la session, tant qu elle est ouverte."""
@@ -460,6 +490,12 @@ class AlmaApp:
                 "« python diagnostic_micro.py » pour vérifier.",
             ))
 
+        peripherique = self.stt._compteur()
+        self.evenements.put((
+            "niveau_texte",
+            "micro : entrée " + str(peripherique.index_peripherique)
+            + " · " + str(peripherique.taux) + " Hz · seuil " + ("%.4f" % seuil),
+        ))
         self.evenements.put(("voyant", (ETATS["veille"][0], "à l'écoute")))
         self.evenements.put((
             "journal",
@@ -485,7 +521,11 @@ class AlmaApp:
             if not self.ecoute_active.is_set():
                 break
             if not propositions:
-                continue           # silence, ou parole non comprise
+                if getattr(self.stt, "a_capte", False):
+                    # Distinction utile : le micro a bien entendu, c est la
+                    # transcription qui a echoue.
+                    self.evenements.put(("entendu", "…je n'ai pas compris"))
+                continue
 
             # On lui coupe la parole des qu on parle -- sauf si le micro a
             # simplement capte sa propre voix dans les haut-parleurs.

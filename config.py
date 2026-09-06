@@ -49,6 +49,10 @@ DEFAULTS: dict = {
         # --- reconnaissance ---
         "stt_engine": "google",
         "stt_language": "fr-FR",
+        # Micro a utiliser : null = choix automatique (interface la plus
+        # sensible). Peut aussi etre un numero de peripherique ou un morceau
+        # de son nom. « python diagnostic_micro.py » liste les candidats.
+        "input_device": None,
         "vosk_model_path": "",
         # Seuil de detection de la voix. Beaucoup de micros integres ont un
         # gain faible : ce plancher volontairement bas evite que Alma reste

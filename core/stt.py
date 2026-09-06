@@ -30,6 +30,10 @@ class SpeechToText:
         self._vosk_model = None
         self._meter = None        # compteur de niveau, cree a la demande
         self._calibre = False     # la calibration n a lieu qu une fois
+        # Vrai quand la derniere ecoute a capte de la parole, meme si la
+        # transcription a echoue : c est la difference entre « je n ai rien
+        # entendu » et « je n ai pas compris ».
+        self.a_capte = False
         self.engine = str((config.get("voice.stt_engine") if config else "google") or "google")
         self.language = str((config.get("voice.stt_language") if config else "fr-FR") or "fr-FR")
         self._init()
@@ -109,6 +113,7 @@ class SpeechToText:
             self._meter = LevelMeterListener(
                 plancher=self.config.get("voice.min_threshold") if self.config else None,
                 facteur=self.config.get("voice.noise_factor") if self.config else None,
+                peripherique=self.config.get("voice.input_device") if self.config else None,
             )
         return self._meter
 
@@ -141,9 +146,12 @@ class SpeechToText:
             on_level=on_level, timeout=timeout,
             phrase_limit=phrase_limit, doit_continuer=doit_continuer,
         )
+        self.a_capte = bool(brut)
         if not brut:
             return [] if toutes else ""
-        audio = sr.AudioData(brut, SAMPLE_RATE, SAMPLE_WIDTH)
+        # L audio est etiquete a SA frequence reelle : le moteur de
+        # reconnaissance s en sert pour interpreter les echantillons.
+        audio = sr.AudioData(brut, compteur.taux, SAMPLE_WIDTH)
         if toutes:
             return self._transcribe_all(audio)
         return self._transcribe(audio)
@@ -164,7 +172,7 @@ class SpeechToText:
         try:
             audio, flux = compteur._open_stream()
             pics = []
-            for _ in range(max(1, int(duree * SAMPLE_RATE / CHUNK))):
+            for _ in range(max(1, int(duree * compteur.taux / CHUNK))):
                 pics.append(_rms(flux.read(CHUNK, exception_on_overflow=False)))
             return max(pics) if pics else 0.0
         except Exception as exc:
@@ -269,6 +277,109 @@ def _rms(raw: bytes) -> float:
     return min(1.0, math.sqrt(total / len(samples)) / 32768.0)
 
 
+# Ordre de preference des interfaces audio de Windows. WASAPI donne le signal
+# le plus propre ; DirectSound est place en dernier car, sur certaines cartes,
+# il renvoie un flux sature en permanence (mesure : 0,6 de niveau en silence).
+PREFERENCE_API = ("wasapi", "mme", "wdm", "directsound")
+
+# Au-dela de ce niveau en ambiance calme, le flux n est pas exploitable :
+# le peripherique renvoie du bruit sature plutot que du son.
+AMBIANT_ABERRANT = 0.05
+
+# Peripheriques a ecarter : ce ne sont pas des micros.
+EXCLUS = ("stereo mix", "mixage stereo", "sound mapper", "mappeur de sons",
+          "pc speaker", "output", "sortie", "loopback")
+
+
+def peripheriques_entree(audio) -> list:
+    """Micros disponibles, du plus prometteur au moins."""
+    try:
+        defaut = audio.get_default_input_device_info()
+        nom_defaut = str(defaut.get("name", "")).lower()
+    except Exception:
+        nom_defaut = ""
+
+    candidats = []
+    for index in range(audio.get_device_count()):
+        try:
+            info = audio.get_device_info_by_index(index)
+            if int(info.get("maxInputChannels", 0)) < 1:
+                continue
+            nom = str(info.get("name", ""))
+            if any(mot in nom.lower() for mot in EXCLUS):
+                continue
+            api = str(audio.get_host_api_info_by_index(info["hostApi"])["name"]).lower()
+            rang_api = next(
+                (i for i, cle in enumerate(PREFERENCE_API) if cle in api.replace(" ", "")),
+                len(PREFERENCE_API),
+            )
+            # On privilegie le peripherique que Windows a choisi par defaut,
+            # mais via l interface la plus performante.
+            meme_micro = 0 if (nom_defaut and nom_defaut[:18] in nom.lower()) else 1
+            candidats.append((meme_micro, rang_api, index, nom,
+                              int(info.get("defaultSampleRate", 44100))))
+        except Exception:
+            continue
+    candidats.sort()
+    return [(index, nom, rate) for _m, _a, index, nom, rate in candidats]
+
+
+def choisir_peripherique(audio, demande=None):
+    """
+    Retourne (index, taux) du micro a utiliser.
+
+    `demande` peut etre un numero, un morceau de nom, ou None pour laisser
+    le choix automatique.
+    """
+    liste = peripheriques_entree(audio)
+    if demande not in (None, "", "auto"):
+        if isinstance(demande, int) or str(demande).isdigit():
+            index = int(demande)
+            for i, nom, rate in liste:
+                if i == index:
+                    return i, rate
+            try:
+                info = audio.get_device_info_by_index(index)
+                return index, int(info.get("defaultSampleRate", 44100))
+            except Exception:
+                pass
+        else:
+            voulu = str(demande).lower()
+            for i, nom, rate in liste:
+                if voulu in nom.lower():
+                    return i, rate
+    # On ne se fie pas au classement seul : on VERIFIE que le peripherique
+    # rend un signal plausible. Certains pilotes acceptent l ouverture puis
+    # renvoient du bruit sature, ce qui rendrait toute detection impossible.
+    for index, _nom, rate in liste:
+        if _flux_plausible(audio, index, rate):
+            return index, rate
+    if liste:
+        index, _nom, rate = liste[0]
+        return index, rate
+    return None, SAMPLE_RATE
+
+
+def _flux_plausible(audio, index, rate, blocs: int = 8) -> bool:
+    """Le peripherique rend-il un niveau credible en ambiance calme ?"""
+    import pyaudio
+
+    flux = None
+    try:
+        flux = audio.open(format=pyaudio.paInt16, channels=1, rate=rate, input=True,
+                          frames_per_buffer=CHUNK, input_device_index=index)
+        niveaux = [_rms(flux.read(CHUNK, exception_on_overflow=False)) for _ in range(blocs)]
+        return (sum(niveaux) / len(niveaux)) < AMBIANT_ABERRANT
+    except Exception:
+        return False
+    finally:
+        if flux is not None:
+            try:
+                flux.stop_stream(); flux.close()
+            except Exception:
+                pass
+
+
 class LevelMeterListener:
     """
     Capture micro maison, qui expose le NIVEAU SONORE en direct.
@@ -293,24 +404,42 @@ class LevelMeterListener:
     # Multiplicateur applique au bruit ambiant mesure.
     FACTEUR = 3.5
 
-    def __init__(self, plancher: float | None = None, facteur: float | None = None) -> None:
+    def __init__(self, plancher: float | None = None, facteur: float | None = None,
+                 peripherique=None) -> None:
         self.plancher = self.PLANCHER if plancher is None else float(plancher)
+        self.peripherique = peripherique
+        self.taux = SAMPLE_RATE
+        self.index_peripherique = None
         self.facteur = self.FACTEUR if facteur is None else float(facteur)
         self.ambient = 0.0
         self.threshold = self.plancher
         self.pic_recent = 0.0        # sert a l auto-gain de l animation
 
     def _open_stream(self):
+        """
+        Ouvre le micro a sa frequence NATIVE, sur l interface la plus
+        sensible. Forcer 16 kHz sur MME divisait le signal par cinq.
+        """
         import pyaudio
 
         audio = pyaudio.PyAudio()
-        stream = audio.open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=SAMPLE_RATE,
-            input=True,
-            frames_per_buffer=CHUNK,
-        )
+        index, taux = choisir_peripherique(audio, self.peripherique)
+        try:
+            stream = audio.open(
+                format=pyaudio.paInt16, channels=1, rate=taux, input=True,
+                frames_per_buffer=CHUNK, input_device_index=index,
+            )
+        except Exception:
+            # Le peripherique choisi refuse ces reglages : on retombe sur
+            # celui de Windows, aux valeurs historiques.
+            stream = audio.open(
+                format=pyaudio.paInt16, channels=1, rate=SAMPLE_RATE,
+                input=True, frames_per_buffer=CHUNK,
+            )
+            taux = SAMPLE_RATE
+            index = None
+        self.taux = taux
+        self.index_peripherique = index
         return audio, stream
 
     def _appliquer_seuil(self, ambient: float) -> float:
@@ -334,7 +463,7 @@ class LevelMeterListener:
         audio = stream = None
         try:
             audio, stream = self._open_stream()
-            blocs = max(1, int(duration * SAMPLE_RATE / CHUNK))
+            blocs = max(1, int(duration * self.taux / CHUNK))
             niveaux = []
             for _ in range(blocs):
                 niveau = _rms(stream.read(CHUNK, exception_on_overflow=False))
@@ -369,7 +498,7 @@ class LevelMeterListener:
             self._close(audio, stream)
             return None
 
-        blocs_par_seconde = SAMPLE_RATE / CHUNK
+        blocs_par_seconde = self.taux / CHUNK
         max_attente = int(timeout * blocs_par_seconde)
         max_phrase = int(phrase_limit * blocs_par_seconde)
         blocs_silence_fin = int(SILENCE_SECONDS * blocs_par_seconde)
