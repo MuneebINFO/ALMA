@@ -29,6 +29,7 @@ class SpeechToText:
         self._microphone = None
         self._vosk_model = None
         self._meter = None        # compteur de niveau, cree a la demande
+        self._calibre = False     # la calibration n a lieu qu une fois
         self.engine = str((config.get("voice.stt_engine") if config else "google") or "google")
         self.language = str((config.get("voice.stt_language") if config else "fr-FR") or "fr-FR")
         self._init()
@@ -129,8 +130,12 @@ class SpeechToText:
         import speech_recognition as sr
 
         compteur = self._compteur()
-        if compteur.ambient == 0.0 and compteur.threshold == compteur.plancher:
+        # Une seule calibration : la relancer a chaque ecoute laissait une
+        # zone morte de 0,8 s par cycle, pendant laquelle la parole etait
+        # avalee par la mesure du bruit de fond.
+        if not self._calibre:
             compteur.calibrate(0.8, on_level=on_level)
+            self._calibre = True
 
         brut = compteur.listen(
             on_level=on_level, timeout=timeout,
@@ -145,7 +150,28 @@ class SpeechToText:
 
     def recalibrate(self, duration: float = 1.0, on_level=None) -> float:
         """Remesure le bruit ambiant (utile si l environnement change)."""
-        return self._compteur().calibrate(duration, on_level=on_level)
+        seuil = self._compteur().calibrate(duration, on_level=on_level)
+        self._calibre = True
+        return seuil
+
+    def niveau_maximum(self, duree: float = 3.0) -> float:
+        """
+        Pic sonore observe pendant `duree`. Sert a dire a l utilisateur si son
+        micro capte quelque chose, sans dependre du seuil de declenchement.
+        """
+        compteur = self._compteur()
+        audio = flux = None
+        try:
+            audio, flux = compteur._open_stream()
+            pics = []
+            for _ in range(max(1, int(duree * SAMPLE_RATE / CHUNK))):
+                pics.append(_rms(flux.read(CHUNK, exception_on_overflow=False)))
+            return max(pics) if pics else 0.0
+        except Exception as exc:
+            log.debug("Mesure du niveau impossible : %s", exc)
+            return 0.0
+        finally:
+            compteur._close(audio, flux)
 
     def _transcribe_all(self, audio) -> list:
         """
@@ -257,8 +283,13 @@ class LevelMeterListener:
     bruit ambiant mesure, avec un plancher volontairement bas.
     """
 
-    # Plancher absolu : en dessous, on considere que c est du bruit de fond.
-    PLANCHER = 0.0025
+    # Plancher absolu de detection.
+    #
+    # Il est volontairement TRES bas, pour une raison de dissymetrie : un
+    # declenchement de trop ne coute rien -- l enonce sera ignore faute de mot
+    # d appel -- alors qu un declenchement manque rend l assistant sourd.
+    # Mesures sur un micro integre : bruit de fond moyen 0,0001, pics 0,0016.
+    PLANCHER = 0.0010
     # Multiplicateur applique au bruit ambiant mesure.
     FACTEUR = 3.5
 

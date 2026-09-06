@@ -447,6 +447,19 @@ class AlmaApp:
 
         self.evenements.put(("statut", ("calibration", "Calibration du micro...")))
         seuil = self.stt.recalibrate(1.2, on_level=sur_niveau)
+
+        # Controle explicite : un micro muet donnait jusqu ici un assistant
+        # silencieux, sans le moindre indice de ce qui n allait pas.
+        pic = self.stt.niveau_maximum(1.5)
+        if pic < seuil / 4:
+            self.evenements.put((
+                "erreur",
+                "Mon micro ne capte presque rien (niveau " + ("%.5f" % pic)
+                + ", seuil " + ("%.5f" % seuil) + "). Montez le volume d'entrée "
+                "dans Paramètres Windows > Son, puis lancez "
+                "« python diagnostic_micro.py » pour vérifier.",
+            ))
+
         self.evenements.put(("voyant", (ETATS["veille"][0], "à l'écoute")))
         self.evenements.put((
             "journal",
