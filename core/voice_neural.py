@@ -31,6 +31,8 @@ VOIX_RECOMMANDEES = (
 VOIX_PAR_DEFAUT = "fr-FR-DeniseNeural"
 
 _verrou_mci = threading.Lock()
+# Alias de la lecture en cours, publie pour qu un autre thread puisse la couper.
+_alias_courant = None
 
 
 def _mci(commande: str) -> int:
@@ -41,22 +43,48 @@ def _mci(commande: str) -> int:
 
 
 def jouer_fichier(chemin: Path) -> bool:
-    """Joue un MP3 de facon bloquante via MCI (aucune dependance externe)."""
+    """
+    Joue un MP3 via MCI (aucune dependance externe).
+
+    L alias est publie AVANT le demarrage et la lecture se fait HORS du
+    verrou : sans cela, aucun autre thread ne pourrait couper la parole en
+    cours.
+    """
+    global _alias_courant
+
     alias = "alma_" + uuid.uuid4().hex[:8]
-    with _verrou_mci:
-        try:
+    try:
+        with _verrou_mci:
             if _mci('open "' + str(chemin) + '" type mpegvideo alias ' + alias) != 0:
                 return False
-            _mci("play " + alias + " wait")
-            return True
-        except Exception as exc:
-            log.debug("Lecture MCI impossible : %s", exc)
-            return False
-        finally:
-            try:
-                _mci("close " + alias)
-            except Exception:
-                pass
+            _alias_courant = alias
+        _mci("play " + alias + " wait")
+        return True
+    except Exception as exc:
+        log.debug("Lecture MCI impossible : %s", exc)
+        return False
+    finally:
+        with _verrou_mci:
+            if _alias_courant == alias:
+                _alias_courant = None
+        try:
+            _mci("close " + alias)
+        except Exception:
+            pass
+
+
+def arreter_lecture() -> bool:
+    """Coupe la lecture en cours. True s il y en avait une."""
+    with _verrou_mci:
+        alias = _alias_courant
+    if not alias:
+        return False
+    try:
+        _mci("stop " + alias)
+        return True
+    except Exception as exc:
+        log.debug("Arret de lecture impossible : %s", exc)
+        return False
 
 
 class VoixNeuronale:

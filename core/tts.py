@@ -44,6 +44,10 @@ class TextToSpeech:
         self._ready = threading.Event()
         self._available = False
         self._stop = threading.Event()
+        # Texte en cours de lecture : sert a reconnaitre notre propre voix si
+        # le micro la capte, et a savoir si l on peut etre interrompu.
+        self.texte_en_cours = ""
+        self._engine = None
         self._thread = threading.Thread(target=self._worker, daemon=True, name="alma-tts")
         self._thread.start()
         self._ready.wait(INIT_TIMEOUT)
@@ -99,6 +103,7 @@ class TextToSpeech:
                 log.debug("Voix neuronale indisponible : %s", exc)
 
             engine = self._init_sapi5()
+            self._engine = engine
             if engine is not None and self.moteur_actif == "aucun":
                 self.moteur_actif = "sapi5"
             if engine is not None:
@@ -117,6 +122,7 @@ class TextToSpeech:
                 self._queue.task_done()
                 break
             texte, cacher = element
+            self.texte_en_cours = texte
             try:
                 joue = False
                 if self._neuronale is not None:
@@ -127,6 +133,7 @@ class TextToSpeech:
             except Exception as exc:
                 log.debug("Echec de lecture : %s", exc)
             finally:
+                self.texte_en_cours = ""
                 self._queue.task_done()
 
         for fermeture in (
@@ -234,7 +241,37 @@ class TextToSpeech:
 
     def parle(self) -> bool:
         """True si une lecture est en cours ou en attente."""
-        return not self._queue.empty()
+        return bool(self.texte_en_cours) or not self._queue.empty()
+
+    def arreter(self) -> bool:
+        """
+        Coupe la parole immediatement et vide la file d attente.
+
+        Quand on lui parle, l assistant doit se taire et ecouter, pas finir
+        sa phrase.
+        """
+        interrompu = bool(self.texte_en_cours)
+        while True:
+            try:
+                self._queue.get_nowait()
+                self._queue.task_done()
+                interrompu = True
+            except queue.Empty:
+                break
+        try:
+            from core import voice_neural
+
+            if voice_neural.arreter_lecture():
+                interrompu = True
+        except Exception:
+            pass
+        try:
+            if self._engine is not None:
+                self._engine.stop()
+        except Exception:
+            pass
+        self.texte_en_cours = ""
+        return interrompu
 
     def list_voices(self) -> list:
         """Voix SAPI5 installees (la voix neuronale, elle, se choisit par nom)."""

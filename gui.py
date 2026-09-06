@@ -375,8 +375,10 @@ class AlmaApp:
             else:
                 self.evenements.put(("erreur", reponse.text))
             if reponse.speak and self.assistant.speaks:
+                # Lecture NON bloquante : sans cela le micro reste sourd
+                # pendant qu il parle, et on ne peut pas lui couper la parole.
                 self.evenements.put(("statut", ("reponse", "Je réponds...")))
-                self.assistant.tts.say(reponse.text, blocking=True)
+                self.assistant.tts.say(reponse.text)
 
         if reponse.should_exit:
             self.evenements.put(("quitter", None))
@@ -471,6 +473,13 @@ class AlmaApp:
             if not texte:
                 continue           # silence, ou parole non comprise
 
+            # On lui coupe la parole des qu on parle -- sauf si le micro a
+            # simplement capte sa propre voix dans les haut-parleurs.
+            if self.assistant.tts.parle():
+                if self._est_son_echo(texte):
+                    continue
+                self.assistant.tts.arreter()
+
             analyse = self.moteur.analyser(texte)
 
             if analyse.etat == wake.IGNORE:
@@ -497,7 +506,7 @@ class AlmaApp:
                 self.evenements.put(("entendu", ""))
                 self.evenements.put(("statut", ("veille", "")))
                 if self.assistant.speaks:
-                    self.assistant.tts.say(reponse, blocking=True, cacher=True)
+                    self.assistant.tts.say(reponse, cacher=True)
                 continue
 
             if analyse.etat == wake.REVEIL_SEUL:
@@ -507,7 +516,7 @@ class AlmaApp:
                 self.evenements.put(("statut", ("arme", "")))
                 if self.assistant.speaks:
                     # `cacher` : la replique est pre-synthetisee, donc immediate.
-                    self.assistant.tts.say(reponse, blocking=True, cacher=True)
+                    self.assistant.tts.say(reponse, cacher=True)
                 continue
 
             commande = analyse.commande
@@ -517,6 +526,28 @@ class AlmaApp:
 
         self.evenements.put(("niveau", (0.0, "arret")))
         self.evenements.put(("voyant", (TEXTE_DOUX, "micro coupé")))
+
+    def _est_son_echo(self, propos: str) -> bool:
+        """
+        Le micro a-t-il simplement capte la voix de l assistant ?
+
+        Deliberement PRUDENT : un ordre court n est jamais considere comme un
+        echo. Nos propres phrases contiennent le nom de l assistant, si bien
+        qu un « Alma » lance pendant qu il parle serait sinon pris pour un
+        renvoi de son haut-parleur -- et ignore.
+        """
+        from core import text_utils
+
+        en_cours = text_utils.normalize(self.assistant.tts.texte_en_cours)
+        if not en_cours.strip():
+            return False
+        if self.moteur.separer_mot_appel(propos)[0]:
+            return False
+        mots = [m for m in text_utils.tokenize(text_utils.normalize(propos)) if len(m) >= 4]
+        if len(mots) < 3:
+            return False
+        communs = sum(1 for m in mots if m in en_cours)
+        return communs / len(mots) >= 0.75
 
     # -- fermeture ------------------------------------------------------------
     def quitter(self) -> None:

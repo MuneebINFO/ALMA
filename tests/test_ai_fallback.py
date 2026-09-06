@@ -58,7 +58,9 @@ def test_desactive_le_fallback_repond_sans_jamais_appeler_claude(config, monkeyp
 
     reponse = handle_with_ai("ecris-moi un script python", config)
     assert reponse in SUGGESTIONS
-    assert "aide" in reponse.lower() or "peux-tu faire" in reponse.lower()
+    # Reponses volontairement courtes : pas de renvoi vers l aide.
+    assert len(reponse) < 40
+    assert "aide" not in reponse.lower()
 
 
 def test_desactive_aucun_appel_reseau(config, monkeypatch):

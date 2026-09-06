@@ -24,10 +24,13 @@ import random
 from core.context import Response, Utterance
 from core.providers import AIProvider  # interface partagee par tous les providers
 
+# Reponses quand rien n est compris : courtes et sans renvoi vers l aide.
+# Une phrase longue coupe le rythme et n apprend rien a qui utilise
+# l assistant tous les jours.
 SUGGESTIONS = [
-    "Je n'ai pas compris cette demande. Dites « aide » pour voir ce que je sais faire.",
-    "Désolé, cette commande ne fait pas partie de mon répertoire. Essayez « que peux-tu faire ».",
-    "Je ne sais pas encore faire cela. Tapez « aide » pour la liste des commandes.",
+    "Je n'ai pas compris.",
+    "Désolé, je n'ai pas saisi.",
+    "Pardon ?",
 ]
 
 
@@ -91,6 +94,58 @@ def handle_with_ai(query: str, config=None) -> str:
 
 
 def handle_unmatched(utterance: Utterance, assistant=None) -> Response:
-    """Appele par le routeur lorsqu aucune regle ne matche."""
+    """
+    Appele par le routeur lorsqu aucune regle ne matche.
+
+    Avant de renoncer, on tente de DEDUIRE ce qui a ete voulu : la
+    transcription a pu deformer un mot, ou le reste de la phrase suffit a
+    reconstruire l intention. Ce n est tente qu ici, donc uniquement sur des
+    demandes qui nous etaient bien adressees.
+    """
     config = getattr(assistant, "config", None)
+
+    if assistant is not None:
+        deduit = _tenter_deduction(utterance, assistant)
+        if deduit is not None:
+            return deduit
+
     return Response(text=handle_with_ai(utterance.raw, config), ok=False)
+
+
+def _tenter_deduction(utterance: Utterance, assistant):
+    """Reconstruit puis execute la demande, si l on parvient a la deduire."""
+    from core import deduction
+    from core.context import Utterance as Enonce
+
+    wake_words = assistant.config.get("general.wake_words")
+
+    def resout(phrase: str) -> bool:
+        essai = Enonce.parse(phrase, source=utterance.source, wake_words=wake_words)
+        if essai.is_empty():
+            return False
+        try:
+            return assistant.router.resolve(essai, assistant) is not None
+        except Exception:
+            return False
+
+    try:
+        phrase = deduction.deduire(utterance.raw, resout)
+    except Exception:
+        return None
+    if not phrase:
+        return None
+
+    essai = Enonce.parse(phrase, source=utterance.source, wake_words=wake_words)
+    resolution = assistant.router.resolve(essai, assistant)
+    if resolution is None:
+        return None
+    from core.context import CommandContext
+
+    ctx = CommandContext(essai, assistant, match=resolution.match, command=resolution.command)
+    try:
+        resultat = resolution.command.handler(ctx)
+    except Exception:
+        return None
+    if isinstance(resultat, str):
+        return Response(text=resultat)
+    return resultat
