@@ -24,13 +24,6 @@ voice:
   voice_id: ""               # « python main.py --list-voices » pour les lister
   stt_engine: google         # "google" (gratuit, en ligne) ou "vosk" (hors ligne)
   stt_language: fr-FR
-  # Corrections de transcription. Le moteur bute sur les mots anglais dans une
-  # phrase francaise : « scroll » revient souvent en « Paul ». Une correction
-  # n est retenue que si elle donne une commande connue, donc « cherche Paul
-  # sur YouTube » reste intact. Completez au fil de vos constats.
-  corrections:
-    paul: scroll
-    pose: pause
   vosk_model_path: ""        # ex: models/vosk-model-small-fr-0.22
   energy_threshold: 300      # sensibilite du micro
   pause_threshold: 0.8

@@ -230,17 +230,6 @@ class AlmaApp:
                                          bg=FOND, fg=TEXTE_DOUX)
         self.etiquette_statut.pack(pady=(0, 2))
 
-        # Vu-metre : sans lui, un micro trop faible donne un assistant muet
-        # sans que rien n indique pourquoi.
-        self.vumetre = tk.Canvas(self.root, width=320, height=6, bg=FOND,
-                                 highlightthickness=0)
-        self.vumetre.pack(pady=(2, 0))
-        self.etiquette_niveau = tk.Label(self.root, text="", font=police_texte,
-                                         bg=FOND, fg=TEXTE_DOUX)
-        self.etiquette_niveau.pack(pady=(1, 0))
-        self.niveau_courant = 0.0
-        self.niveau_pic = 0.0
-
         # Ce que Alma a compris.
         self.etiquette_entendu = tk.Label(self.root, text="", font=police_entendu,
                                           bg=FOND, fg=TEXTE, wraplength=640, height=2)
@@ -332,8 +321,6 @@ class AlmaApp:
                 type_evenement, charge = self.evenements.get_nowait()
                 if type_evenement == "niveau":
                     niveau, etat = charge
-                    self.niveau_courant = niveau
-                    self.niveau_pic = max(self.niveau_pic * 0.99, niveau)
                     self.orbe.definir_niveau(niveau)
                     if etat:
                         self.definir_statut(etat)
@@ -343,8 +330,6 @@ class AlmaApp:
                     self.etiquette_entendu.configure(
                         text=("« " + charge + " »") if charge else ""
                     )
-                elif type_evenement == "niveau_texte":
-                    self.etiquette_niveau.configure(text=charge)
                 elif type_evenement == "voyant":
                     couleur, texte = charge
                     self.voyant.configure(text="●  " + texte, fg=couleur)
@@ -359,22 +344,7 @@ class AlmaApp:
         except queue.Empty:
             pass
         self._rafraichir_compte_a_rebours()
-        self._rafraichir_vumetre()
         self.root.after(40, self._traiter_evenements)
-
-    def _rafraichir_vumetre(self) -> None:
-        """Montre en direct ce que le micro capte, et le seuil a franchir."""
-        self.vumetre.delete("all")
-        largeur, hauteur = 320, 6
-        self.vumetre.create_rectangle(0, 0, largeur, hauteur, fill=FOND_CARTE, outline="")
-        rempli = int(max(0.0, min(1.0, self.niveau_courant)) * largeur)
-        couleur = ETATS["voix"][0] if self.niveau_courant > 0.15 else ETATS["veille"][0]
-        if rempli:
-            self.vumetre.create_rectangle(0, 0, rempli, hauteur, fill=couleur, outline="")
-        # Repere du pic recent, pour voir si la voix approche du declenchement.
-        pic = int(max(0.0, min(1.0, self.niveau_pic)) * largeur)
-        if pic:
-            self.vumetre.create_line(pic, 0, pic, hauteur, fill=TEXTE_DOUX)
 
     def _rafraichir_compte_a_rebours(self) -> None:
         """Affiche le temps restant de la session, tant qu elle est ouverte."""
@@ -405,10 +375,8 @@ class AlmaApp:
             else:
                 self.evenements.put(("erreur", reponse.text))
             if reponse.speak and self.assistant.speaks:
-                # Lecture NON bloquante : le micro doit rester actif pendant
-                # qu il parle, sinon impossible de lui couper la parole.
                 self.evenements.put(("statut", ("reponse", "Je réponds...")))
-                self.assistant.tts.say(reponse.text)
+                self.assistant.tts.say(reponse.text, blocking=True)
 
         if reponse.should_exit:
             self.evenements.put(("quitter", None))
@@ -477,25 +445,6 @@ class AlmaApp:
 
         self.evenements.put(("statut", ("calibration", "Calibration du micro...")))
         seuil = self.stt.recalibrate(1.2, on_level=sur_niveau)
-
-        # Controle explicite : un micro muet donnait jusqu ici un assistant
-        # silencieux, sans le moindre indice de ce qui n allait pas.
-        pic = self.stt.niveau_maximum(1.5)
-        if pic < seuil / 4:
-            self.evenements.put((
-                "erreur",
-                "Mon micro ne capte presque rien (niveau " + ("%.5f" % pic)
-                + ", seuil " + ("%.5f" % seuil) + "). Montez le volume d'entrée "
-                "dans Paramètres Windows > Son, puis lancez "
-                "« python diagnostic_micro.py » pour vérifier.",
-            ))
-
-        peripherique = self.stt._compteur()
-        self.evenements.put((
-            "niveau_texte",
-            "micro : entrée " + str(peripherique.index_peripherique)
-            + " · " + str(peripherique.taux) + " Hz · seuil " + ("%.4f" % seuil),
-        ))
         self.evenements.put(("voyant", (ETATS["veille"][0], "à l'écoute")))
         self.evenements.put((
             "journal",
@@ -508,11 +457,10 @@ class AlmaApp:
         while self.ecoute_active.is_set():
             self.evenements.put(("statut", (self._etat_repos(), "")))
             try:
-                propositions = self.stt.listen_live(
+                texte = self.stt.listen_live(
                     on_level=sur_niveau,
                     timeout=6.0,
                     doit_continuer=self.ecoute_active.is_set,
-                    toutes=True,
                 )
             except Exception as exc:
                 self.evenements.put(("erreur", "Erreur du micro : " + str(exc)))
@@ -520,25 +468,8 @@ class AlmaApp:
 
             if not self.ecoute_active.is_set():
                 break
-            if not propositions:
-                if getattr(self.stt, "a_capte", False):
-                    # Distinction utile : le micro a bien entendu, c est la
-                    # transcription qui a echoue.
-                    self.evenements.put(("entendu", "…je n'ai pas compris"))
-                continue
-
-            # On lui coupe la parole des qu on parle -- sauf si le micro a
-            # simplement capte sa propre voix dans les haut-parleurs.
-            if self.assistant.tts.parle():
-                if self._est_son_echo(propositions):
-                    continue
-                self.assistant.tts.arreter()
-
-            # Le moteur classe ses hypotheses par probabilite acoustique ;
-            # on retient celle qui correspond a une commande connue.
-            texte = self.assistant.choisir_transcription(propositions)
             if not texte:
-                continue
+                continue           # silence, ou parole non comprise
 
             analyse = self.moteur.analyser(texte)
 
@@ -576,7 +507,7 @@ class AlmaApp:
                 self.evenements.put(("statut", ("arme", "")))
                 if self.assistant.speaks:
                     # `cacher` : la replique est pre-synthetisee, donc immediate.
-                    self.assistant.tts.say(reponse, cacher=True)
+                    self.assistant.tts.say(reponse, blocking=True, cacher=True)
                 continue
 
             commande = analyse.commande
@@ -586,35 +517,6 @@ class AlmaApp:
 
         self.evenements.put(("niveau", (0.0, "arret")))
         self.evenements.put(("voyant", (TEXTE_DOUX, "micro coupé")))
-
-    def _est_son_echo(self, propositions) -> bool:
-        """
-        Le micro a-t-il simplement capte la voix de l assistant ?
-
-        Sans ce garde-fou, l assistant s interromprait lui-meme des qu il
-        parle dans des haut-parleurs. On compare ce qui est entendu au texte
-        en cours de lecture.
-        """
-        from core import text_utils
-
-        en_cours = text_utils.normalize(self.assistant.tts.texte_en_cours)
-        if not en_cours.strip():
-            return False
-        for proposition in propositions:
-            # Un ordre court n est JAMAIS un echo. « Alma », « arrête »,
-            # « stop » doivent toujours passer -- d autant que nos propres
-            # phrases contiennent le nom de l assistant, ce qui les ferait
-            # prendre pour de l echo.
-            if self.moteur.separer_mot_appel(proposition)[0]:
-                return False
-            mots = [m for m in text_utils.tokenize(text_utils.normalize(proposition))
-                    if len(m) >= 4]
-            if len(mots) < 3:
-                continue
-            communs = sum(1 for m in mots if m in en_cours)
-            if communs / len(mots) >= 0.75:
-                return True
-        return False
 
     # -- fermeture ------------------------------------------------------------
     def quitter(self) -> None:

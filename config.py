@@ -49,33 +49,11 @@ DEFAULTS: dict = {
         # --- reconnaissance ---
         "stt_engine": "google",
         "stt_language": "fr-FR",
-        # Micro a utiliser : null = choix automatique (interface la plus
-        # sensible). Peut aussi etre un numero de peripherique ou un morceau
-        # de son nom. « python diagnostic_micro.py » liste les candidats.
-        "input_device": None,
         "vosk_model_path": "",
         # Seuil de detection de la voix. Beaucoup de micros integres ont un
         # gain faible : ce plancher volontairement bas evite que Alma reste
         # sourd. Voir « python diagnostic_micro.py ».
-        # Corrections de transcription. La reconnaissance bute sur les mots
-        # anglais dans une phrase francaise : « scroll » revient souvent en
-        # « Paul ». Une correction n est retenue que si elle donne une
-        # commande connue, donc « cherche Paul sur YouTube » reste intact.
-        "corrections": {
-            "paul": "scroll",
-            "scrawl": "scroll",
-            "school": "scroll",
-            "pose": "pause",
-            "poz": "pause",
-            "clik": "clique",
-            "click": "clique",
-            "next": "suivant",
-        },
-        # Seuil de detection de la voix, volontairement TRES bas : un
-        # declenchement de trop ne coute rien (l enonce sera ignore faute de
-        # mot d appel), alors qu un declenchement manque rend l assistant
-        # sourd. Verifiez le votre avec « python diagnostic_micro.py ».
-        "min_threshold": 0.0010,
+        "min_threshold": 0.004,
         "noise_factor": 3.5,
         # Duree pendant laquelle Alma reste receptif apres un « Alma » seul.
         "armed_seconds": 60,

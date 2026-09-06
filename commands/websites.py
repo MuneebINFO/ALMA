@@ -140,10 +140,10 @@ def open_website(ctx: CommandContext) -> Response:
     if not ok:
         return Response.error("Je n'ai pas réussi à ouvrir " + url + ".")
     if mode == "onglet":
-        return Response.action("Je bascule sur l'onglet " + key + ".")
+        return Response(text="Je bascule sur l'onglet " + key + ".")
     if mode == "fenetre":
-        return Response.action("Je reviens sur " + key + ".")
-    return Response.action("J'ouvre " + key + ".")
+        return Response(text="Je reviens sur " + key + ".")
+    return Response(text="J'ouvre " + key + ".")
 
 
 @command(
@@ -249,7 +249,7 @@ def site_search(ctx: CommandContext) -> Response:
             text="J'ouvre " + cle + ", mais je ne sais pas y chercher directement."
         )
     prefixe = ("Je reprends l'onglet " + cle) if mode != "ouvert" else ("J'ouvre " + cle)
-    return Response.action(prefixe + " et je cherche « " + requete + " ».")
+    return Response(text=prefixe + " et je cherche « " + requete + " ».")
 
 
 def _site_en_contexte(ctx: CommandContext) -> bool:
@@ -295,4 +295,4 @@ def site_search_contextuel(ctx: CommandContext) -> Response:
     ok, mode = afficher_site(ctx.config, cle, cible, naviguer=True)
     if not ok:
         return Response.error("Je n'ai pas réussi à chercher sur " + cle + ".")
-    return Response.action("Je cherche « " + requete + " » sur " + cle + ".")
+    return Response(text="Je cherche « " + requete + " » sur " + cle + ".")

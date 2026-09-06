@@ -81,7 +81,7 @@ def open_app(ctx: CommandContext) -> Response:
     label = (entry.get("aliases") or [key])[0]
     ok, detail = win_utils.launch(entry.get("paths", []) or [])
     if ok:
-        return Response.action("J'ouvre " + label + ".")
+        return Response(text="J'ouvre " + label + ".")
     return Response.error(
         "Impossible d ouvrir " + label + ". Vérifiez le chemin dans config.yaml "
         "(applications." + key + ".paths). Détail : " + detail
@@ -112,7 +112,7 @@ def close_app(ctx: CommandContext) -> Response:
         )
     ok, detail = win_utils.kill_process(process)
     if ok:
-        return Response.action("J'ai fermé " + label + ".")
+        return Response(text="J'ai fermé " + label + ".")
     return Response.error(label + " ne semble pas ouvert. (" + detail + ")")
 
 

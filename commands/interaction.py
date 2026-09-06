@@ -138,7 +138,7 @@ def defiler(ctx: CommandContext) -> Response:
     ):
         return Response.error("Je n'ai pas pu lancer le défilement.")
     sens = "vers le haut" if direction == interaction.HAUT else "vers le bas"
-    return Response.action("Je fais défiler " + sens + ".")
+    return Response(text="Je fais défiler " + sens + ". Dites « arrête » quand ça suffit.")
 
 
 @command(
@@ -206,7 +206,7 @@ def cliquer_ordinal(ctx: CommandContext) -> Response:
         )
 
     if interaction.cliquer(cible):
-        return Response.action("J'ouvre « " + cible.nom[:60] + " ».")
+        return Response(text="J'ouvre « " + cible.nom[:60] + " ».")
     return Response.error("Je n'ai pas réussi à cliquer sur « " + cible.nom[:40] + " ».")
 
 
@@ -273,5 +273,5 @@ def cliquer_sur(ctx: CommandContext) -> Response:
             "Dites « clique sur la première vidéo » pour choisir par position."
         )
     if interaction.cliquer(cible):
-        return Response.action("Je clique sur « " + cible.nom[:60] + " ».")
+        return Response(text="Je clique sur « " + cible.nom[:60] + " ».")
     return Response.error("Je n'ai pas réussi à cliquer sur « " + cible.nom[:40] + " ».")

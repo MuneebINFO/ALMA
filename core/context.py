@@ -66,17 +66,6 @@ class Response:
     def error(cls, text: str) -> "Response":
         return cls(text=text, ok=False)
 
-    @classmethod
-    def action(cls, text: str) -> "Response":
-        """
-        Reponse a une action dont l effet est visible a l ecran.
-
-        Elle est ecrite dans le journal mais PAS lue a voix haute : commenter
-        « je fais defiler » pendant qu on defile ne sert a rien et retarde
-        l execution.
-        """
-        return cls(text=text, speak=False)
-
 
 class CommandContext:
     """

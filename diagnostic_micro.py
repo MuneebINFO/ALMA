@@ -62,28 +62,14 @@ def main() -> int:
     # Périphérique utilisé
     import pyaudio
 
-    from core.stt import _flux_plausible, choisir_peripherique, peripheriques_entree
-
     audio = pyaudio.PyAudio()
-    candidats = peripheriques_entree(audio)
-    if not candidats:
-        print("ATTENTION : aucun micro détecté.")
+    try:
+        info = audio.get_default_input_device_info()
+        print("Micro utilisé : " + str(info["name"]))
+    except Exception:
+        print("ATTENTION : aucun micro par défaut détecté dans Windows.")
         audio.terminate()
         return 1
-
-    print()
-    print("Micros disponibles (du plus prometteur au moins) :")
-    for index, nom, taux in candidats:
-        etat = "exploitable" if _flux_plausible(audio, index, taux) else "inutilisable"
-        print("  [%2d] %-42s %6d Hz  %s" % (index, nom[:42], taux, etat))
-
-    choisi, taux = choisir_peripherique(audio, config.get("voice.input_device"))
-    nom_choisi = next((n for i, n, _t in candidats if i == choisi), "?")
-    print()
-    print("Micro retenu : [" + str(choisi) + "] " + nom_choisi + " à " + str(taux) + " Hz")
-    print("Pour en imposer un autre, mettez son numéro dans config.yaml :")
-    print("    voice:")
-    print("      input_device: <numéro>")
     audio.terminate()
 
     print("\n1) Calibration — ne parlez pas pendant %.1f secondes..." % DUREE_CALIBRATION)

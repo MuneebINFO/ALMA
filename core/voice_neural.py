@@ -31,8 +31,6 @@ VOIX_RECOMMANDEES = (
 VOIX_PAR_DEFAUT = "fr-FR-DeniseNeural"
 
 _verrou_mci = threading.Lock()
-# Alias de la lecture en cours, pour pouvoir la couper depuis un autre thread.
-_alias_courant = None
 
 
 def _mci(commande: str) -> int:
@@ -43,49 +41,22 @@ def _mci(commande: str) -> int:
 
 
 def jouer_fichier(chemin: Path) -> bool:
-    """
-    Joue un MP3 via MCI (aucune dependance externe).
-
-    L appel est bloquant, mais l alias est publie AVANT la lecture : un autre
-    thread peut ainsi couper la parole en cours (voir arreter_lecture).
-    """
-    global _alias_courant
-
+    """Joue un MP3 de facon bloquante via MCI (aucune dependance externe)."""
     alias = "alma_" + uuid.uuid4().hex[:8]
-    try:
-        with _verrou_mci:
+    with _verrou_mci:
+        try:
             if _mci('open "' + str(chemin) + '" type mpegvideo alias ' + alias) != 0:
                 return False
-            _alias_courant = alias
-        # La lecture se fait HORS du verrou : sinon l interruption ne pourrait
-        # pas prendre la main pendant qu on parle.
-        _mci("play " + alias + " wait")
-        return True
-    except Exception as exc:
-        log.debug("Lecture MCI impossible : %s", exc)
-        return False
-    finally:
-        with _verrou_mci:
-            if _alias_courant == alias:
-                _alias_courant = None
-        try:
-            _mci("close " + alias)
-        except Exception:
-            pass
-
-
-def arreter_lecture() -> bool:
-    """Coupe la lecture en cours. True s il y en avait une."""
-    with _verrou_mci:
-        alias = _alias_courant
-    if not alias:
-        return False
-    try:
-        _mci("stop " + alias)
-        return True
-    except Exception as exc:
-        log.debug("Arret de lecture impossible : %s", exc)
-        return False
+            _mci("play " + alias + " wait")
+            return True
+        except Exception as exc:
+            log.debug("Lecture MCI impossible : %s", exc)
+            return False
+        finally:
+            try:
+                _mci("close " + alias)
+            except Exception:
+                pass
 
 
 class VoixNeuronale:

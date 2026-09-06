@@ -17,8 +17,6 @@ machine**. Say "**ALMA**" to wake it, then speak.
 - [Quick start](#quick-start)
 - [The voice app](#the-voice-app)
 - [The voice](#the-voice)
-- [When it mishears you](#when-it-mishears-you)
-- [Interrupting it](#interrupting-it)
 - [If ALMA cannot hear you](#if-alma-cannot-hear-you)
 - [Building an executable](#building-an-executable)
 - [What ALMA can do](#what-alma-can-do)
@@ -218,40 +216,6 @@ replayed from a cache, so the answer to the wake word is instant instead of
 waiting on a network round trip.
 
 ---
-
-## When it mishears you
-
-Speech recognition stumbles on short words and on English words inside a French
-sentence — "scroll" often comes back as "Paul". Two mechanisms fix that.
-
-**ALMA reads the engine's whole shortlist.** The recogniser ranks its guesses by
-acoustic probability alone, knowing nothing about what the assistant can do.
-ALMA walks that list and keeps the first guess that matches a real command, so
-"Paul / scroll" resolves to *scroll*.
-
-**A correction table handles the rest**, in `config.yaml`:
-
-```yaml
-voice:
-  corrections:
-    paul: scroll
-    pose: pause
-```
-
-A correction only applies when the original makes no sense as a command — so
-"cherche Paul sur YouTube" is left untouched. Add your own as you notice them:
-the text ALMA heard is always shown under the orb.
-
-## Interrupting it
-
-ALMA keeps listening **while it speaks**. Talk over it and it stops mid-sentence
-to obey you. It also knows its own voice: if the microphone picks up your
-speakers, it compares what it hears to what it is saying and ignores the echo
-rather than interrupting itself.
-
-Actions that you can see happen are **not narrated**. "scrolle" scrolls — it
-does not announce that it is about to scroll. Only answers you cannot see, such
-as the time or the weather, are spoken.
 
 ## If ALMA cannot hear you
 
@@ -698,7 +662,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-264 tests cover:
+251 tests cover:
 
 - normalisation and fuzzy matching (`test_text_utils.py`);
 - **routing**: every sentence must reach the right handler, including the
@@ -715,10 +679,6 @@ pytest -q
 - **screen targeting**: with two players running on two screens, only the one
   on the requested screen is paused; the keyboard fallback is used when no media
   session exists (`test_desktop_media.py`);
-- **understanding speech**: the hypothesis matching a command wins over the
-  engine's first guess, corrections never damage a legitimate query, the
-  assistant's own echo is not mistaken for a new order, and visible actions
-  stay silent (`test_ecoute.py`);
 - **naming a target**: "la vidéo Interstellar" searches for *Interstellar*,
   the kind restricts the search, and English labels are matched
   (`test_interaction.py`);
