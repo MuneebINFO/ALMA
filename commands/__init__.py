@@ -14,7 +14,11 @@ module sans l inscrire ici, le test echoue avec un message explicite.
 
 MODULES = (
     "apps",
+    "calcul",
+    "clavier",
+    "fenetres",
     "info",
+    "infos_systeme",
     "interaction",
     "media",
     "misc",

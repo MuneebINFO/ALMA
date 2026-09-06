@@ -463,6 +463,44 @@ resumes, the second only pauses. Bare "pause" or "play" stays a toggle. The
 object must end the sentence — "lance la vidéo Interstellar" names a specific
 video, so it is treated as a search rather than a playback command.
 
+### Editing (applies to the app in front)
+```
+copie la sélection            colle
+coupe la sélection            annule la dernière action
+rétablis                      sélectionne tout
+enregistre                    imprime la page
+cherche dans la page          écris bonjour tout le monde
+valide                        échap
+```
+
+### Windows and tabs
+```
+ouvre un nouvel onglet        ferme cet onglet
+rouvre l'onglet fermé         onglet suivant / précédent
+actualise la page             page précédente / suivante
+zoom avant / arrière / normal plein écran
+minimise / agrandis la fenêtre
+change de fenêtre             affiche le bureau
+capture une zone
+```
+
+### Machine
+```
+niveau de batterie            espace libre sur le disque
+mon adresse IP                vide la corbeille
+```
+
+### Arithmetic and chance
+```
+combien font 15 fois 4        calcule 200 divisé par 8
+pile ou face                  lance un dé
+donne-moi un nombre entre 1 et 100
+```
+
+Arithmetic is parsed and evaluated through a **restricted** syntax tree: only
+numbers and the four operations are accepted, so nothing else can be executed
+even if the sentence contained it.
+
 ### Miscellaneous
 ```
 aide / que peux-tu faire      raconte-moi une blague

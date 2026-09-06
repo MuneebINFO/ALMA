@@ -420,3 +420,41 @@ def type_text(texte: str, restaurer_presse_papiers: bool = True) -> bool:
 
         threading.Timer(1.0, set_clipboard, args=(ancien,)).start()
     return ok
+
+
+# --------------------------------------------------------------------------
+# Table des touches, pour composer des raccourcis par leur nom
+# --------------------------------------------------------------------------
+TOUCHES = {
+    "ctrl": 0x11, "shift": 0x10, "alt": 0x12, "win": 0x5B,
+    "entree": 0x0D, "echap": 0x1B, "tab": 0x09, "espace": 0x20,
+    "suppr": 0x2E, "retour": 0x08, "debut": 0x24, "fin": 0x23,
+    "gauche": 0x25, "haut": 0x26, "droite": 0x27, "bas": 0x28,
+    "page_haut": 0x21, "page_bas": 0x22,
+    "plus": 0xBB, "moins": 0xBD, "zero": 0x30,
+    "f1": 0x70, "f2": 0x71, "f3": 0x72, "f4": 0x73, "f5": 0x74,
+    "f6": 0x75, "f11": 0x7A, "f12": 0x7B,
+}
+# Lettres a a z.
+for _lettre in "abcdefghijklmnopqrstuvwxyz":
+    TOUCHES[_lettre] = ord(_lettre.upper())
+
+
+def raccourci(*noms) -> bool:
+    """
+    Envoie un raccourci designe par des noms de touches.
+
+        raccourci("ctrl", "c")        -> copier
+        raccourci("ctrl", "shift", "t")
+
+    Retourne False si une touche est inconnue, plutot que d envoyer une
+    combinaison incomplete qui pourrait declencher autre chose.
+    """
+    codes = []
+    for nom in noms:
+        code = TOUCHES.get(str(nom).lower())
+        if code is None:
+            log.debug("Touche inconnue : %s", nom)
+            return False
+        codes.append(code)
+    return press_combo(*codes)
