@@ -45,6 +45,14 @@ paths:
 weather:
   default_city: Bruxelles    # ville utilisee si vous n en precisez pas
 
+# Defilement de page. Reglage par defaut mesure a ~365 pixels par seconde,
+# soit une vitesse de lecture confortable. Deux crans par tic depassent
+# 1300 px/s et deviennent illisibles.
+interaction:
+  scroll_crans: 1            # crans de molette par tic
+  scroll_intervalle: 0.25    # secondes entre deux tics
+  scroll_duree_max: 300      # securite : arret automatique au bout de 5 min
+
 notifications:
   sound: true                # bip a l echeance des rappels
   popup: true                # fenetre de notification Windows

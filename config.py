@@ -89,6 +89,14 @@ DEFAULTS: dict = {
             "timeout_seconds": 120,
         },
     },
+    # Defilement de page. Reglage par defaut mesure a ~365 pixels par seconde,
+    # soit une vitesse de lecture confortable. Deux crans par tic depassent
+    # 1300 px/s et deviennent illisibles : augmentez plutot avec prudence.
+    "interaction": {
+        "scroll_crans": 1,
+        "scroll_intervalle": 0.25,
+        "scroll_duree_max": 300,
+    },
     "notifications": {
         "sound": True,
         "popup": True,

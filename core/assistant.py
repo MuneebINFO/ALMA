@@ -40,6 +40,11 @@ class Assistant:
         # Memoire de court terme : le site ou l application dont on vient de
         # parler, afin que « recherche Damso » suive « va sur YouTube ».
         self.contexte: dict = {}
+        # Defilement en cours, s il y en a un : il doit pouvoir etre
+        # interrompu par la voix pendant qu il tourne.
+        from core.interaction import Defilement
+
+        self.defilement = Defilement()
         self.running = True
         self.last_utterance: Utterance | None = None
         self.last_command_text: str = ""
@@ -93,6 +98,14 @@ class Assistant:
             del self.contexte[cle]
             return defaut
         return valeur
+
+    def interrompre(self) -> bool:
+        """
+        Arrete l action en cours (defilement). Retourne True si quelque chose
+        a bien ete interrompu : dire « arrete » pendant un defilement doit
+        arreter le defilement, pas refermer la session d ecoute.
+        """
+        return self.defilement.arreter()
 
     def oublier_contexte(self) -> None:
         """Vide la memoire de court terme (fin de session)."""
@@ -187,6 +200,10 @@ class Assistant:
 
     def shutdown(self) -> None:
         """Arret propre : on laisse la synthese finir de parler."""
+        try:
+            self.defilement.arreter()
+        except Exception:
+            pass
         try:
             self.scheduler.shutdown()
         except Exception:

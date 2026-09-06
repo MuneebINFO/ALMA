@@ -368,6 +368,45 @@ something ("mets X sur YouTube").
 > GitHub tab named "Your Repositories" contains no clue that it is GitHub, so
 > ALMA will open a new one.
 
+### Scrolling and clicking
+
+```
+scrolle                       scroll down (the default)
+fais défiler vers le haut     scroll up
+descends / remonte la page
+arrête                        stops the scrolling
+clique sur Abonnements        clicks the element with that name
+clique sur la première vidéo  clicks by position instead
+```
+
+Scrolling is **continuous**: the command returns immediately and ALMA keeps
+listening, so you can stop it with a word. Speed is measured at roughly
+**365 pixels per second** with the default settings — a comfortable reading
+pace. Two wheel notches per tick already exceed 1300 px/s, which is unreadable,
+so raise it carefully:
+
+```yaml
+interaction:
+  scroll_crans: 1        # wheel notches per tick
+  scroll_intervalle: 0.25
+```
+
+Saying "arrête" while scrolling **stops the scrolling and keeps the session
+open** — it does not hang up on you. It only closes the session when nothing is
+running.
+
+Clicking goes through the accessibility API: elements are matched by their
+name, preferring an exact match, then the shortest one containing your words —
+so "Damso" targets the link named *Damso* rather than an 80-character title
+that merely mentions him. Only elements **actually on screen** are considered;
+anything scrolled out of view is ignored, since clicking it would land
+somewhere else.
+
+> "clique sur la première vidéo" is a heuristic: nothing distinguishes a video
+> from any other link, so ALMA takes the elements in reading order and skips
+> short labels, which are almost always navigation buttons. Naming what you
+> want is more reliable.
+
 ### System
 ```
 mets le volume à 30%          coupe le son / remets le son
@@ -540,6 +579,7 @@ alma/
 │   ├── desktop.py          screens, windows and focus
 │   ├── browser_tabs.py     reads and activates browser tabs (UI Automation)
 │   ├── media_control.py    per-application playback control
+│   ├── interaction.py      continuous scrolling and clicking on screen
 │   ├── tts.py              speech synthesis (neural, SAPI5 fallback)
 │   ├── voice_neural.py     edge-tts neural voice
 │   ├── stt.py              speech recognition and microphone level metering
@@ -605,7 +645,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-211 tests cover:
+238 tests cover:
 
 - normalisation and fuzzy matching (`test_text_utils.py`);
 - **routing**: every sentence must reach the right handler, including the
@@ -622,6 +662,10 @@ pytest -q
 - **screen targeting**: with two players running on two screens, only the one
   on the requested screen is paused; the keyboard fallback is used when no media
   session exists (`test_desktop_media.py`);
+- **scrolling and clicking**: default direction, cursor restored afterwards,
+  "arrête" stops the scroll instead of closing the session, and the ambiguous
+  verbs "monte"/"descends" still reach volume and brightness
+  (`test_interaction.py`);
 - **the session**: it lasts through several exchanges, the countdown restarts
   when you speak, "stop" closes it at once, and nothing runs afterwards without
   the wake word (`test_wake.py`);

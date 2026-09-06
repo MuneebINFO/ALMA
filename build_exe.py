@@ -31,6 +31,7 @@ IMPORTS_CACHES = [
     "core.wake",
     "core.desktop",
     "core.browser_tabs",
+    "core.interaction",
     "comtypes.client",
     "comtypes.gen",
     "core.media_control",

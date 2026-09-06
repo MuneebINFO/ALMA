@@ -482,6 +482,14 @@ class AlmaApp:
             self.evenements.put(("entendu", texte))
 
             if analyse.etat == wake.FIN_SESSION:
+                # « arrête » pendant un défilement doit arrêter le défilement,
+                # pas refermer la session : on interrompt d'abord l'action.
+                if self.assistant.interrompre():
+                    self.moteur.armer()          # la session continue
+                    self.evenements.put(("journal", ("Vous", texte)))
+                    self.evenements.put(("journal", (self.nom, "J'arrête.")))
+                    self.evenements.put(("statut", ("arme", "")))
+                    continue
                 reponse = wake.accuse_fin()
                 self.assistant.oublier_contexte()
                 self.evenements.put(("journal", ("Vous", texte)))

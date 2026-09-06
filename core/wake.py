@@ -41,8 +41,9 @@ ACCUSES = (
 
 # Mots qui ferment la session d ecoute avant la fin du compte a rebours.
 MOTS_FIN_SESSION = {
-    "stop", "stoppe", "c est bon", "laisse tomber", "annule", "rien",
-    "merci c est tout", "termine", "fini", "silence",
+    "stop", "stoppe", "arrete", "arrete toi", "c est bon", "laisse tomber",
+    "annule", "rien", "merci c est tout", "termine", "fini", "silence",
+    "ca suffit", "assez",
 }
 
 # Repliques de fin de session.
