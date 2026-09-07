@@ -107,6 +107,19 @@ class Assistant:
         """
         return self.defilement.arreter()
 
+    def interrompre_parole(self) -> bool:
+        """
+        Fait taire l assistant immediatement.
+
+        Appele des que le micro DETECTE de la voix, sans attendre la
+        transcription : sinon il finirait sa phrase pendant qu on lui parle,
+        avec plusieurs secondes de retard.
+        """
+        try:
+            return self.tts.arreter()
+        except Exception:
+            return False
+
     def oublier_contexte(self) -> None:
         """Vide la memoire de court terme (fin de session)."""
         self.contexte.clear()

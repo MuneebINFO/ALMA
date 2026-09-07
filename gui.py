@@ -441,6 +441,10 @@ class AlmaApp:
                 etat = "calibration"
             elif etat_audio == "parole":
                 etat = "voix"
+                # On coupe la parole DES LA DETECTION de la voix, pas apres
+                # la transcription : attendre reviendrait a finir sa phrase
+                # pendant que l utilisateur parle.
+                self.assistant.interrompre_parole()
             else:
                 etat = self._etat_repos()
             self.evenements.put(("niveau", (niveau, etat)))

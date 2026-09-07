@@ -1,0 +1,748 @@
+{
+  "actions": [
+    {
+      "action": "Ouvrir un site web (YouTube, Gmail, GitHub, Netflix...)",
+      "phrases": [
+        "ouvre YouTube",
+        "va sur GitHub",
+        "bascule sur Netflix",
+        "reviens sur YouTube",
+        "affiche l'onglet Gmail"
+      ]
+    },
+    {
+      "action": "Ouvrir un site et y lancer une recherche",
+      "phrases": [
+        "va sur Netflix et mets Fast and Furious",
+        "mets lofi hip hop sur YouTube",
+        "cherche une recette sur YouTube"
+      ]
+    },
+    {
+      "action": "Lister les sites que je sais ouvrir",
+      "phrases": [
+        "quels sites connais-tu"
+      ]
+    },
+    {
+      "action": "Ouvrir une adresse web dictée (exemple.com)",
+      "phrases": [
+        "ouvre exemple.com"
+      ]
+    },
+    {
+      "action": "Poursuivre sur le site en cours (« va sur YouTube » puis « recherche Damso »)",
+      "phrases": [
+        "recherche Damso"
+      ]
+    },
+    {
+      "action": "Faire défiler la page (vers le bas par défaut)",
+      "phrases": [
+        "scrolle",
+        "fais défiler",
+        "descends",
+        "fais défiler vers le haut",
+        "remonte la page"
+      ]
+    },
+    {
+      "action": "Cliquer sur un élément visible, en le nommant",
+      "phrases": [
+        "clique sur Abonnements",
+        "clique sur le bouton lecture",
+        "clique sur la vidéo Interstellar",
+        "appuie sur le bouton pause"
+      ]
+    },
+    {
+      "action": "Cliquer sur le premier, deuxième... élément affiché",
+      "phrases": [
+        "clique sur la première vidéo",
+        "sélectionne le premier résultat"
+      ]
+    },
+    {
+      "action": "Arrêter le défilement en cours",
+      "phrases": [
+        "arrête"
+      ]
+    },
+    {
+      "action": "Lancer la lecture de la vidéo ou de la musique",
+      "phrases": [
+        "lance la vidéo",
+        "joue la vidéo",
+        "démarre la vidéo",
+        "remets la vidéo"
+      ]
+    },
+    {
+      "action": "Mettre la vidéo ou la musique en pause",
+      "phrases": [
+        "mets pause à la vidéo",
+        "mets la vidéo en pause",
+        "pause la vidéo"
+      ]
+    },
+    {
+      "action": "Passer au morceau suivant",
+      "phrases": [
+        "chanson suivante",
+        "suivant",
+        "morceau suivant"
+      ]
+    },
+    {
+      "action": "Lecture ou pause du lecteur actif",
+      "phrases": [
+        "pause",
+        "play",
+        "reprends"
+      ]
+    },
+    {
+      "action": "Lancer la musique (dossier local, sinon Spotify)",
+      "phrases": [
+        "mets de la musique",
+        "joue de la musique",
+        "balance de la musique"
+      ]
+    },
+    {
+      "action": "Mettre en pause ce qui joue sur un écran précis",
+      "phrases": [
+        "mets pause sur l'écran 2",
+        "arrête la vidéo sur le deuxième écran"
+      ]
+    },
+    {
+      "action": "Mettre en pause tous les lecteurs à la fois",
+      "phrases": [
+        "mets tout en pause",
+        "pause partout"
+      ]
+    },
+    {
+      "action": "Revenir au morceau précédent",
+      "phrases": [
+        "chanson précédente",
+        "précédent"
+      ]
+    },
+    {
+      "action": "Arrêter la lecture",
+      "phrases": [
+        "arrête la musique",
+        "arrête la vidéo"
+      ]
+    },
+    {
+      "action": "Dire ce qui est en cours de lecture",
+      "phrases": [
+        "qu'est-ce qui joue",
+        "quelle musique passe"
+      ]
+    },
+    {
+      "action": "Reprendre la lecture sur un écran précis",
+      "phrases": [
+        "reprends la lecture sur l'écran 2"
+      ]
+    },
+    {
+      "action": "Ouvrir un dossier dans l explorateur",
+      "phrases": [
+        "ouvre le dossier téléchargements",
+        "ouvre mes documents",
+        "ouvre le bureau"
+      ]
+    },
+    {
+      "action": "Prendre une capture d'écran",
+      "phrases": [
+        "prends une capture d'écran",
+        "screenshot",
+        "fais une capture"
+      ]
+    },
+    {
+      "action": "Baisser le volume",
+      "phrases": [
+        "baisse le son",
+        "baisse le volume",
+        "moins fort"
+      ]
+    },
+    {
+      "action": "Régler le volume a un pourcentage precis",
+      "phrases": [
+        "mets le volume à 30%",
+        "volume à 70",
+        "règle le son sur 50"
+      ]
+    },
+    {
+      "action": "Augmenter le volume",
+      "phrases": [
+        "monte le son",
+        "augmente le volume",
+        "plus fort"
+      ]
+    },
+    {
+      "action": "Augmenter ou baisser la luminosité",
+      "phrases": [
+        "monte la luminosité",
+        "baisse la luminosité"
+      ]
+    },
+    {
+      "action": "Verrouiller la session Windows",
+      "phrases": [
+        "verrouille l'ordinateur",
+        "verrouille la session"
+      ]
+    },
+    {
+      "action": "Couper le son",
+      "phrases": [
+        "coupe le son",
+        "silence"
+      ]
+    },
+    {
+      "action": "Rétablir le son",
+      "phrases": [
+        "remets le son",
+        "rétablis le son"
+      ]
+    },
+    {
+      "action": "Annuler une extinction ou un redémarrage programmé",
+      "phrases": [
+        "annule l'extinction"
+      ]
+    },
+    {
+      "action": "Régler la luminosité de l'écran",
+      "phrases": [
+        "mets la luminosité à 50%"
+      ]
+    },
+    {
+      "action": "Redémarrer l'ordinateur (confirmation obligatoire)",
+      "phrases": [
+        "redémarre l'ordinateur"
+      ]
+    },
+    {
+      "action": "Éteindre l'ordinateur (confirmation obligatoire)",
+      "phrases": [
+        "éteins l'ordinateur"
+      ]
+    },
+    {
+      "action": "Mettre l'ordinateur en veille (confirmation demandée)",
+      "phrases": [
+        "mets l'ordinateur en veille"
+      ]
+    },
+    {
+      "action": "Vider la corbeille (confirmation demandée)",
+      "phrases": [
+        "vide la corbeille"
+      ]
+    },
+    {
+      "action": "Connaître le niveau de volume",
+      "phrases": [
+        "quel est le volume"
+      ]
+    },
+    {
+      "action": "Recharger la page",
+      "phrases": [
+        "actualise la page",
+        "recharge",
+        "rafraîchis"
+      ]
+    },
+    {
+      "action": "Afficher le bureau",
+      "phrases": [
+        "affiche le bureau",
+        "réduis tout"
+      ]
+    },
+    {
+      "action": "Agrandir la fenêtre active",
+      "phrases": [
+        "agrandis la fenêtre",
+        "maximise la fenêtre"
+      ]
+    },
+    {
+      "action": "Capturer une zone de l'écran",
+      "phrases": [
+        "capture une zone",
+        "capture une partie de l'écran"
+      ]
+    },
+    {
+      "action": "Passer à la fenêtre suivante",
+      "phrases": [
+        "change de fenêtre",
+        "fenêtre suivante"
+      ]
+    },
+    {
+      "action": "Fermer l'onglet courant",
+      "phrases": [
+        "ferme cet onglet",
+        "ferme la page"
+      ]
+    },
+    {
+      "action": "Réduire la fenêtre active",
+      "phrases": [
+        "minimise la fenêtre",
+        "réduis la fenêtre"
+      ]
+    },
+    {
+      "action": "Ouvrir un nouvel onglet",
+      "phrases": [
+        "ouvre un nouvel onglet",
+        "nouvel onglet"
+      ]
+    },
+    {
+      "action": "Revenir à la page précédente",
+      "phrases": [
+        "page précédente",
+        "retour arrière"
+      ]
+    },
+    {
+      "action": "Basculer en plein écran",
+      "phrases": [
+        "plein écran",
+        "mets en plein écran"
+      ]
+    },
+    {
+      "action": "Rouvrir le dernier onglet fermé",
+      "phrases": [
+        "rouvre l'onglet fermé",
+        "restaure l'onglet"
+      ]
+    },
+    {
+      "action": "Réduire l'affichage",
+      "phrases": [
+        "zoom arrière",
+        "réduis le texte"
+      ]
+    },
+    {
+      "action": "Agrandir l'affichage",
+      "phrases": [
+        "zoom avant",
+        "agrandis le texte"
+      ]
+    },
+    {
+      "action": "Revenir au zoom normal",
+      "phrases": [
+        "zoom normal",
+        "remets le zoom"
+      ]
+    },
+    {
+      "action": "Fermer la fenêtre active",
+      "phrases": [
+        "ferme la fenêtre"
+      ]
+    },
+    {
+      "action": "Revenir à l'onglet précédent",
+      "phrases": [
+        "onglet précédent"
+      ]
+    },
+    {
+      "action": "Passer à l'onglet suivant",
+      "phrases": [
+        "onglet suivant"
+      ]
+    },
+    {
+      "action": "Aller à la page suivante",
+      "phrases": [
+        "page suivante"
+      ]
+    },
+    {
+      "action": "Annuler la dernière action",
+      "phrases": [
+        "annule la dernière action",
+        "annule"
+      ]
+    },
+    {
+      "action": "Coller le presse-papiers",
+      "phrases": [
+        "colle",
+        "colle le texte"
+      ]
+    },
+    {
+      "action": "Copier la sélection",
+      "phrases": [
+        "copie la sélection",
+        "copie"
+      ]
+    },
+    {
+      "action": "Écrire un texte dans l'application active",
+      "phrases": [
+        "écris bonjour tout le monde",
+        "tape mon adresse"
+      ]
+    },
+    {
+      "action": "Enregistrer le document",
+      "phrases": [
+        "enregistre",
+        "sauvegarde"
+      ]
+    },
+    {
+      "action": "Ouvrir la boîte d'impression",
+      "phrases": [
+        "imprime la page",
+        "imprime"
+      ]
+    },
+    {
+      "action": "Tout sélectionner",
+      "phrases": [
+        "sélectionne tout",
+        "tout sélectionner"
+      ]
+    },
+    {
+      "action": "Appuyer sur Entrée",
+      "phrases": [
+        "valide",
+        "confirme"
+      ]
+    },
+    {
+      "action": "Couper la sélection",
+      "phrases": [
+        "coupe la sélection"
+      ]
+    },
+    {
+      "action": "Appuyer sur Échap",
+      "phrases": [
+        "échap"
+      ]
+    },
+    {
+      "action": "Rechercher dans la page affichée",
+      "phrases": [
+        "cherche dans la page"
+      ]
+    },
+    {
+      "action": "Rétablir l'action annulée",
+      "phrases": [
+        "rétablis"
+      ]
+    },
+    {
+      "action": "Rechercher sur Google",
+      "phrases": [
+        "cherche des idées de cadeaux",
+        "google météo Bruxelles",
+        "recherche les actualités"
+      ]
+    },
+    {
+      "action": "Lire un résumé Wikipedia",
+      "phrases": [
+        "qui est Marie Curie",
+        "cherche Alan Turing sur Wikipedia",
+        "c'est quoi la photosynthèse"
+      ]
+    },
+    {
+      "action": "Rechercher des images",
+      "phrases": [
+        "cherche des images de montagne",
+        "montre moi des photos de chats"
+      ]
+    },
+    {
+      "action": "Localiser un lieu sur Google Maps",
+      "phrases": [
+        "où est la gare centrale",
+        "itinéraire vers Bruxelles"
+      ]
+    },
+    {
+      "action": "Traduire un texte avec Google Traduction",
+      "phrases": [
+        "traduis bonjour le monde en anglais",
+        "traduis good morning en français"
+      ]
+    },
+    {
+      "action": "Envoyer une question à Claude dans le navigateur",
+      "phrases": [
+        "demande à Claude comment fonctionne un moteur de recherche"
+      ]
+    },
+    {
+      "action": "Rechercher sur YouTube (raccourci)",
+      "phrases": [
+        "youtube lofi hip hop"
+      ]
+    },
+    {
+      "action": "Ouvrir une application (Chrome, Word, VS Code, Spotify...)",
+      "phrases": [
+        "ouvre Chrome",
+        "lance la calculatrice",
+        "démarre le bloc-notes",
+        "ouvre Spotify"
+      ]
+    },
+    {
+      "action": "Fermer une application ouverte",
+      "phrases": [
+        "ferme Chrome",
+        "quitte Spotify",
+        "ferme le bloc-notes"
+      ]
+    },
+    {
+      "action": "Lister les applications que je sais ouvrir",
+      "phrases": [
+        "quelles applications connais-tu",
+        "liste les applications"
+      ]
+    },
+    {
+      "action": "Relire les notes enregistrées",
+      "phrases": [
+        "lis mes notes",
+        "montre moi mes notes",
+        "mes notes"
+      ]
+    },
+    {
+      "action": "Prendre une note horodatée",
+      "phrases": [
+        "note que je dois rappeler ma banque",
+        "prends une note acheter du pain"
+      ]
+    },
+    {
+      "action": "Lister les rappels en attente",
+      "phrases": [
+        "mes rappels",
+        "liste mes rappels"
+      ]
+    },
+    {
+      "action": "Lancer un minuteur",
+      "phrases": [
+        "lance un minuteur de 5 minutes",
+        "minuteur de 3 minutes"
+      ]
+    },
+    {
+      "action": "Annuler tous les rappels",
+      "phrases": [
+        "annule mes rappels"
+      ]
+    },
+    {
+      "action": "Supprimer toutes les notes",
+      "phrases": [
+        "efface toutes mes notes"
+      ]
+    },
+    {
+      "action": "Supprimer une note par son numéro",
+      "phrases": [
+        "supprime la note 2"
+      ]
+    },
+    {
+      "action": "Lire le contenu du presse-papiers",
+      "phrases": [
+        "lis le presse-papiers"
+      ]
+    },
+    {
+      "action": "Programmer un rappel (notification + son)",
+      "phrases": [
+        "rappelle-moi dans 10 minutes de sortir le gâteau"
+      ]
+    },
+    {
+      "action": "Copier un texte dans le presse-papiers",
+      "phrases": [
+        "copie bonjour tout le monde dans le presse-papiers"
+      ]
+    },
+    {
+      "action": "Connaître le niveau de batterie",
+      "phrases": [
+        "niveau de batterie",
+        "combien de batterie",
+        "il me reste combien de batterie"
+      ]
+    },
+    {
+      "action": "Faire un calcul",
+      "phrases": [
+        "combien font 15 fois 4",
+        "calcule 200 divisé par 8",
+        "combien ça fait 12 plus 30"
+      ]
+    },
+    {
+      "action": "Donner la date du jour",
+      "phrases": [
+        "quelle est la date",
+        "quel jour sommes-nous",
+        "on est quel jour"
+      ]
+    },
+    {
+      "action": "Donner l'heure actuelle",
+      "phrases": [
+        "quelle heure est-il",
+        "il est quelle heure",
+        "donne moi l'heure"
+      ]
+    },
+    {
+      "action": "Donner la météo d'une ville",
+      "phrases": [
+        "quel temps fait-il à Bruxelles",
+        "météo Paris",
+        "quelle est la température à Lyon"
+      ]
+    },
+    {
+      "action": "Donner l'adresse IP locale",
+      "phrases": [
+        "mon adresse IP",
+        "quelle est mon adresse IP"
+      ]
+    },
+    {
+      "action": "Connaître l'espace disque disponible",
+      "phrases": [
+        "espace libre sur le disque",
+        "combien de place"
+      ]
+    },
+    {
+      "action": "Dire bonjour",
+      "phrases": [
+        "bonjour",
+        "salut Alma",
+        "coucou"
+      ]
+    },
+    {
+      "action": "Prendre des nouvelles",
+      "phrases": [
+        "comment ça va",
+        "ça va"
+      ]
+    },
+    {
+      "action": "Raconter une blague",
+      "phrases": [
+        "raconte-moi une blague",
+        "fais moi rire"
+      ]
+    },
+    {
+      "action": "Se présenter",
+      "phrases": [
+        "qui es-tu",
+        "présente-toi"
+      ]
+    },
+    {
+      "action": "Répondre à un remerciement",
+      "phrases": [
+        "merci"
+      ]
+    },
+    {
+      "action": "Quitter Alma",
+      "phrases": [
+        "au revoir Alma",
+        "quitte",
+        "à bientôt"
+      ]
+    },
+    {
+      "action": "Afficher la liste des commandes disponibles",
+      "phrases": [
+        "aide",
+        "que peux-tu faire"
+      ]
+    },
+    {
+      "action": "Voir les commandes demandées aujourd'hui",
+      "phrases": [
+        "historique",
+        "qu'est-ce que je t'ai demandé aujourd'hui"
+      ]
+    },
+    {
+      "action": "Lancer un dé",
+      "phrases": [
+        "lance un dé",
+        "jette un dé"
+      ]
+    },
+    {
+      "action": "Tirer un nombre au hasard",
+      "phrases": [
+        "donne-moi un nombre entre 1 et 100",
+        "un nombre au hasard"
+      ]
+    },
+    {
+      "action": "Effacer l'historique des commandes",
+      "phrases": [
+        "efface l'historique"
+      ]
+    },
+    {
+      "action": "Tirer à pile ou face",
+      "phrases": [
+        "pile ou face"
+      ]
+    },
+    {
+      "action": "Répéter la dernière commande",
+      "phrases": [
+        "répète"
+      ]
+    }
+  ]
+}
