@@ -10,6 +10,7 @@ Tout passe par ctypes : aucune dependance supplementaire.
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import logging
 from ctypes import wintypes
@@ -24,6 +25,9 @@ except Exception:  # pragma: no cover - hors Windows
     user32 = None
 
 MONITOR_DEFAULTTONEAREST = 2
+
+# DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+CONTEXTE_PAR_MONITEUR = -4
 
 # Navigateurs : leur titre de fenetre reflete l onglet actif.
 NAVIGATEURS = ("chrome.exe", "firefox.exe", "msedge.exe", "brave.exe",
@@ -98,6 +102,48 @@ def ecrans() -> list:
 
     trouves.sort(key=lambda item: (item[1][0], item[1][1]))
     return [Ecran(i, rect, handle) for i, (handle, rect) in enumerate(trouves, start=1)]
+
+
+@contextlib.contextmanager
+def dpi_par_moniteur():
+    """
+    Bascule le thread courant en conscience DPI « par moniteur ».
+
+    Le processus est seulement « system aware » : Windows lui presente les
+    ecrans dont l echelle differe de celle de l ecran principal avec des
+    coordonnees redimensionnees, et redimensionne a son tour les fenetres
+    qu on y place. Un ecran a 100 % voisin d un ecran principal a 125 % est
+    ainsi annonce 2400x1350 au lieu de 1920x1080, et une fenetre censee le
+    couvrir n en occupe que les deux tiers.
+
+    Dans ce contexte, les coordonnees redeviennent des pixels physiques.
+    Les fenetres creees ici gardent ce comportement pour toute leur vie ;
+    le reste de l application n est pas affecte.
+    """
+    precedent = None
+    if user32 is not None:
+        try:
+            user32.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+            user32.SetThreadDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+            precedent = user32.SetThreadDpiAwarenessContext(
+                ctypes.c_void_p(CONTEXTE_PAR_MONITEUR))
+        except Exception as exc:  # Windows 8.1 et anterieurs
+            log.debug("Contexte DPI par moniteur indisponible : %s", exc)
+            precedent = None
+    try:
+        yield bool(precedent)
+    finally:
+        if precedent:
+            try:
+                user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(precedent))
+            except Exception as exc:
+                log.debug("Restauration du contexte DPI impossible : %s", exc)
+
+
+def ecrans_physiques() -> list:
+    """Les ecrans avec leurs vraies coordonnees en pixels, sans mise a l echelle."""
+    with dpi_par_moniteur():
+        return ecrans()
 
 
 def _nom_processus(hwnd) -> str:

@@ -6,9 +6,14 @@ Une fenetre sans bordure, toujours au premier plan et transparente au clic,
 couvre l ecran vise et n affiche qu un cadre lumineux. Elle apparait et
 disparait en quelques centaines de millisecondes, puis se detruit.
 
-Contrainte : Tkinter n est pilotable que depuis son thread principal. Toutes
-les fonctions d ici doivent donc etre appelees via root.after(), ce dont
-l interface se charge.
+Deux contraintes Windows se croisent ici :
+
+  - Tkinter n est pilotable que depuis son thread principal ; toutes les
+    fonctions d ici doivent donc etre appelees via root.after(), ce dont
+    l interface se charge.
+  - le cadre doit etre cree dans un contexte DPI « par moniteur », sinon
+    Windows le redimensionne sur les ecrans dont l echelle differe de celle
+    de l ecran principal et il ne couvre plus qu une partie de l ecran.
 """
 
 from __future__ import annotations
@@ -25,57 +30,49 @@ EPAISSEUR_MAX = 22
 COULEUR_TRANSPARENTE = "#010203"   # teinte improbable, rendue invisible
 
 
-def facteur_dpi(root) -> float:
+def flasher(root, index: int, couleur: str = "#38bdf8",
+            duree_ms: int = DUREE_MS) -> bool:
     """
-    Rapport entre pixels physiques et points logiques.
+    Illumine le contour de l ecran numero `index`.
 
-    Les rectangles d ecran viennent de l API Windows en pixels physiques,
-    alors que Tkinter positionne ses fenetres en points logiques. Sur un
-    ecran a 125 %, ignorer ce rapport place le cadre a cote de l ecran.
-    """
-    try:
-        import ctypes
-
-        largeur_physique = ctypes.windll.user32.GetSystemMetrics(0)
-        largeur_logique = root.winfo_screenwidth()
-        if largeur_logique > 0 and largeur_physique > 0:
-            return largeur_physique / largeur_logique
-    except Exception as exc:
-        log.debug("Facteur DPI indeterminable : %s", exc)
-    return 1.0
-
-
-def flasher(root, rect, couleur: str = "#38bdf8", duree_ms: int = DUREE_MS) -> bool:
-    """
-    Illumine le contour d un ecran.
-
-    `rect` est le rectangle physique (gauche, haut, droite, bas) de l ecran.
     Retourne False si la fenetre n a pas pu etre creee -- l assistant
     continue alors sans signal visuel plutot que d echouer.
     """
     try:
         import tkinter as tk
 
-        facteur = facteur_dpi(root)
-        gauche, haut, droite, bas = [int(v / facteur) for v in rect]
-        largeur, hauteur = droite - gauche, bas - haut
-        if largeur <= 0 or hauteur <= 0:
-            return False
+        from core import desktop
 
-        cadre = tk.Toplevel(root)
-        cadre.overrideredirect(True)
-        cadre.attributes("-topmost", True)
-        cadre.geometry("%dx%d+%d+%d" % (largeur, hauteur, gauche, haut))
-        try:
-            # La couleur de fond devient transparente ET laisse passer les
-            # clics : le cadre ne gene donc pas ce qui se trouve dessous.
-            cadre.attributes("-transparentcolor", COULEUR_TRANSPARENTE)
-        except Exception:
-            pass
+        # Tout ce qui touche aux coordonnees se fait dans le meme contexte
+        # DPI : l ecran est mesure et la fenetre est posee en pixels reels.
+        with desktop.dpi_par_moniteur():
+            ecran = next((e for e in desktop.ecrans() if e.index == index), None)
+            if ecran is None:
+                return False
+            gauche, haut, droite, bas = ecran.rect
+            largeur, hauteur = droite - gauche, bas - haut
+            if largeur <= 0 or hauteur <= 0:
+                return False
 
-        toile = tk.Canvas(cadre, width=largeur, height=hauteur,
-                          bg=COULEUR_TRANSPARENTE, highlightthickness=0)
-        toile.pack()
+            cadre = tk.Toplevel(root)
+            cadre.overrideredirect(True)
+            cadre.attributes("-topmost", True)
+            # « +-1080 » et non « -1080 » : un signe seul designerait le bord
+            # oppose de l ecran au lieu d une coordonnee negative.
+            cadre.geometry("%dx%d+%d+%d" % (largeur, hauteur, gauche, haut))
+            try:
+                # La couleur de fond devient transparente ET laisse passer les
+                # clics : le cadre ne gene donc pas ce qui se trouve dessous.
+                cadre.attributes("-transparentcolor", COULEUR_TRANSPARENTE)
+            except Exception:
+                pass
+
+            toile = tk.Canvas(cadre, bg=COULEUR_TRANSPARENTE,
+                              highlightthickness=0)
+            toile.pack(fill="both", expand=True)
+            # Force la creation et le placement de la fenetre tant que le
+            # contexte DPI est actif ; elle le conservera ensuite.
+            cadre.update_idletasks()
     except Exception as exc:
         log.debug("Cadre lumineux impossible : %s", exc)
         return False
@@ -95,9 +92,13 @@ def flasher(root, rect, couleur: str = "#38bdf8", duree_ms: int = DUREE_MS) -> b
         epaisseur = EPAISSEUR_MIN + (EPAISSEUR_MAX - EPAISSEUR_MIN) * intensite
         try:
             cadre.attributes("-alpha", max(0.05, intensite))
+            # On redessine d apres la taille reelle de la toile : le cadre
+            # epouse l ecran meme si Windows a ajuste la fenetre.
+            large = toile.winfo_width() or largeur
+            haute = toile.winfo_height() or hauteur
             toile.delete("all")
             demi = epaisseur / 2
-            toile.create_rectangle(demi, demi, largeur - demi, hauteur - demi,
+            toile.create_rectangle(demi, demi, large - demi, haute - demi,
                                    outline=couleur, width=epaisseur)
         except Exception:
             return

@@ -353,12 +353,9 @@ class AlmaApp:
     def signaler_ecran(self, index: int) -> None:
         """Illumine brievement le contour de l ecran choisi."""
         def dessiner():
-            from core import desktop, flash_ecran
+            from core import flash_ecran
 
-            ecran = next((e for e in desktop.ecrans() if e.index == index), None)
-            if ecran is None:
-                return
-            flash_ecran.flasher(self.root, ecran.rect, couleur=ETATS["voix"][0])
+            flash_ecran.flasher(self.root, index, couleur=ETATS["voix"][0])
 
         try:
             self.root.after(0, dessiner)
