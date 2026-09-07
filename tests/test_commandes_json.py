@@ -36,6 +36,7 @@ REMPLACEMENTS = {
     "va sur l écran X": "va sur l'écran 2",
     "écran X": "écran 2",
     "mets toi sur l écran X": "mets toi sur l'écran 2",
+    "sur l écran X": "sur l'écran 2",
 }
 
 # Commandes qui n'ont de sens que dans une situation précise : vérifiées

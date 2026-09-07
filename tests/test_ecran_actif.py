@@ -84,6 +84,10 @@ def test_un_signal_defaillant_ne_bloque_pas(assistant, deux_ecrans):
 @pytest.mark.parametrize("phrase", [
     "va sur l'écran 2", "écran 2", "passe sur le deuxième écran",
     "bascule sur l'écran de droite", "mets toi sur l'écran 2",
+    # Formulations que la transcription tronque souvent : le verbe se perd,
+    # mais « premier écran » suffit à comprendre l'intention.
+    "pour le premier écran", "le deuxième écran", "sur l'écran 1",
+    "vers l'écran 2", "premier écran",
 ])
 def test_routage_du_choix_d_ecran(router, config, phrase):
     utterance = Utterance.parse(phrase, wake_words=config.get("general.wake_words"))

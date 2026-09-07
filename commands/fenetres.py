@@ -276,6 +276,10 @@ def capture_zone(ctx: CommandContext) -> Response:
         r"^(?:ecran|moniteur)\s+(?:numero\s+)?(?:\d+|premier|deuxieme|second|"
         r"troisieme|de\s+droite|de\s+gauche|principal|autre)\b.*$",
         r"^(?:utilise|prends)\s+(?:l\s+)?(?:ecran|moniteur)\b.*$",
+        # Formulations tronquees par la transcription : « pour le premier
+        # ecran » ou « le deuxieme ecran » doivent suffire.
+        r"^(?:pour|sur|dans|vers)\s+.{0,20}?\b(?:ecran|moniteur)s?\b.*$",
+        r"^(?:le\s+|l\s+)?(?:premier|premiere|deuxieme|second|seconde|troisieme|dernier)\s+(?:ecran|moniteur)\b.*$",
     ],
     category="Fenêtres",
     description="Choisir l'écran sur lequel travailler",
