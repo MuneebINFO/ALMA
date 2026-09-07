@@ -74,6 +74,68 @@ class Onglet:
             return False
 
 
+# La barre d adresse, telle que les navigateurs l annoncent.
+NOMS_BARRE_ADRESSE = ("adresse", "address", "url", "recherche", "search")
+TYPE_CHAMP = 50004           # UIA_EditControlTypeId
+
+
+def adresse_courante(fenetre) -> str:
+    """
+    L adresse affichee dans la barre du navigateur, ou "" si illisible.
+
+    Chrome n y montre pas le protocole (« youtube.com/watch?v=... ») : c est
+    au lecteur d en tenir compte.
+    """
+    uia, module = _client()
+    if uia is None:
+        return ""
+    try:
+        racine = uia.ElementFromHandle(fenetre.handle)
+        condition = uia.CreatePropertyCondition(module.UIA_ControlTypePropertyId,
+                                                TYPE_CHAMP)
+        champs = racine.FindAll(module.TreeScope_Descendants, condition)
+    except Exception as exc:
+        log.debug("Barre d adresse illisible : %s", exc)
+        return ""
+    for index in range(champs.Length):
+        try:
+            champ = champs.GetElement(index)
+            nom = (champ.CurrentName or "").lower()
+            if not any(mot in nom for mot in NOMS_BARRE_ADRESSE):
+                continue
+            motif = champ.GetCurrentPattern(module.UIA_ValuePatternId)
+            if not motif:
+                continue
+            valeur = motif.QueryInterface(module.IUIAutomationValuePattern).CurrentValue
+            if valeur:
+                return str(valeur).strip()
+        except Exception:
+            continue
+    return ""
+
+
+def racine_du_site(adresse: str) -> str:
+    """
+    L accueil du site auquel appartient une adresse.
+
+    « youtube.com/watch?v=abc » donne « https://youtube.com/ ». Retourne ""
+    si ce n est pas une adresse -- la barre peut contenir une recherche.
+    """
+    adresse = (adresse or "").strip()
+    if not adresse or " " in adresse:
+        return ""
+    protocole = "https://"
+    if "://" in adresse:
+        protocole, _, adresse = adresse.partition("://")
+        protocole += "://"
+        if protocole not in ("http://", "https://"):
+            return ""
+    hote = adresse.split("/")[0].split("?")[0].split("#")[0]
+    if "." not in hote or hote.startswith(".") or hote.endswith("."):
+        return ""
+    return protocole + hote + "/"
+
+
 def onglets(fenetre) -> list:
     """Liste les onglets d une fenetre de navigateur."""
     uia, module = _client()

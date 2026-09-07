@@ -339,3 +339,107 @@ def ouvrir_site_nouvel_onglet(ctx: CommandContext) -> Response:
     if ouvert:
         return Response(text="Nouvel onglet sur " + cle + ".", speak=False)
     return Response.error("Je n'ai pas réussi à ouvrir " + cle + ".")
+
+
+# --------------------------------------------------------------------------
+# Retour a l accueil
+# --------------------------------------------------------------------------
+# Tout titre de fenetre se termine par le nom du navigateur. Sans le retirer,
+# « Sans titre - Google Chrome » passerait pour une page Google.
+NAVIGATEURS_DANS_LE_TITRE = (
+    "google chrome", "mozilla firefox", "microsoft edge", "brave browser",
+    "chromium", "firefox", "brave", "opera", "vivaldi", "librewolf", "edge",
+)
+
+
+def sans_le_navigateur(titre: str) -> str:
+    """Le titre d une fenetre, prive du nom du navigateur qui le termine."""
+    norme = text_utils.normalize(titre or "").strip()
+    for nom in NAVIGATEURS_DANS_LE_TITRE:
+        if norme.endswith(nom):
+            return norme[: -len(nom)].strip(" -|:")
+    return norme
+
+
+def site_du_titre(config, titre: str):
+    """
+    Le site reconnu dans un titre de fenetre. Retourne (cle, url) ou None.
+
+    Repli pour les cas ou la barre d adresse est illisible : « Netflix -
+    Google Chrome » suffit a savoir ou l on est.
+    """
+    jetons = set(text_utils.tokenize(sans_le_navigateur(titre)))
+    if not jetons:
+        return None
+    for cle, entree in (config.get("websites", {}) or {}).items():
+        url = entree.get("url") if isinstance(entree, dict) else str(entree)
+        if not url:
+            continue
+        for terme in termes_de_recherche(cle, entree):
+            if text_utils.normalize(terme).strip() in jetons:
+                return cle, url
+    return None
+
+
+@command(
+    name="retour_accueil",
+    patterns=[
+        r"^(?:retourne|retour|reviens|revenir|va|vas|aller|ramene\s+moi|"
+        r"remonte|remonter|repasse)\s+(?:a\s+|sur\s+|vers\s+|au\s+)?"
+        r"(?:la\s+|le\s+|l\s+)?(?:page\s+d\s+|ecran\s+d\s+)?"
+        r"(?:accueil|home)(?:\s+(?:de\s+|du\s+|d\s+|sur\s+)?"
+        r"(?:la\s+|le\s+|l\s+)?(?P<site>.+))?$",
+        r"^(?:page\s+d\s+|ecran\s+d\s+)?(?:accueil|home)"
+        r"(?:\s+(?:de\s+|du\s+|d\s+)?(?P<site>.+))?$",
+        r"^(?:retourne|retour|reviens|revenir)\s+(?:a\s+)?(?:la\s+)?"
+        r"page\s+(?:principale|d\s+accueil)$",
+    ],
+    keywords=[["retour", "accueil"], ["reviens", "accueil"], ["page", "accueil"]],
+    category="Sites web",
+    description="Revenir à la page d'accueil du site",
+    examples=["retourne à l'accueil", "reviens à l'accueil de Netflix"],
+    priority=94,
+)
+def retour_accueil(ctx: CommandContext) -> Response:
+    """
+    Ramene a la racine du site affiche, ou d un site nomme.
+
+    Sans nom de site, on lit la barre d adresse du navigateur : cela marche
+    pour n importe quel site, y compris ceux qui ne figurent pas dans la
+    configuration. Le titre de la fenetre sert de repli.
+    """
+    from commands.interaction import fenetre_visee
+    from core import browser_tabs, desktop
+
+    demande = (ctx.group("site") or "").strip()
+    if demande:
+        trouve = resolve_website(ctx.config, demande)
+        if trouve is None:
+            return Response.error("Je ne connais pas le site « " + demande + " ».")
+        cle, url = trouve
+        ok, _comment = afficher_site(ctx.config, cle, url, naviguer=True,
+                                     assistant=ctx.assistant)
+        if ok:
+            ctx.assistant.memoriser("site", cle)
+            return Response(text="Accueil de " + demande + ".")
+        return Response.error("Je n'ai pas pu ouvrir l'accueil de " + demande + ".")
+
+    fenetre = fenetre_visee(ctx)
+    if fenetre is None:
+        return Response.error("Je ne vois aucune page ouverte.")
+
+    accueil = browser_tabs.racine_du_site(browser_tabs.adresse_courante(fenetre))
+    nom = accueil.split("//")[-1].strip("/") if accueil else ""
+    if not accueil:
+        # Barre d adresse illisible : on reconnait le site a son titre.
+        trouve = site_du_titre(ctx.config, fenetre.titre)
+        if trouve is None:
+            return Response.error(
+                "Je n'arrive pas à savoir sur quel site vous êtes. "
+                "Dites par exemple « retourne à l'accueil de Netflix »."
+            )
+        nom, accueil = trouve
+
+    if desktop.naviguer_dans_fenetre(fenetre, accueil):
+        return Response(text="Retour à l'accueil de " + nom + ".")
+    return Response.error("Je n'ai pas pu revenir à l'accueil de " + nom + ".")

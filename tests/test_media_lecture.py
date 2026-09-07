@@ -74,6 +74,25 @@ def test_ces_actions_ne_sont_pas_lues_a_voix_haute(assistant, sessions_factices)
     assert assistant.handle("mets pause à la vidéo").speak is False
 
 
+def test_aucune_methode_dassistant_inexistante_nest_appelee():
+    """
+    Même garde-fou, côté assistant : `ctx.assistant.retenir(...)` s'écrit
+    sans erreur et ne casse qu'à l'exécution, dans une branche que les tests
+    ne traversent pas forcément.
+    """
+    from core.assistant import Assistant
+
+    manquantes = []
+    for dossier in ("commands", "core"):
+        for fichier in (RACINE / dossier).rglob("*.py"):
+            source = fichier.read_text(encoding="utf-8")
+            for nom in set(re.findall(r"ctx\.assistant\.([a-zA-Z_]\w*)\s*\(", source)):
+                if not hasattr(Assistant, nom):
+                    manquantes.append(str(fichier.relative_to(RACINE)) + " : assistant." + nom)
+    assert not manquantes, ("méthodes inexistantes :" + chr(10)
+                            + chr(10).join(sorted(manquantes)))
+
+
 def test_aucune_methode_de_reponse_inexistante_nest_appelee():
     """
     Garde-fou général : toute méthode `Response.xxx()` utilisée dans le code

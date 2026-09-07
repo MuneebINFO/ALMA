@@ -383,6 +383,24 @@ the one that gets paused. A player with no visible window at all (Spotify
 minimised to the notification area) belongs to no screen and stays controllable
 from wherever you are.
 
+### Back to the home page
+
+```
+retourne à l'accueil          the site you are on
+reviens à l'accueil
+page d'accueil
+retourne à l'accueil de Netflix    a site by name
+```
+
+ALMA reads the address showing in the browser and goes back to its root, so
+this works on **any** site — including the ones that are not in the
+configuration. `netflix.com/watch/80144925` becomes `netflix.com/browse`,
+`disneyplus.com/fr-fr/play/120ae1e6…` becomes the Disney+ home,
+`anime-sama.fr/catalogue/detective-conan` becomes `anime-sama.fr`. If the
+address bar cannot be read, the window title identifies the site instead —
+minus the browser's own name, or every Chrome window would look like a Google
+page.
+
 ### Two volumes
 
 A video on a streaming site has a level of its own, separate from the

@@ -7,6 +7,14 @@
       ]
     },
     {
+      "action": "Revenir à la page d'accueil du site",
+      "phrases": [
+        "retourne à l'accueil",
+        "reviens à l'accueil de X",
+        "page d'accueil"
+      ]
+    },
+    {
       "action": "Ouvrir un site dans un nouvel onglet",
       "phrases": [
         "ouvre un nouvel onglet X",
