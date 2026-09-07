@@ -3,19 +3,32 @@
     {
       "action": "Ouvrir un site web (YouTube, Gmail, GitHub, Netflix...)",
       "phrases": [
-        "ouvre YouTube",
-        "va sur GitHub",
-        "bascule sur Netflix",
-        "reviens sur YouTube",
-        "affiche l'onglet Gmail"
+        "ouvre X"
+      ]
+    },
+    {
+      "action": "Ouvrir un site dans un nouvel onglet",
+      "phrases": [
+        "ouvre un nouvel onglet X",
+        "ouvre X dans un nouvel onglet"
+      ]
+    },
+    {
+      "action": "Aller sur un site web déjà ouvert",
+      "phrases": [
+        "va sur X",
+        "reviens sur X",
+        "affiche l'onglet X"
       ]
     },
     {
       "action": "Ouvrir un site et y lancer une recherche",
       "phrases": [
-        "va sur Netflix et mets Fast and Furious",
-        "mets lofi hip hop sur YouTube",
-        "cherche une recette sur YouTube"
+        "va sur X et mets Y",
+        "va sur X et recherche Y",
+        "mets X sur Y",
+        "cherche X sur Y",
+        "recherche X sur Y"
       ]
     },
     {
@@ -31,15 +44,10 @@
       ]
     },
     {
-      "action": "Poursuivre sur le site en cours (« va sur YouTube » puis « recherche Damso »)",
-      "phrases": [
-        "recherche Damso"
-      ]
-    },
-    {
       "action": "Faire défiler la page (vers le bas par défaut)",
       "phrases": [
         "scrolle",
+        "scrolle vers le bas",
         "fais défiler",
         "descends",
         "fais défiler vers le haut",
@@ -80,24 +88,25 @@
     {
       "action": "Mettre la vidéo ou la musique en pause",
       "phrases": [
-        "mets pause à la vidéo",
-        "mets la vidéo en pause",
-        "pause la vidéo"
+        "mets pause à la X",
+        "fais pause à la X",
+        "mets la X en pause",
+        "pause la X"
       ]
     },
     {
       "action": "Passer au morceau suivant",
       "phrases": [
         "chanson suivante",
+        "mets la chanson suivante",
         "suivant",
-        "morceau suivant"
+        "mets le morceau suivant"
       ]
     },
     {
       "action": "Lecture ou pause du lecteur actif",
       "phrases": [
         "pause",
-        "play",
         "reprends"
       ]
     },
@@ -128,13 +137,6 @@
       "phrases": [
         "chanson précédente",
         "précédent"
-      ]
-    },
-    {
-      "action": "Arrêter la lecture",
-      "phrases": [
-        "arrête la musique",
-        "arrête la vidéo"
       ]
     },
     {
@@ -321,6 +323,7 @@
       "action": "Revenir à la page précédente",
       "phrases": [
         "page précédente",
+        "reviens à la page précédente",
         "retour arrière"
       ]
     },
@@ -374,7 +377,8 @@
     {
       "action": "Passer à l'onglet suivant",
       "phrases": [
-        "onglet suivant"
+        "onglet suivant",
+        "mets l'onglet suivant"
       ]
     },
     {

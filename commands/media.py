@@ -235,25 +235,6 @@ def media_previous(ctx: CommandContext) -> Response:
 
 
 @command(
-    name="media_stop",
-    patterns=[
-        r"(?:arrete|arreter|stoppe|stopper|coupe|couper|eteins)\s+(?:la\s+|le\s+)?(?:musique|lecture|video|son\s+du\s+lecteur)",
-        r"^stop$",
-    ],
-    keywords=[["arrete", "musique"], ["stoppe", "musique"], ["arrete", "video"]],
-    category="Musique",
-    description="Arrêter la lecture",
-    examples=["arrête la musique"],
-    priority=88,
-)
-def media_stop(ctx: CommandContext) -> Response:
-    """Arrête la lecture."""
-    if win_utils.press_key(win_utils.VK_MEDIA_STOP):
-        return Response(text="Lecture arrêtée.", speak=False)
-    return Response.error("Je n'ai pas pu piloter le lecteur.")
-
-
-@command(
     name="play_music",
     patterns=[
         r"^(?:joue|jouer|lance|lancer|met[s]?|met\s+moi|mets\s+moi|balance|envoie)\s+"
@@ -337,8 +318,10 @@ def media_lecture(ctx: CommandContext) -> Response:
         r"(?:la\s+|le\s+|l\s+)?" + OBJET_LECTURE + r"$",
         r"^(?:met[s]?|mettre)\s+(?:la\s+|le\s+|l\s+)?" + OBJET_LECTURE + r"\s+en\s+pause$",
         r"^pause\s+(?:a\s+)?(?:la\s+|le\s+|l\s+)?" + OBJET_LECTURE + r"$",
-        # « arrête la musique » garde sa commande dediee (media_stop) : on ne
-        # l intercepte pas ici.
+        # « arrete la musique » aboutit ici : mettre en pause conserve la
+        # position, ce qu un arret pur et simple perdait.
+        r"^(?:arrete|arreter|stoppe|stopper|coupe|suspend[s]?)\s+"
+        r"(?:la\s+|le\s+|l\s+)?" + OBJET_LECTURE + r"$",
     ],
     keywords=[["pause", "video"], ["pause", "musique"]],
     category="Musique",

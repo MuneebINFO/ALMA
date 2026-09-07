@@ -296,3 +296,44 @@ def site_search_contextuel(ctx: CommandContext) -> Response:
     if not ok:
         return Response.error("Je n'ai pas réussi à chercher sur " + cle + ".")
     return Response(text="Je cherche « " + requete + " » sur " + cle + ".")
+
+
+def _site_pour_nouvel_onglet(ctx: CommandContext) -> bool:
+    """Guard : « ouvre un nouvel onglet » sans site reste un onglet vide."""
+    return resolve_website(ctx.config, ctx.arg) is not None
+
+
+@command(
+    name="ouvrir_site_nouvel_onglet",
+    patterns=[
+        r"^(?:ouvre|ouvrir|lance|lancer)\s+(?:moi\s+)?(?:un\s+|dans\s+un\s+)?"
+        r"nouvel?\s+onglet\s+(.+)$",
+        r"^(?:ouvre|ouvrir)\s+(.+?)\s+dans\s+un\s+nouvel?\s+onglet$",
+    ],
+    category="Sites web",
+    description="Ouvrir un site dans un nouvel onglet",
+    examples=["ouvre un nouvel onglet YouTube"],
+    priority=98,
+    guard=_site_pour_nouvel_onglet,
+)
+def ouvrir_site_nouvel_onglet(ctx: CommandContext) -> Response:
+    """
+    Force un NOUVEL onglet, meme si le site est deja ouvert ailleurs.
+
+    C est la difference avec « ouvre X » et « va sur X », qui reprennent
+    l onglet existant plutot que d en empiler un de plus.
+    """
+    import webbrowser
+
+    resolu = resolve_website(ctx.config, ctx.arg)
+    if resolu is None:
+        return Response.error("Je ne connais pas ce site.")
+    cle, url = resolu
+    ctx.assistant.memoriser("site", cle)
+    try:
+        ouvert = webbrowser.open_new_tab(url)
+    except Exception:
+        ouvert = False
+    if ouvert:
+        return Response(text="Nouvel onglet sur " + cle + ".", speak=False)
+    return Response.error("Je n'ai pas réussi à ouvrir " + cle + ".")

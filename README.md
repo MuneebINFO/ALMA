@@ -555,6 +555,27 @@ for anything described above.
 
 ---
 
+## The command specification
+
+[`commandes.json`](commandes.json) lists every action and the phrases that
+trigger it, in plain French. It is not read at runtime — it is the
+**specification**, and a test enforces it: every phrase in the file must reach
+a real command, and reach the one the file describes.
+
+```json
+{
+  "action": "Ouvrir un site et y lancer une recherche",
+  "phrases": [
+    "va sur X et mets Y",
+    "mets X sur Y",
+    "cherche X sur Y"
+  ]
+}
+```
+
+`X` and `Y` mark the variable parts. Add a phrasing to the file, run `pytest`,
+and a failure tells you the code does not understand it yet.
+
 ## Adding a command
 
 There is **no large if/elif block** to edit. One command is one decorated

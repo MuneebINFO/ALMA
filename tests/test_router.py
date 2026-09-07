@@ -75,7 +75,7 @@ CAS_NOMINAUX = [
     ("qu est-ce qui joue", "media_what_is_playing"),
     ("chanson suivante", "media_next"),
     ("chanson precedente", "media_previous"),
-    ("arrete la musique", "media_stop"),
+    ("arrete la musique", "media_mettre_en_pause"),
     # Divers et conversation
     ("que peux-tu faire", "help"),
     ("aide", "help"),
@@ -231,8 +231,10 @@ def test_une_phrase_hors_sujet_reste_ignoree(router, config):
 # la contrepartie des motifs de lecture et de pause explicites.
 VOISINS_A_NE_PAS_CAPTURER = [
     ("remets le son", "volume_unmute"),        # rétablir le volume, pas relire
-    ("arrête la musique", "media_stop"),       # arrêt, pas mise en pause
-    ("arrête la vidéo", "media_stop"),
+    # « Arrêter la lecture » a été retiré : mettre en pause conserve la
+    # position, ce qu'un arrêt pur perdait.
+    ("arrête la musique", "media_mettre_en_pause"),
+    ("arrête la vidéo", "media_mettre_en_pause"),
     ("pause", "media_play_pause"),             # bascule, sans objet précisé
     ("play", "media_play_pause"),
     ("mets de la musique", "play_music"),      # lancer une lecture depuis zéro
