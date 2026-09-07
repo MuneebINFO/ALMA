@@ -410,17 +410,36 @@ slider is a `div` with `role="slider"`, and nothing in the page listens for the
 accessibility call. So ALMA reads the value, gives the slider keyboard focus,
 and sends arrow keys — exactly what you would do by hand.
 
-Arrow steps differ between sites, so ALMA does not assume one. It measures how
-far the first burst moved the slider and corrects from there, which is why
-"à 30" lands on 30 on a player that steps by 5 as well as on one that steps by
-10. A player that does not respond at all stops the attempt rather than
-hammering the keyboard.
+No two players behave the same, which is why none of this is hard-coded.
+Measured on the three:
 
-Verified on YouTube. Detection is by accessible name plus a value range, which
-is what Netflix, Twitch, Prime Video and the built-in Chrome and Firefox video
-controls expose too — but only YouTube has been tested end to end. A player
-that exposes no slider is reported as such, rather than silently changing the
-machine volume instead.
+| Player | Slider | Exposed when idle | Revealed by | Arrow step |
+|---|---|---|---|---|
+| YouTube | named *Volume*, 0–100 | yes | nothing needed | 5 |
+| Prime Video | named *Volume*, 0–100 | no, after 3 s | hovering the player | 1 |
+| Netflix | **unnamed**, 0–1 | no | hovering the volume **button** | 5 % |
+
+So ALMA wakes the control bar with a mouse move before looking, accepts an
+unnamed slider when it sits right against the volume button, works in percent
+whatever the underlying scale, and **measures** the arrow step instead of
+assuming one — recomputing the gap after each burst, since keypresses do get
+dropped when many are sent in a row. On a player whose arrows move by a single
+point, it tries Page Up / Page Down once and keeps them only if they actually
+moved the slider, which is what turns a three-second crawl on Prime Video into
+one burst. A player that answers nothing stops the attempt rather than
+hammering the keyboard, and one that exposes no slider is reported as such
+rather than silently changing the machine volume instead.
+
+Measured end to end, control bar closed at the start of each command:
+
+```
+Netflix       "à 30" → 29    "à 75" → 74    (2.7 - 3.1 s)
+Prime Video   "à 30" → 30    "à 75" → 75    (2.1 - 2.2 s)
+YouTube       "à 30" → 30    "à 75" → 75    (1.0 s)
+```
+
+Netflix lands one point off because its own slider does not sit exactly on a
+whole percent — that is the player's granularity, not a rounding error.
 
 ### Opening a site and searching inside it
 

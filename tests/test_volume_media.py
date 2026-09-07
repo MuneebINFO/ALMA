@@ -6,6 +6,8 @@ Une vidéo de site de streaming a son propre curseur de volume, dans la page.
 sur toute la machine — et les deux ne doivent jamais se confondre.
 """
 
+import contextlib
+
 import pytest
 
 from core import desktop, media_control, player_volume, win_utils
@@ -32,35 +34,51 @@ class CurseurFactice:
     """
 
     HAUT, BAS = player_volume.VK_HAUT, player_volume.VK_BAS
+    PAGE_HAUT, PAGE_BAS = player_volume.VK_PAGE_HAUT, player_volume.VK_PAGE_BAS
 
-    def __init__(self, valeur=50.0, pas=5.0, sourd=False):
+    def __init__(self, valeur=50.0, pas=5.0, sourd=False, gros_pas=0.0):
         self._valeur = float(valeur)
         self.pas = float(pas)
+        self.gros_pas = float(gros_pas)     # 0 = touches « page » ignorées
         self.sourd = sourd
         self.touches = 0
+        self.pages = 0
 
     @property
     def valeur(self):
         return self._valeur
+
+    def _bouger(self, delta):
+        self._valeur = max(0.0, min(100.0, self._valeur + delta))
 
     def appuyer(self, code):
         self.touches += 1
         if self.sourd:
             return True
         if code == self.HAUT:
-            self._valeur = min(100.0, self._valeur + self.pas)
+            self._bouger(self.pas)
         elif code == self.BAS:
-            self._valeur = max(0.0, self._valeur - self.pas)
+            self._bouger(-self.pas)
+        elif code == self.PAGE_HAUT:
+            self.pages += 1
+            self._bouger(self.gros_pas)
+        elif code == self.PAGE_BAS:
+            self.pages += 1
+            self._bouger(-self.gros_pas)
         return True
 
 
 @pytest.fixture
 def curseur(monkeypatch):
     """Installe un curseur factice à la place de celui de la page."""
-    def installer(valeur=50.0, pas=5.0, sourd=False, absent=False):
-        faux = CurseurFactice(valeur, pas, sourd)
-        monkeypatch.setattr(player_volume, "trouver",
-                            lambda fenetre: None if absent else faux)
+    def installer(valeur=50.0, pas=5.0, sourd=False, absent=False, gros_pas=0.0):
+        faux = CurseurFactice(valeur, pas, sourd, gros_pas)
+
+        @contextlib.contextmanager
+        def reveler(fenetre):
+            yield None if absent else faux
+
+        monkeypatch.setattr(player_volume, "reveler", reveler)
         monkeypatch.setattr(player_volume, "_preparer", lambda fenetre, c: True)
         monkeypatch.setattr(win_utils, "press_key", faux.appuyer)
         # Les temporisations n'ont d'intérêt qu'en face d'un vrai navigateur.
@@ -232,3 +250,40 @@ def test_un_lecteur_sans_session_declaree_est_quand_meme_trouve(monkeypatch):
     monkeypatch.setattr(media_control, "sessions", lambda: [])
     fenetres = media_control.fenetres_de_lecture_sur_ecran(2)
     assert [f.handle for f in fenetres] == [30]
+
+
+# --------------------------------------------------------------------------
+# Les trois lecteurs mesures en vrai
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("lecteur,pas,gros_pas,bornes", [
+    ("YouTube", 5.0, 0.0, 100),        # curseur nommé, toujours exposé
+    ("Prime Video", 1.0, 10.0, 100),   # pas d'un point, Page ±10
+    ("Netflix", 5.0, 0.0, 1),          # curseur sans nom, échelle 0-1
+])
+@pytest.mark.parametrize("cible", [0, 30, 55, 75, 100])
+def test_les_profils_reels_des_lecteurs(curseur, lecteur, pas, gros_pas, bornes, cible):
+    """
+    Chaque lecteur a son pas et son échelle. La cible doit être atteinte
+    dans tous les cas, à la granularité du lecteur près.
+    """
+    faux = curseur(valeur=50.0, pas=pas, gros_pas=gros_pas)
+    atteint = player_volume.regler(object(), cible)
+    assert abs(atteint - cible) <= max(player_volume.TOLERANCE, pas), lecteur
+
+
+def test_la_touche_a_gros_pas_nest_essayee_que_si_les_fleches_sont_trop_fines(curseur):
+    """
+    Sur un lecteur qui avance de 5, inutile de tenter « page suivante » : on
+    risquerait de faire défiler la page pour rien.
+    """
+    faux = curseur(valeur=90.0, pas=5.0, gros_pas=10.0)
+    player_volume.regler(object(), 30)
+    assert faux.pages == 0, "les touches « page » n'avaient pas lieu d'être"
+
+
+def test_la_touche_a_gros_pas_est_abandonnee_si_elle_ne_fait_rien(curseur):
+    """Un seul essai : si le curseur ne bouge pas, on n'insiste jamais."""
+    faux = curseur(valeur=90.0, pas=1.0, gros_pas=0.0)   # « page » ignorée
+    atteint = player_volume.regler(object(), 30)
+    assert faux.pages == 1, "un seul essai devait suffire à conclure"
+    assert abs(atteint - 30) <= player_volume.TOLERANCE
