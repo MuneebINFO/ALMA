@@ -20,10 +20,9 @@ def _percent(ctx: CommandContext, default: int = 50) -> int:
     return default
 
 
-# Le volume d une video de site de streaming n est pas pilotable directement,
-# mais Windows tient un volume par application. « baisse le volume de la
-# video » agit donc sur le lecteur qui joue sur l ecran de travail, en
-# laissant le volume general de l ordinateur intact.
+# « baisse le volume de la video » agit sur le curseur de volume DU LECTEUR
+# affiche sur l ecran de travail -- celui de YouTube, Netflix, Twitch... --
+# et laisse le volume general de l ordinateur intact.
 OBJET_MEDIA = (r"(?:video|videos|film|films|serie|series|episode|musique|"
                r"chanson|lecture|podcast|streaming|navigateur|onglet)")
 DETERMINANT = r"(?:de\s+la\s+|de\s+l\s+|du\s+|des\s+|de\s+)"
@@ -31,30 +30,31 @@ VERBES_REGLAGE = (r"(?:met[s]?|mettre|regle|regler|passe|baisse|baisser|"
                   r"diminue|diminuer|reduis|reduire|monte|monter|augmente|augmenter)")
 
 
-def _nom_lisible(processus: str) -> str:
-    """« chrome.exe » se dit « Chrome »."""
-    nom = (processus or "").rsplit(".", 1)[0]
-    return nom[:1].upper() + nom[1:] if nom else "ce lecteur"
-
-
-def _application_media(ctx: CommandContext):
+def _fenetre_de_lecture(ctx: CommandContext):
     """
-    Le lecteur dont il faut regler le volume, sur l ecran de travail.
+    La fenetre dont il faut regler le volume, sur l ecran de travail.
 
-    Retourne (processus, numero d ecran). Le processus vaut None si rien ne
-    joue la : comme pour la pause, on ne va pas chercher ailleurs.
+    Retourne (fenetre, numero d ecran). La fenetre vaut None si rien ne joue
+    la : comme pour la pause, on ne va pas chercher sur un autre ecran.
     """
     from commands.media import ecran_cible
     from core import media_control
 
     index = ecran_cible(ctx)
-    applications = media_control.applications_sur_ecran(index)
-    return (applications[0] if applications else None), index
+    fenetres = media_control.fenetres_de_lecture_sur_ecran(index)
+    return (fenetres[0] if fenetres else None), index
 
 
 def _rien_ne_joue(index: int) -> Response:
     return Response.error(
         "Rien ne joue sur l'écran " + str(index) + " : il n'y a pas de volume à régler."
+    )
+
+
+def _pas_de_curseur() -> Response:
+    return Response.error(
+        "Je n'ai pas trouvé de réglage de volume dans ce lecteur. "
+        "Vous pouvez régler le volume de l'ordinateur à la place."
     )
 
 
@@ -73,16 +73,22 @@ def _rien_ne_joue(index: int) -> Response:
 )
 def volume_media_set(ctx: CommandContext) -> Response:
     """Regle le volume du lecteur qui joue sur l'écran de travail."""
-    application, index = _application_media(ctx)
-    if application is None:
+    from core import player_volume
+
+    fenetre, index = _fenetre_de_lecture(ctx)
+    if fenetre is None:
         return _rien_ne_joue(index)
-    niveau = max(0, min(100, int(ctx.arg or 50)))
-    if win_utils.set_app_volume(application, niveau):
-        return Response(text="Volume de " + _nom_lisible(application) + " à "
-                             + str(niveau) + " pour cent.")
-    return Response.error(
-        "Je n'ai pas pu régler le volume de " + _nom_lisible(application) + "."
-    )
+    cible = max(0, min(100, int(ctx.arg or 50)))
+    niveau = player_volume.regler(fenetre, cible)
+    if niveau is None:
+        return _pas_de_curseur()
+    if abs(niveau - cible) > 10:
+        return Response.error(
+            "Je n'ai pas pu descendre plus bas que " + str(niveau) + " pour cent."
+            if niveau > cible else
+            "Je n'ai pas pu monter plus haut que " + str(niveau) + " pour cent."
+        )
+    return Response(text="Volume de la vidéo à " + str(niveau) + " pour cent.")
 
 
 @command(
@@ -122,16 +128,15 @@ def volume_media_down(ctx: CommandContext) -> Response:
 
 
 def _ajuster_volume_media(ctx: CommandContext, delta: int) -> Response:
-    application, index = _application_media(ctx)
-    if application is None:
+    from core import player_volume
+
+    fenetre, index = _fenetre_de_lecture(ctx)
+    if fenetre is None:
         return _rien_ne_joue(index)
-    niveau = win_utils.change_app_volume(application, delta)
+    niveau = player_volume.ajuster(fenetre, delta)
     if niveau is None:
-        return Response.error(
-            "Je n'ai pas pu régler le volume de " + _nom_lisible(application) + "."
-        )
-    return Response(text="Volume de " + _nom_lisible(application) + " à "
-                         + str(niveau) + " pour cent.")
+        return _pas_de_curseur()
+    return Response(text="Volume de la vidéo à " + str(niveau) + " pour cent.")
 
 
 @command(

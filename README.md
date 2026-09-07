@@ -398,14 +398,29 @@ mets le volume à 30                   the whole computer
 monte le son / baisse le son
 ```
 
-The video's level goes through the **Windows mixer**, where each application
-has its own slider — so lowering the video leaves everything else where it was,
-and lowering the computer leaves the video's own balance untouched. Like every
-playback command, this targets the player on the **current screen**: if nothing
-is playing there, ALMA says so instead of reaching for another screen.
+The video's level is **the player's own volume slider**, inside the page — the
+one you would drag next to the play button. Like every playback command, this
+targets the player on the **current screen**: if nothing is playing there, ALMA
+says so instead of reaching for another screen.
 
-One honest limitation: the mixer works per application, not per tab. If a
-single browser plays two things at once, both follow the same slider.
+Reaching that slider takes two steps, because the obvious one does not work.
+Players expose it to the accessibility API with its value and bounds, so
+**reading** the level is easy, but **writing** it is ignored: a web player's
+slider is a `div` with `role="slider"`, and nothing in the page listens for the
+accessibility call. So ALMA reads the value, gives the slider keyboard focus,
+and sends arrow keys — exactly what you would do by hand.
+
+Arrow steps differ between sites, so ALMA does not assume one. It measures how
+far the first burst moved the slider and corrects from there, which is why
+"à 30" lands on 30 on a player that steps by 5 as well as on one that steps by
+10. A player that does not respond at all stops the attempt rather than
+hammering the keyboard.
+
+Verified on YouTube. Detection is by accessible name plus a value range, which
+is what Netflix, Twitch, Prime Video and the built-in Chrome and Firefox video
+controls expose too — but only YouTube has been tested end to end. A player
+that exposes no slider is reported as such, rather than silently changing the
+machine volume instead.
 
 ### Opening a site and searching inside it
 

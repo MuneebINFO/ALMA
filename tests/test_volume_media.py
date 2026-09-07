@@ -1,14 +1,14 @@
 """
-Volume de la vidéo contre volume de l'ordinateur.
+Volume du lecteur contre volume de l'ordinateur.
 
-Une vidéo de site de streaming a son propre niveau sonore. « baisse le volume
-de la vidéo » doit agir sur le lecteur seul, « baisse le volume » sur toute la
-machine — et les deux ne doivent jamais se confondre.
+Une vidéo de site de streaming a son propre curseur de volume, dans la page.
+« baisse le volume de la vidéo » doit agir sur celui-là, « baisse le volume »
+sur toute la machine — et les deux ne doivent jamais se confondre.
 """
 
 import pytest
 
-from core import desktop, media_control, win_utils
+from core import desktop, media_control, player_volume, win_utils
 from core.context import Utterance
 
 
@@ -25,23 +25,61 @@ def lecteur_sur_ecran_2(monkeypatch):
     ])
 
 
+class CurseurFactice:
+    """
+    Un curseur de lecteur : il ne bouge qu'aux flèches, par pas fixe, et se
+    bloque à ses bornes — comme un vrai.
+    """
+
+    HAUT, BAS = player_volume.VK_HAUT, player_volume.VK_BAS
+
+    def __init__(self, valeur=50.0, pas=5.0, sourd=False):
+        self._valeur = float(valeur)
+        self.pas = float(pas)
+        self.sourd = sourd
+        self.touches = 0
+
+    @property
+    def valeur(self):
+        return self._valeur
+
+    def appuyer(self, code):
+        self.touches += 1
+        if self.sourd:
+            return True
+        if code == self.HAUT:
+            self._valeur = min(100.0, self._valeur + self.pas)
+        elif code == self.BAS:
+            self._valeur = max(0.0, self._valeur - self.pas)
+        return True
+
+
 @pytest.fixture
-def melangeur(monkeypatch):
-    """Un mélangeur Windows factice : volume par application et volume général."""
-    etat = {"chrome.exe": 100, "general": 50}
-    monkeypatch.setattr(win_utils, "get_app_volume",
-                        lambda nom: etat.get(nom))
-    monkeypatch.setattr(win_utils, "set_app_volume",
-                        lambda nom, n: etat.__setitem__(nom, max(0, min(100, int(n)))) or True)
-    monkeypatch.setattr(win_utils, "change_app_volume",
-                        lambda nom, d: etat.__setitem__(nom, max(0, min(100, etat[nom] + d)))
-                        or etat[nom])
-    monkeypatch.setattr(win_utils, "get_volume", lambda: etat["general"])
+def curseur(monkeypatch):
+    """Installe un curseur factice à la place de celui de la page."""
+    def installer(valeur=50.0, pas=5.0, sourd=False, absent=False):
+        faux = CurseurFactice(valeur, pas, sourd)
+        monkeypatch.setattr(player_volume, "trouver",
+                            lambda fenetre: None if absent else faux)
+        monkeypatch.setattr(player_volume, "_preparer", lambda fenetre, c: True)
+        monkeypatch.setattr(win_utils, "press_key", faux.appuyer)
+        # Les temporisations n'ont d'intérêt qu'en face d'un vrai navigateur.
+        monkeypatch.setattr(player_volume, "PAUSE_TOUCHE", 0)
+        monkeypatch.setattr(player_volume, "PAUSE_LECTURE", 0)
+        return faux
+    return installer
+
+
+@pytest.fixture
+def volume_general(monkeypatch):
+    """Le volume de la machine, pour vérifier qu'il ne bouge pas."""
+    etat = {"niveau": 50}
+    monkeypatch.setattr(win_utils, "get_volume", lambda: etat["niveau"])
     monkeypatch.setattr(win_utils, "set_volume",
-                        lambda n: etat.__setitem__("general", int(n)) or True)
+                        lambda n: etat.__setitem__("niveau", int(n)) or True)
     monkeypatch.setattr(win_utils, "change_volume",
-                        lambda d: etat.__setitem__("general", etat["general"] + d)
-                        or etat["general"])
+                        lambda d: etat.__setitem__("niveau", etat["niveau"] + d)
+                        or etat["niveau"])
     return etat
 
 
@@ -71,71 +109,126 @@ def test_le_volume_vise_est_le_bon(assistant, phrase, attendu):
 
 
 # --------------------------------------------------------------------------
-# Execution
+# Le pas du lecteur est mesure, pas suppose
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("pas", [1.0, 2.0, 5.0, 10.0, 20.0])
+def test_la_cible_est_atteinte_quel_que_soit_le_pas_du_lecteur(curseur, pas):
+    """
+    YouTube avance par 5, un autre lecteur par 10. Le code mesure le pas réel
+    après la première salve : la cible doit être atteinte dans les deux cas,
+    sans marteler le clavier.
+    """
+    faux = curseur(valeur=50.0, pas=pas)
+    atteint = player_volume.regler(object(), 20)
+    assert abs(atteint - 20) <= player_volume.TOLERANCE, "pas de " + str(pas)
+    assert faux.touches <= player_volume.TOUCHES_MAX * 2, "trop d'appuis"
+
+
+def test_les_bornes_sont_respectees(curseur):
+    curseur(valeur=50.0, pas=5.0)
+    assert player_volume.regler(object(), 0) == 0
+    curseur(valeur=50.0, pas=5.0)
+    assert player_volume.regler(object(), 100) == 100
+
+
+def test_un_lecteur_sourd_aux_fleches_narrete_le_martelage(curseur):
+    """Si rien ne bouge, on s'arrête au lieu d'insister indéfiniment."""
+    faux = curseur(valeur=50.0, sourd=True)
+    assert player_volume.regler(object(), 10) == 50
+    assert faux.touches <= player_volume.TOUCHES_MAX, "il a insisté pour rien"
+
+
+def test_sans_curseur_de_volume(curseur):
+    curseur(absent=True)
+    assert player_volume.regler(object(), 30) is None
+    assert player_volume.lire(object()) is None
+
+
+@pytest.mark.parametrize("nom,attendu", [
+    ("Volume", True), ("volume", True), ("Curseur de volume", True),
+    ("Volumen", True), ("Sound", True),
+    ("Barre de lecture", False), ("Lecture", False), ("Plein écran", False),
+    ("", False), (None, False),
+])
+def test_reconnaissance_du_curseur_de_volume(nom, attendu):
+    """La barre de progression ne doit jamais être prise pour le volume."""
+    assert player_volume._est_un_volume(nom) is attendu
+
+
+# --------------------------------------------------------------------------
+# A travers l assistant
 # --------------------------------------------------------------------------
 def test_le_volume_de_la_video_ne_touche_pas_celui_de_lordinateur(
-        assistant, lecteur_sur_ecran_2, melangeur):
+        assistant, lecteur_sur_ecran_2, curseur, volume_general):
+    curseur(valeur=80.0, pas=5.0)
     assistant.definir_ecran(2)
     reponse = assistant.handle("baisse le volume de la vidéo à 30")
     assert reponse.ok, reponse.text
-    assert melangeur["chrome.exe"] == 30
-    assert melangeur["general"] == 50, "le volume général devait rester intact"
+    assert "30" in reponse.text
+    assert volume_general["niveau"] == 50, "le volume général devait rester intact"
 
 
 def test_le_volume_de_lordinateur_ne_touche_pas_celui_de_la_video(
-        assistant, lecteur_sur_ecran_2, melangeur):
+        assistant, lecteur_sur_ecran_2, curseur, volume_general):
+    faux = curseur(valeur=80.0, pas=5.0)
     assistant.definir_ecran(2)
-    reponse = assistant.handle("mets le volume à 20")
-    assert reponse.ok, reponse.text
-    assert melangeur["general"] == 20
-    assert melangeur["chrome.exe"] == 100, "le lecteur devait rester intact"
+    assert assistant.handle("mets le volume à 20").ok
+    assert volume_general["niveau"] == 20
+    assert faux.valeur == 80, "le lecteur devait rester intact"
 
 
-@pytest.mark.parametrize("depart,phrase,attendu", [
-    (100, "monte le volume de la vidéo", 100),    # deja au maximum
-    (100, "baisse le volume de la vidéo", 90),
-    (50, "monte le volume de la vidéo", 60),
-    (5, "baisse le volume de la vidéo", 0),       # jamais en dessous de zero
+@pytest.mark.parametrize("phrase,attendu", [
+    ("monte le volume de la vidéo", 60),
+    ("baisse le volume de la vidéo", 40),
+    ("mets la vidéo plus fort", 60),
+    ("mets le film moins fort", 40),
 ])
-def test_les_paliers_de_dix(assistant, lecteur_sur_ecran_2, melangeur,
-                            depart, phrase, attendu):
-    melangeur["chrome.exe"] = depart
+def test_les_paliers_de_dix(assistant, lecteur_sur_ecran_2, curseur,
+                            phrase, attendu):
+    faux = curseur(valeur=50.0, pas=5.0)
     assistant.definir_ecran(2)
-    assert assistant.handle(phrase).ok
-    assert melangeur["chrome.exe"] == attendu
+    assert assistant.handle(phrase).ok, phrase
+    assert faux.valeur == attendu, phrase
 
 
-def test_rien_ne_joue_sur_lecran_de_travail(assistant, lecteur_sur_ecran_2, melangeur):
+def test_rien_ne_joue_sur_lecran_de_travail(assistant, lecteur_sur_ecran_2,
+                                            curseur, volume_general):
     """Comme pour la pause : on ne va pas régler un lecteur d'un autre écran."""
+    faux = curseur(valeur=80.0, pas=5.0)
     assistant.definir_ecran(1)
     reponse = assistant.handle("baisse le volume de la vidéo à 30")
     assert not reponse.ok
     assert "écran 1" in reponse.text
-    assert melangeur["chrome.exe"] == 100, "le lecteur de l'écran 2 devait être épargné"
+    assert faux.touches == 0, "le lecteur de l'écran 2 devait être épargné"
+
+
+def test_un_lecteur_sans_curseur_le_dit_clairement(assistant, lecteur_sur_ecran_2,
+                                                   curseur):
+    curseur(absent=True)
+    assistant.definir_ecran(2)
+    reponse = assistant.handle("baisse le volume de la vidéo à 30")
+    assert not reponse.ok
+    assert "volume" in reponse.text.lower()
 
 
 # --------------------------------------------------------------------------
-# Reperage des sessions audio
+# Quelle fenetre regler
 # --------------------------------------------------------------------------
-def test_une_application_est_reconnue_quelle_que_soit_son_ecriture(monkeypatch):
-    class SessionFactice:
-        def __init__(self, nom):
-            self._nom = nom
+def test_la_fenetre_de_lecture_est_celle_de_lecran(lecteur_sur_ecran_2):
+    fenetres = media_control.fenetres_de_lecture_sur_ecran(2)
+    assert [f.handle for f in fenetres] == [20]
+    assert media_control.fenetres_de_lecture_sur_ecran(1) == []
 
-        @property
-        def Process(self):
-            return type("P", (), {"name": lambda _self: self._nom})()
 
-    monkeypatch.setattr(win_utils, "_sessions_audio", lambda: [
-        SessionFactice("chrome.exe"), SessionFactice("firefox.exe"),
+def test_un_lecteur_sans_session_declaree_est_quand_meme_trouve(monkeypatch):
+    """
+    Beaucoup de sites de streaming n'exposent aucune session média : leur
+    fenêtre se reconnaît alors à son titre.
+    """
+    monkeypatch.setattr(desktop, "fenetres", lambda *a, **k: [
+        desktop.Fenetre(handle=30, titre="Detective Conan | Anime-Sama - Streaming",
+                        processus="firefox.exe", ecran=2),
     ])
-    assert len(win_utils.sessions_audio_de("Chrome")) == 1
-    assert len(win_utils.sessions_audio_de("chrome.exe")) == 1
-    assert len(win_utils.sessions_audio_de("Google Chrome")) == 1
-    assert win_utils.sessions_audio_de("spotify.exe") == []
-    assert win_utils.sessions_audio_de("") == []
-
-
-def test_les_applications_qui_jouent_sont_rattachees_a_leur_ecran(lecteur_sur_ecran_2):
-    assert media_control.applications_sur_ecran(2) == ["chrome.exe"]
-    assert media_control.applications_sur_ecran(1) == []
+    monkeypatch.setattr(media_control, "sessions", lambda: [])
+    fenetres = media_control.fenetres_de_lecture_sur_ecran(2)
+    assert [f.handle for f in fenetres] == [30]

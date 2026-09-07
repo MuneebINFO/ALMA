@@ -264,24 +264,31 @@ def sessions_sur_ecran(index_ecran: int) -> list:
     return retenues
 
 
-def applications_sur_ecran(index_ecran: int) -> list:
+def fenetres_de_lecture_sur_ecran(index_ecran: int) -> list:
     """
-    Les processus qui font du son sur un ecran donne (« chrome.exe »...).
+    Les fenetres de cet ecran qui affichent une lecture.
 
-    Sert a regler le volume du seul lecteur visible ici, sans toucher aux
-    autres applications ni au volume general.
+    Sert a piloter le volume propre du lecteur : il faut la FENETRE, pas
+    seulement l application, puisque c est dans sa page que se trouve le
+    curseur de volume.
     """
     toutes = desktop.fenetres()
-    noms = []
+    ici = [f for f in toutes if f.ecran == index_ecran]
+    retenues = []
     for session in sessions_sur_ecran(index_ecran):
-        nom = session.application
-        for fenetre in toutes:
-            if fenetre.ecran == index_ecran and correspond(fenetre.processus, nom):
-                nom = fenetre.processus
-                break
-        if nom not in noms:
-            noms.append(nom)
-    return noms
+        candidates = [f for f in ici if correspond(f.processus, session.application)]
+        # Le titre designe la bonne fenetre quand l application en a plusieurs.
+        avec_titre = [f for f in candidates
+                      if _titres_se_recoupent(session.titre, f.titre)]
+        for fenetre in (avec_titre or candidates):
+            if fenetre not in retenues:
+                retenues.append(fenetre)
+            break
+    if retenues:
+        return retenues
+    # Repli : un lecteur qui ne declare aucune session au systeme (beaucoup de
+    # sites de streaming) se reconnait a son titre.
+    return [f for f in ici if f.est_lecteur or _titre_de_media(f)]
 
 
 def agir_sur_ecran(index_ecran: int, action: str = "pause") -> tuple:
