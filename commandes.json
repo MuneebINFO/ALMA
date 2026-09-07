@@ -185,6 +185,30 @@
       ]
     },
     {
+      "action": "Régler le volume de la vidéo, sans toucher au volume général",
+      "phrases": [
+        "baisse le volume de la vidéo à 30",
+        "mets le volume du film à 60",
+        "augmente le volume de la vidéo à 80"
+      ]
+    },
+    {
+      "action": "Augmenter le volume de la vidéo seule",
+      "phrases": [
+        "monte le volume de la vidéo",
+        "augmente le son du film",
+        "mets la vidéo plus fort"
+      ]
+    },
+    {
+      "action": "Baisser le volume de la vidéo seule",
+      "phrases": [
+        "baisse le volume de la vidéo",
+        "diminue le son du film",
+        "mets la vidéo moins fort"
+      ]
+    },
+    {
       "action": "Augmenter le volume",
       "phrases": [
         "monte le son",

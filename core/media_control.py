@@ -264,6 +264,26 @@ def sessions_sur_ecran(index_ecran: int) -> list:
     return retenues
 
 
+def applications_sur_ecran(index_ecran: int) -> list:
+    """
+    Les processus qui font du son sur un ecran donne (« chrome.exe »...).
+
+    Sert a regler le volume du seul lecteur visible ici, sans toucher aux
+    autres applications ni au volume general.
+    """
+    toutes = desktop.fenetres()
+    noms = []
+    for session in sessions_sur_ecran(index_ecran):
+        nom = session.application
+        for fenetre in toutes:
+            if fenetre.ecran == index_ecran and correspond(fenetre.processus, nom):
+                nom = fenetre.processus
+                break
+        if nom not in noms:
+            noms.append(nom)
+    return noms
+
+
 def agir_sur_ecran(index_ecran: int, action: str = "pause") -> tuple:
     """
     Applique une action de lecture a ce qui joue sur un ecran donne.

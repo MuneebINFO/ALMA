@@ -383,6 +383,30 @@ the one that gets paused. A player with no visible window at all (Spotify
 minimised to the notification area) belongs to no screen and stays controllable
 from wherever you are.
 
+### Two volumes
+
+A video on a streaming site has a level of its own, separate from the
+computer's. Naming the video says which one you mean:
+
+```
+baisse le volume de la vidéo à 30     the player only
+mets le volume du film à 60
+monte le volume de la vidéo           ±10 points
+mets la vidéo moins fort
+
+mets le volume à 30                   the whole computer
+monte le son / baisse le son
+```
+
+The video's level goes through the **Windows mixer**, where each application
+has its own slider — so lowering the video leaves everything else where it was,
+and lowering the computer leaves the video's own balance untouched. Like every
+playback command, this targets the player on the **current screen**: if nothing
+is playing there, ALMA says so instead of reaching for another screen.
+
+One honest limitation: the mixer works per application, not per tab. If a
+single browser plays two things at once, both follow the same slider.
+
 ### Opening a site and searching inside it
 
 ```

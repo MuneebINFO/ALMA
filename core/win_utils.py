@@ -209,6 +209,95 @@ def change_volume(delta: int) -> int | None:
     return target if set_volume(target) else None
 
 
+# --------------------------------------------------------------------------
+# Volume par application (melangeur Windows)
+# --------------------------------------------------------------------------
+# Une video de site de streaming n a pas de reglage accessible de l exterieur,
+# mais Windows tient un volume par application : agir dessus revient a bouger
+# le curseur du navigateur dans le melangeur. C est ce que fait « baisse le
+# volume de la video », qui laisse le volume general intact.
+def _sessions_audio() -> list:
+    """Les applications qui ont ouvert un flux audio, ou [] si pycaw manque."""
+    try:
+        from pycaw.utils import AudioUtilities
+
+        return list(AudioUtilities.GetAllSessions())
+    except Exception as exc:
+        log.debug("Sessions audio indisponibles : %s", exc)
+        return []
+
+
+def _racine_app(nom: str) -> str:
+    """« chrome.exe », « Chrome » et « Google Chrome » doivent se correspondre."""
+    nom = (nom or "").lower().strip()
+    for suffixe in (".exe", ".appx"):
+        if nom.endswith(suffixe):
+            nom = nom[: -len(suffixe)]
+    return nom.replace("google ", "").replace("mozilla ", "").strip()
+
+
+def _nom_de_session(session) -> str:
+    """Nom du processus d une session audio, vide s il a disparu entre-temps."""
+    try:
+        processus = session.Process
+        return processus.name() if processus is not None else ""
+    except Exception:
+        return ""
+
+
+def sessions_audio_de(nom: str) -> list:
+    """
+    Les sessions audio d une application donnee.
+
+    Un navigateur peut en ouvrir plusieurs : on les traite toutes ensemble,
+    sinon le son baisserait a moitie.
+    """
+    cible = _racine_app(nom)
+    if not cible:
+        return []
+    retenues = []
+    for session in _sessions_audio():
+        candidat = _racine_app(_nom_de_session(session))
+        if candidat and (candidat == cible or candidat in cible or cible in candidat):
+            retenues.append(session)
+    return retenues
+
+
+def get_app_volume(nom: str) -> int | None:
+    """Volume d une application en pourcentage, ou None si elle n emet pas."""
+    for session in sessions_audio_de(nom):
+        try:
+            return int(round(session.SimpleAudioVolume.GetMasterVolume() * 100))
+        except Exception:
+            continue
+    return None
+
+
+def set_app_volume(nom: str, percent: int) -> bool:
+    """Regle le volume d une application (0-100)."""
+    percent = max(0, min(100, int(percent)))
+    regle = False
+    for session in sessions_audio_de(nom):
+        try:
+            reglage = session.SimpleAudioVolume
+            reglage.SetMasterVolume(percent / 100.0, None)
+            if percent > 0:
+                reglage.SetMute(0, None)
+            regle = True
+        except Exception as exc:
+            log.debug("Volume de %s inaccessible : %s", nom, exc)
+    return regle
+
+
+def change_app_volume(nom: str, delta: int) -> int | None:
+    """Monte/baisse le volume d une application. Retourne le nouveau niveau."""
+    courant = get_app_volume(nom)
+    if courant is None:
+        return None
+    cible = max(0, min(100, courant + int(delta)))
+    return cible if set_app_volume(nom, cible) else None
+
+
 def set_mute(muted: bool) -> bool:
     """Coupe ou retablit le son."""
     volume = _volume_interface()

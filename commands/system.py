@@ -20,6 +20,120 @@ def _percent(ctx: CommandContext, default: int = 50) -> int:
     return default
 
 
+# Le volume d une video de site de streaming n est pas pilotable directement,
+# mais Windows tient un volume par application. « baisse le volume de la
+# video » agit donc sur le lecteur qui joue sur l ecran de travail, en
+# laissant le volume general de l ordinateur intact.
+OBJET_MEDIA = (r"(?:video|videos|film|films|serie|series|episode|musique|"
+               r"chanson|lecture|podcast|streaming|navigateur|onglet)")
+DETERMINANT = r"(?:de\s+la\s+|de\s+l\s+|du\s+|des\s+|de\s+)"
+VERBES_REGLAGE = (r"(?:met[s]?|mettre|regle|regler|passe|baisse|baisser|"
+                  r"diminue|diminuer|reduis|reduire|monte|monter|augmente|augmenter)")
+
+
+def _nom_lisible(processus: str) -> str:
+    """« chrome.exe » se dit « Chrome »."""
+    nom = (processus or "").rsplit(".", 1)[0]
+    return nom[:1].upper() + nom[1:] if nom else "ce lecteur"
+
+
+def _application_media(ctx: CommandContext):
+    """
+    Le lecteur dont il faut regler le volume, sur l ecran de travail.
+
+    Retourne (processus, numero d ecran). Le processus vaut None si rien ne
+    joue la : comme pour la pause, on ne va pas chercher ailleurs.
+    """
+    from commands.media import ecran_cible
+    from core import media_control
+
+    index = ecran_cible(ctx)
+    applications = media_control.applications_sur_ecran(index)
+    return (applications[0] if applications else None), index
+
+
+def _rien_ne_joue(index: int) -> Response:
+    return Response.error(
+        "Rien ne joue sur l'écran " + str(index) + " : il n'y a pas de volume à régler."
+    )
+
+
+@command(
+    name="volume_media_set",
+    patterns=[
+        VERBES_REGLAGE + r"\s+(?:le\s+)?(?:son|volume)\s+" + DETERMINANT
+        + OBJET_MEDIA + r"\s+(?:a|sur)\s+(" + r"\d" + r"{1,3})",
+        r"(?:son|volume)\s+" + DETERMINANT + OBJET_MEDIA
+        + r"\s+(?:a|sur)\s+(\d{1,3})",
+    ],
+    category="Système",
+    description="Régler le volume de la vidéo, sans toucher au volume général",
+    examples=["baisse le volume de la vidéo à 30", "mets le volume du film à 60"],
+    priority=95,
+)
+def volume_media_set(ctx: CommandContext) -> Response:
+    """Regle le volume du lecteur qui joue sur l'écran de travail."""
+    application, index = _application_media(ctx)
+    if application is None:
+        return _rien_ne_joue(index)
+    niveau = max(0, min(100, int(ctx.arg or 50)))
+    if win_utils.set_app_volume(application, niveau):
+        return Response(text="Volume de " + _nom_lisible(application) + " à "
+                             + str(niveau) + " pour cent.")
+    return Response.error(
+        "Je n'ai pas pu régler le volume de " + _nom_lisible(application) + "."
+    )
+
+
+@command(
+    name="volume_media_up",
+    patterns=[
+        r"(?:monte|monter|augmente|augmenter)\s+(?:le\s+)?(?:son|volume)\s+"
+        + DETERMINANT + OBJET_MEDIA + r"\b",
+        r"(?:met[s]?|mettre)\s+(?:la\s+|le\s+|l\s+)?" + OBJET_MEDIA
+        + r"\s+plus\s+fort",
+    ],
+    category="Système",
+    description="Augmenter le volume de la vidéo seule",
+    examples=["monte le volume de la vidéo", "mets la vidéo plus fort"],
+    priority=94,
+)
+def volume_media_up(ctx: CommandContext) -> Response:
+    """Monte de 10 points le volume du lecteur de l'écran de travail."""
+    return _ajuster_volume_media(ctx, 10)
+
+
+@command(
+    name="volume_media_down",
+    patterns=[
+        r"(?:baisse|baisser|diminue|diminuer|reduis|reduire)\s+(?:le\s+)?"
+        r"(?:son|volume)\s+" + DETERMINANT + OBJET_MEDIA + r"\b",
+        r"(?:met[s]?|mettre)\s+(?:la\s+|le\s+|l\s+)?" + OBJET_MEDIA
+        + r"\s+moins\s+fort",
+    ],
+    category="Système",
+    description="Baisser le volume de la vidéo seule",
+    examples=["baisse le volume de la vidéo", "mets le film moins fort"],
+    priority=94,
+)
+def volume_media_down(ctx: CommandContext) -> Response:
+    """Baisse de 10 points le volume du lecteur de l'écran de travail."""
+    return _ajuster_volume_media(ctx, -10)
+
+
+def _ajuster_volume_media(ctx: CommandContext, delta: int) -> Response:
+    application, index = _application_media(ctx)
+    if application is None:
+        return _rien_ne_joue(index)
+    niveau = win_utils.change_app_volume(application, delta)
+    if niveau is None:
+        return Response.error(
+            "Je n'ai pas pu régler le volume de " + _nom_lisible(application) + "."
+        )
+    return Response(text="Volume de " + _nom_lisible(application) + " à "
+                         + str(niveau) + " pour cent.")
+
+
 @command(
     name="volume_set",
     patterns=[
