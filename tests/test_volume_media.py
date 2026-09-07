@@ -287,3 +287,30 @@ def test_la_touche_a_gros_pas_est_abandonnee_si_elle_ne_fait_rien(curseur):
     atteint = player_volume.regler(object(), 30)
     assert faux.pages == 1, "un seul essai devait suffire à conclure"
     assert abs(atteint - 30) <= player_volume.TOLERANCE
+
+
+# --------------------------------------------------------------------------
+# Ou se cache le curseur, selon le lecteur
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("nom,volume,sourdine", [
+    ("Volume", True, True),                 # YouTube, Prime Video, Netflix
+    ("Curseur de volume", True, True),
+    ("Volumen", True, True),
+    ("Sound", True, True),
+    ("Couper le son", False, True),         # Disney+ : seul bouton annoncé
+    ("Mute", False, True),
+    # Ce qui ne doit surtout pas être pris pour un réglage de son.
+    ("Saison 2", False, False),             # « saison » contient « son »
+    ("Barre de progression", False, False),
+    ("Paramètres", False, False),
+    ("Episodes", False, False),
+    ("", False, False),
+])
+def test_le_bouton_a_survoler_est_reconnu(nom, volume, sourdine):
+    """
+    Le curseur se cache derrière un bouton, dont le nom change d'un lecteur à
+    l'autre. La comparaison porte sur les MOTS : « Saison 2 » contient bien
+    les trois lettres de « son ».
+    """
+    assert player_volume._est_un_volume(nom) is volume
+    assert player_volume._est_une_sourdine(nom) is sourdine

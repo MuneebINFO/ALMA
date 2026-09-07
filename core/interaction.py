@@ -11,6 +11,7 @@ ferait un lecteur d ecran) et on ne bouge la souris qu en dernier recours.
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import logging
 import threading
@@ -355,6 +356,193 @@ def cliquer(cible: Cible) -> bool:
     return _clic_physique(cible)
 
 
+# --------------------------------------------------------------------------
+# Reveiller les controles qui se cachent
+# --------------------------------------------------------------------------
+PAUSE_REVEIL = 0.35
+
+
+def centre_fenetre(fenetre):
+    """Centre d une fenetre, en pixels ecran, ou None."""
+    try:
+        from ctypes import wintypes
+
+        rect = wintypes.RECT()
+        if not user32.GetWindowRect(fenetre.handle, ctypes.byref(rect)):
+            return None
+        if rect.right <= rect.left or rect.bottom <= rect.top:
+            return None
+        return (rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2
+    except Exception as exc:
+        log.debug("Rectangle de la fenetre inconnu : %s", exc)
+        return None
+
+
+class Souris:
+    """Deplace le pointeur et retient d ou il vient, pour l y remettre."""
+
+    def __init__(self):
+        try:
+            self.depart = position_souris()
+        except Exception:
+            self.depart = None
+
+    def poser(self, point) -> bool:
+        """Amene le pointeur sur un point, avec un vrai mouvement."""
+        if point is None:
+            return False
+        try:
+            # Deux deplacements : un saut unique peut ne declencher aucun
+            # evenement de survol et ne rien reveiller.
+            deplacer_souris(point[0], point[1])
+            time.sleep(0.12)
+            deplacer_souris(point[0] + 3, point[1] + 1)
+            time.sleep(PAUSE_REVEIL)
+            return True
+        except Exception as exc:
+            log.debug("Deplacement du pointeur impossible : %s", exc)
+            return False
+
+    def revenir(self) -> None:
+        if self.depart is None:
+            return
+        try:
+            deplacer_souris(*self.depart)
+        except Exception:
+            pass
+
+
+@contextlib.contextmanager
+def controles_reveilles(fenetre):
+    """
+    Fait apparaitre les controles qui se cachent, et les y maintient.
+
+    Un lecteur video referme sa barre de controle apres quelques secondes et
+    la retire de l arbre d accessibilite : ses boutons n existent alors plus
+    du tout. Mesure sur le lecteur Netflix : zero element de contenu au
+    repos, neuf apres un mouvement de souris. Le pointeur doit rester la
+    jusqu au clic, puis retrouver sa place.
+    """
+    souris = Souris()
+    try:
+        yield souris.poser(centre_fenetre(fenetre))
+    finally:
+        souris.revenir()
+
+
+# --------------------------------------------------------------------------
+# Reconnaissance des titres sur les sites de streaming
+# --------------------------------------------------------------------------
+# Le nom accessible d une vignette n est pas un titre : c est une fiche.
+#   « Deadpool & Wolverine Classe 16+ Sortie : 2024. Super-heros, Action... »
+#   « Hulu Original Series Malcolm : Rien n a change Classe 12+ Sortie... »
+# Le titre est au milieu, entre une etiquette et une avalanche de metadonnees.
+# On le degage pour pouvoir comparer ce que l utilisateur a dit a ce qu il
+# voit, et non a tout ce que le site a colle autour.
+ETIQUETTES = (
+    "hulu original series", "hulu original", "hulu generic",
+    "disney original series", "disney original", "original series",
+    "serie originale", "film original", "nouvelle serie", "nouveau film",
+    "nouvel episode", "badge", "recommande", "exclusivite",
+    # Selecteurs de profil : « Profil de Muneeb. Selectionnez cette... »
+    "profil de", "profil", "profile of", "profile",
+)
+METADONNEES = (
+    "classe ", "classee ", "sortie :", "sortie:", "note :", "duree ",
+    "rated ", "released ", "maturity rating", "ans et plus", "tous publics",
+    "regarder maintenant", "reprendre la lecture",
+    "nouvelle saison", "nouveaux episodes", "tous les episodes",
+    "disponible des maintenant", "disponible maintenant",
+    "selectionnez cette option", "select this option", "cliquez pour",
+)
+# Mots que l on ignore quand on compare : ils varient d une formulation a
+# l autre (« Deadpool & Wolverine » se dit « Deadpool et Wolverine »).
+MOTS_VIDES = {"le", "la", "les", "l", "un", "une", "des", "du", "de", "d",
+              "et", "and", "the", "a", "au", "aux", "en", "avec", "pour"}
+
+
+def titre_visible(nom: str) -> str:
+    """
+    Le titre seul, degage de l etiquette qui le precede et de la fiche qui le
+    suit. Renvoie une chaine normalisee, prete a comparer.
+    """
+    from core import text_utils
+
+    titre = text_utils.normalize(nom or "").strip()
+    for etiquette in ETIQUETTES:
+        if titre.startswith(etiquette + " "):
+            titre = titre[len(etiquette) + 1:].strip()
+            break
+    coupures = [titre.find(marqueur) for marqueur in METADONNEES]
+    coupures = [c for c in coupures if c > 0]
+    if coupures:
+        titre = titre[: min(coupures)]
+    return titre.strip(" :.-,;").strip()
+
+
+def titre_affiche(nom: str) -> str:
+    """
+    Le titre tel qu il est ecrit a l ecran, accents et majuscules compris.
+
+    La normalisation preserve la longueur caractere par caractere : il suffit
+    donc de retrouver la position du titre dans la version normalisee pour le
+    decouper dans la chaine d origine.
+    """
+    from core import text_utils
+
+    titre = titre_visible(nom)
+    if not titre:
+        return nom
+    debut = text_utils.normalize(nom).find(titre)
+    if debut < 0:
+        return nom
+    return nom[debut:debut + len(titre)].strip()
+
+
+def _mots(texte: str) -> list:
+    from core import text_utils
+
+    return [m for m in text_utils.tokenize(texte) if m]
+
+
+def _mots_utiles(texte: str) -> list:
+    """Les mots qui portent le sens ; jamais une liste vide."""
+    mots = _mots(texte)
+    return [m for m in mots if m not in MOTS_VIDES] or mots
+
+
+def _rang(cible, voulu: str, mots_voulus: set) -> tuple | None:
+    """
+    A quel point cette cible correspond ? Plus petit est meilleur.
+
+    Du plus sur au plus large : le titre exact, le titre qui contient la
+    demande, le nom complet qui la contient, puis tous les mots presents --
+    ce dernier cas rattrape la ponctuation et les esperluettes, qui font
+    echouer toute comparaison litterale.
+    """
+    from core import text_utils
+
+    nom = text_utils.normalize(cible.nom).strip()
+    titre = titre_visible(cible.nom)
+    if not nom:
+        return None
+    if nom == voulu or titre == voulu:
+        niveau = 0
+    elif voulu and voulu in titre:
+        niveau = 1
+    elif voulu and voulu in nom:
+        niveau = 2
+    elif mots_voulus and mots_voulus <= set(_mots(titre)):
+        niveau = 3
+    elif mots_voulus and mots_voulus <= set(_mots(nom)):
+        niveau = 4
+    else:
+        return None
+    # A niveau egal, le libelle le plus court est le plus proche de ce qui a
+    # ete demande : « Damso » plutot qu un titre de 80 caracteres.
+    return (niveau, len(titre) or len(nom), len(nom))
+
+
 def chercher_cible(cibles: list, termes: str, types=None):
     """
     Retrouve l element correspondant a ce que l utilisateur a nomme.
@@ -376,18 +564,22 @@ def chercher_cible(cibles: list, termes: str, types=None):
         trouve = chercher_cible(restreint, termes) if restreint else None
         if trouve is not None:
             return trouve
-    exacts, partiels = [], []
+    mots_voulus = set(_mots_utiles(voulu))
+    classees = []
     for cible in cibles:
-        nom = text_utils.normalize(cible.nom).strip()
-        if nom == voulu:
-            exacts.append(cible)
-        elif voulu in nom:
-            partiels.append(cible)
-    if exacts:
-        return exacts[0]
-    if partiels:
-        return min(partiels, key=lambda c: len(c.nom))
-    # Dernier essai : tolerance aux erreurs de transcription.
-    noms = [c.nom for c in cibles]
-    meilleur = text_utils.best_match(voulu, noms, threshold=0.72)
-    return next((c for c in cibles if c.nom == meilleur), None) if meilleur else None
+        rang = _rang(cible, voulu, mots_voulus)
+        if rang is not None:
+            classees.append((rang, cible))
+    if classees:
+        return min(classees, key=lambda paire: paire[0])[1]
+
+    # Dernier essai : tolerance aux erreurs de transcription. On compare au
+    # TITRE et non au nom complet, sinon vingt mots de metadonnees noient la
+    # ressemblance et plus rien ne depasse le seuil.
+    meilleur, ecart = None, 0.0
+    for cible in cibles:
+        for texte in (titre_visible(cible.nom), text_utils.normalize(cible.nom).strip()):
+            score = text_utils.similarity(voulu, texte)
+            if score > ecart:
+                meilleur, ecart = cible, score
+    return meilleur if ecart >= 0.72 else None

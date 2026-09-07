@@ -261,3 +261,96 @@ def test_les_libelles_anglais_sont_reconnus(demande, nom_reel):
         if trouve is not None:
             break
     assert trouve is not None, demande + " devrait trouver " + nom_reel
+
+
+# --------------------------------------------------------------------------
+# Titres des sites de streaming
+# --------------------------------------------------------------------------
+# Noms relevés tels quels dans l'arbre d'accessibilité de Disney+, Netflix et
+# Prime Video. Les espaces insécables y sont d'origine.
+FICHES = [
+    "Deadpool & Wolverine Classé 16+ Sortie : 2024. Super-héros, Action",
+    "Hulu Original Series Malcolm : Rien n’a changé Classé 12+ Sortie : 2026. Drame",
+    "Hulu Generic Le Diable s'habille en Prada 2 Classé 12+ Sortie : 2026",
+    "Le Diable s'habille en Prada Classé 12+ Sortie : 2006. Drame, Comédie",
+    "Thunderbolts* Classé 12+ Sortie : 2025. Super-héros, Action",
+    "Hulu Original Series The Testaments Classé 16+ Sortie : 2026. Drame",
+    "Star Wars: The Mandalorian and Grogu Badge Nouveau film Classé 12+",
+    "Adults Saison 2 disponible dès maintenant Nouvelle saison Classé 16+",
+    "X-Men Origins: Wolverine Sélectionnez cette option pour en savoir plus",
+    "Profil de Muneeb. Sélectionnez cette option pour ouvrir ce profil",
+]
+
+
+def fiches():
+    return [cible(nom) for nom in FICHES]
+
+
+@pytest.mark.parametrize("nom,attendu", [
+    (FICHES[0], "deadpool   wolverine"),
+    (FICHES[1], "malcolm : rien n a change"),
+    (FICHES[2], "le diable s habille en prada 2"),
+    (FICHES[5], "the testaments"),
+    # « Saison 2 » fait partie du titre : le marqueur suivant est plus loin.
+    (FICHES[7], "adults saison 2"),
+    (FICHES[8], "x men origins: wolverine"),   # le tiret devient un espace
+    (FICHES[9], "muneeb"),
+    # Un libellé ordinaire n'est pas touché.
+    ("Abonnements", "abonnements"),
+    ("LECTURE", "lecture"),
+])
+def test_le_titre_est_degage_de_la_fiche(nom, attendu):
+    """
+    Le nom accessible d'une vignette est une fiche entière : étiquette,
+    titre, classification, année, genres. Seul le titre nous intéresse.
+    """
+    assert interaction.titre_visible(nom) == attendu
+
+
+def test_le_titre_affiche_garde_sa_casse_et_ses_accents():
+    assert interaction.titre_affiche(FICHES[1]) == "Malcolm : Rien n’a changé"
+    assert interaction.titre_affiche(FICHES[0]) == "Deadpool & Wolverine"
+    assert interaction.titre_affiche(FICHES[9]) == "Muneeb"
+    assert interaction.titre_affiche("Play") == "Play"
+
+
+@pytest.mark.parametrize("demande,attendu", [
+    # L'esperluette se dit « et » : aucune comparaison littérale ne marche.
+    ("Deadpool et Wolverine", FICHES[0]),
+    ("Deadpool and Wolverine", FICHES[0]),
+    ("Deadpool", FICHES[0]),
+    # La ponctuation interne casse la sous-chaîne : « Malcolm : Rien... »
+    ("Malcolm rien n'a changé", FICHES[1]),
+    ("Malcolm", FICHES[1]),
+    # Le 2 doit départager deux titres presque identiques.
+    ("Le Diable s'habille en Prada", FICHES[3]),
+    ("Le Diable s'habille en Prada 2", FICHES[2]),
+    # Étiquette devant le titre.
+    ("The Testaments", FICHES[5]),
+    ("Star Wars", FICHES[6]),
+    ("Adults", FICHES[7]),
+    ("X-Men Origins Wolverine", FICHES[8]),
+    # Un profil se nomme comme une personne.
+    ("Muneeb", FICHES[9]),
+    ("profil de Muneeb", FICHES[9]),
+])
+def test_les_titres_de_streaming_sont_retrouves(demande, attendu):
+    trouve = interaction.chercher_cible(fiches(), demande)
+    assert trouve is not None, demande + " -> rien"
+    assert trouve.nom == attendu, demande
+
+
+def test_ce_qui_nest_pas_la_nest_pas_invente():
+    assert interaction.chercher_cible(fiches(), "Interstellar") is None
+    assert interaction.chercher_cible(fiches(), "Le Parrain") is None
+
+
+def test_les_espaces_insecables_ne_cassent_plus_la_comparaison():
+    """
+    Les sites en mettent partout (« Classé 16+ »). Sans repli, les mots ne se
+    séparent pas et plus aucune comparaison ne tombe juste.
+    """
+    from core import text_utils
+
+    assert text_utils.normalize("Classé 16+") == "classe 16 "
+    assert text_utils.tokenize(text_utils.normalize("Saison 2")) == ["saison", "2"]

@@ -13,14 +13,16 @@ chemin qu un vrai utilisateur.
 
 Les trois lecteurs mesures ne se ressemblent pas :
 
-    lecteur       curseur     visible au repos   revele par        pas
-    YouTube       « Volume »  oui                --                5
-    Prime Video   « Volume »  non (3 s)          survol du lecteur 1
-    Netflix       sans nom    non                survol du BOUTON  5 %
+    lecteur       curseur     visible au repos   revele par           pas
+    YouTube       « Volume »  oui                --                   5
+    Prime Video   « Volume »  non (3 s)          survol du lecteur    1
+    Netflix       sans nom    non                bouton « Volume »    5 %
+    Disney+       « Volume »  non                bouton « Couper le son »
 
 D ou trois principes : on reveille la barre de controle avant de chercher,
-on accepte un curseur sans nom s il est colle au bouton de volume, et on
-MESURE le pas au lieu de le supposer.
+on accepte un curseur sans nom s il jouxte le bouton de volume -- ou de
+sourdine, seul bouton qu annonce Disney+ --, et on MESURE le pas au lieu de
+le supposer.
 """
 
 from __future__ import annotations
@@ -35,6 +37,11 @@ log = logging.getLogger(__name__)
 # Le nom du curseur, tel que les lecteurs l annoncent. « volume » couvre le
 # francais, l anglais, l espagnol et l italien ; les autres sont explicites.
 MOTS_VOLUME = ("volume", "volumen", "lautstarke", "sound", "audio")
+
+# Le curseur ne se cache pas toujours derriere un bouton « volume » : Disney+
+# n annonce qu un bouton « Couper le son », et son curseur n apparait qu au
+# survol de celui-la.
+MOTS_SOURDINE = MOTS_VOLUME + ("son", "mute", "unmute", "muet", "silence")
 
 TYPE_CURSEUR = 50015        # UIA_SliderControlTypeId
 TYPE_BOUTON = 50000         # UIA_ButtonControlTypeId
@@ -88,11 +95,27 @@ class CurseurVolume:
         return max(0.0, min(100.0, (brut - self.minimum) / etendue * 100.0))
 
 
-def _est_un_volume(nom: str) -> bool:
+def _a_un_mot(nom: str, mots) -> bool:
+    """
+    Le nom contient-il l un de ces mots ENTIERS ?
+
+    La comparaison porte sur les mots et non sur les lettres : « Saison 2 »
+    contient bien les trois lettres de « son », et une recherche litterale
+    prendrait un bouton de saison pour un reglage de son.
+    """
     from core import text_utils
 
-    nom = text_utils.normalize(nom or "").lower()
-    return any(mot in nom for mot in MOTS_VOLUME)
+    jetons = set(text_utils.tokenize(text_utils.normalize(nom or "")))
+    return bool(jetons.intersection(mots))
+
+
+def _est_un_volume(nom: str) -> bool:
+    return _a_un_mot(nom, MOTS_VOLUME)
+
+
+def _est_une_sourdine(nom: str) -> bool:
+    """Bouton de volume ou de sourdine : les deux servent de point de survol."""
+    return _a_un_mot(nom, MOTS_SOURDINE)
 
 
 # --------------------------------------------------------------------------
@@ -151,7 +174,12 @@ def _chercher(fenetre) -> CurseurVolume | None:
 
 
 def _bouton_volume(fenetre):
-    """Rectangle du bouton de volume, celui qu il faut survoler (Netflix)."""
+    """
+    Rectangle du bouton a survoler pour faire apparaitre le curseur.
+
+    Netflix annonce un bouton « Volume », Disney+ un bouton « Couper le
+    son » : les deux ouvrent le meme reglage.
+    """
     tous, _module = _elements(fenetre)
     if tous is None:
         return None
@@ -161,7 +189,7 @@ def _bouton_volume(fenetre):
             nom = (element.CurrentName or "").strip()
             if element.CurrentControlType != TYPE_BOUTON:
                 continue
-            if len(nom) > 24 or not _est_un_volume(nom):
+            if len(nom) > 26 or not _est_une_sourdine(nom):
                 continue
             r = element.CurrentBoundingRectangle
             if r.right > r.left and r.bottom > r.top:
@@ -205,56 +233,16 @@ def _curseur_pres_de(fenetre, rect) -> CurseurVolume | None:
 # Reveiller la barre de controle
 # --------------------------------------------------------------------------
 def _centre_de_la_fenetre(fenetre):
-    try:
-        import ctypes
-        from ctypes import wintypes
+    from core import interaction
 
-        rect = wintypes.RECT()
-        if not ctypes.windll.user32.GetWindowRect(fenetre.handle, ctypes.byref(rect)):
-            return None
-        if rect.right <= rect.left or rect.bottom <= rect.top:
-            return None
-        return (rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2
-    except Exception as exc:
-        log.debug("Rectangle de la fenetre inconnu : %s", exc)
-        return None
+    return interaction.centre_fenetre(fenetre)
 
 
-class _Souris:
-    """Deplace le pointeur et retient d ou il vient, pour l y remettre."""
+def _Souris():
+    """Le pointeur, avec retour a sa position de depart (voir core.interaction)."""
+    from core import interaction
 
-    def __init__(self):
-        from core import interaction
-
-        self._interaction = interaction
-        try:
-            self.depart = interaction.position_souris()
-        except Exception:
-            self.depart = None
-
-    def poser(self, point) -> bool:
-        """Amene le pointeur sur un point, avec un vrai mouvement."""
-        if point is None:
-            return False
-        try:
-            # Deux deplacements : un saut unique peut ne declencher aucun
-            # evenement de survol et ne rien reveiller.
-            self._interaction.deplacer_souris(point[0], point[1])
-            time.sleep(0.12)
-            self._interaction.deplacer_souris(point[0] + 3, point[1] + 1)
-            time.sleep(PAUSE_REVEIL)
-            return True
-        except Exception as exc:
-            log.debug("Deplacement du pointeur impossible : %s", exc)
-            return False
-
-    def revenir(self) -> None:
-        if self.depart is None:
-            return
-        try:
-            self._interaction.deplacer_souris(*self.depart)
-        except Exception:
-            pass
+    return interaction.Souris()
 
 
 @contextlib.contextmanager

@@ -49,7 +49,12 @@ def _lower_char(char: str) -> str:
 def normalize(text: str) -> str:
     """
     Retourne une version simplifiee de `text` de MEME LONGUEUR :
-    minuscules, accents replies, ponctuation remplacee par des espaces.
+    minuscules, accents replies, ponctuation ET espaces exotiques remplaces
+    par des espaces ordinaires.
+
+    La longueur est preservee caractere par caractere : c est ce qui permet
+    de reperer un argument dans la chaine normalisee puis de le decouper
+    dans la chaine d origine, accents et majuscules intacts.
     """
     out = []
     for char in text:
@@ -57,7 +62,12 @@ def normalize(text: str) -> str:
         char = char.translate(_ACCENT_MAP)
         if len(char) != 1:  # securite : ne jamais casser l'alignement
             char = " "
-        if char.isalnum() or char.isspace() or char in _KEEP:
+        if char.isspace():
+            # Espace insecable, espace fine... Les sites en mettent partout
+            # (« Classe 16+ », « Sortie : 2024 ») : sans ce repli, les mots
+            # ne se separent pas et aucune comparaison ne tombe juste.
+            out.append(" ")
+        elif char.isalnum() or char in _KEEP:
             out.append(char)
         else:
             out.append(" ")

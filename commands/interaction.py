@@ -45,6 +45,11 @@ TYPES_PAR_MOT = {
     "musique": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE),
     "titre": (interaction.LIEN, interaction.GROUPE),
     "resultat": (interaction.LIEN, interaction.GROUPE, interaction.ITEM_LISTE),
+    # Selecteur de profil, a l ouverture d un service de streaming.
+    "profil": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE,
+               interaction.ITEM_LISTE, interaction.BOUTON),
+    "compte": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE,
+               interaction.ITEM_LISTE, interaction.BOUTON),
     "proposition": (interaction.LIEN, interaction.GROUPE, interaction.ITEM_LISTE),
 }
 
@@ -230,7 +235,8 @@ def cliquer_ordinal(ctx: CommandContext) -> Response:
         r"choisis|choisir|tape\s+sur)\s+(?:sur\s+)?"
         r"(?:le\s+|la\s+|les\s+|l\s+|un\s+|une\s+)?"
         r"(?P<type>bouton|boutons|lien|image|vignette|onglet|case|champ|video|film|"
-        r"serie|episode|clip|chanson|musique|titre|resultat|proposition)?\s*"
+        r"serie|episode|clip|chanson|musique|titre|resultat|proposition|profil|"
+        r"compte)?\s*"
         r"(?P<label>.+)$",
     ],
     category="Navigation",
@@ -275,12 +281,27 @@ def cliquer_sur(ctx: CommandContext) -> Response:
         time.sleep(1.2)
         cible = chercher()
 
-    if cible is None:
-        quoi = (mot_type + " ") if mot_type else ""
-        return Response.error(
-            "Je ne trouve pas " + quoi + "« " + libelle + " » à l'écran. "
-            "Dites « clique sur la première vidéo » pour choisir par position."
-        )
+    if cible is not None:
+        return _cliquer(cible)
+
+    # Dernier recours : reveiller la barre de controle d un lecteur video.
+    # Fermee, elle n est pas seulement invisible -- elle a disparu de l arbre
+    # d accessibilite, et ses boutons avec. Le clic doit donc se faire tant
+    # que le pointeur la maintient ouverte.
+    with interaction.controles_reveilles(fenetre) as reveille:
+        if reveille:
+            cible = chercher()
+            if cible is not None:
+                return _cliquer(cible)
+
+    quoi = (mot_type + " ") if mot_type else ""
+    return Response.error(
+        "Je ne trouve pas " + quoi + "« " + libelle + " » à l'écran. "
+        "Dites « clique sur la première vidéo » pour choisir par position."
+    )
+
+
+def _cliquer(cible) -> Response:
     if interaction.cliquer(cible):
-        return Response(text="Je clique sur « " + cible.nom[:60] + " ».")
+        return Response(text="Je clique sur « " + interaction.titre_affiche(cible.nom)[:60] + " ».")
     return Response.error("Je n'ai pas réussi à cliquer sur « " + cible.nom[:40] + " ».")

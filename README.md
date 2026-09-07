@@ -417,10 +417,12 @@ Measured on the three:
 |---|---|---|---|---|
 | YouTube | named *Volume*, 0–100 | yes | nothing needed | 5 |
 | Prime Video | named *Volume*, 0–100 | no, after 3 s | hovering the player | 1 |
-| Netflix | **unnamed**, 0–1 | no | hovering the volume **button** | 5 % |
+| Netflix | **unnamed**, 0–1 | no | hovering the *Volume* button | 5 % |
+| Disney+ | named *Volume*, 0–100 | no | hovering the *Couper le son* button | 1 |
 
-So ALMA wakes the control bar with a mouse move before looking, accepts an
-unnamed slider when it sits right against the volume button, works in percent
+So ALMA wakes the control bar with a mouse move before looking, then hovers the
+volume button — or the mute button, the only one Disney+ announces — accepts an
+unnamed slider when it sits right against that button, works in percent
 whatever the underlying scale, and **measures** the arrow step instead of
 assuming one — recomputing the gap after each burst, since keypresses do get
 dropped when many are sent in a row. On a player whose arrows move by a single
@@ -435,6 +437,7 @@ Measured end to end, control bar closed at the start of each command:
 ```
 Netflix       "à 30" → 29    "à 75" → 74    (2.7 - 3.1 s)
 Prime Video   "à 30" → 30    "à 75" → 75    (2.1 - 2.2 s)
+Disney+       "à 30" → 30    "à 75" → 75    (3.7 - 5.0 s)
 YouTube       "à 30" → 30    "à 75" → 75    (1.0 s)
 ```
 
@@ -522,6 +525,24 @@ so "Damso" targets the link named *Damso* rather than an 80-character title
 that merely mentions him. Only elements **actually on screen** are considered;
 anything scrolled out of view is ignored, since clicking it would land
 somewhere else.
+
+**Streaming tiles are not named after their titles.** What a poster announces
+to the accessibility API is a whole record: `Hulu Original Series Malcolm :
+Rien n'a changé Classé 12+ Sortie : 2026. Drame`. ALMA cuts the label off the
+front and the rating, year and genres off the back, keeping the title — which
+is what you actually say. Matching then works on words rather than letters, so
+"Deadpool et Wolverine" finds *Deadpool & Wolverine* and "Malcolm rien n'a
+changé" finds a title whose colon would break any literal comparison. Where two
+titles overlap, the exact one wins: "Le Diable s'habille en Prada" and the same
+phrase followed by "2" reach different films. Profiles work the same way —
+"clique sur le profil Muneeb" finds *Profil de Muneeb. Sélectionnez cette
+option…*.
+
+**A closed control bar is not merely invisible.** It is gone from the
+accessibility tree, and its buttons with it — on the Netflix player, nine
+controls become zero. If ALMA finds nothing, it moves the pointer over the
+window to bring the bar back, clicks while it is still open, then puts the
+pointer back where it was.
 
 **Naming the kind narrows the search.** "clique sur le bouton lecture" looks at
 buttons first, so it will not land on a video title that happens to contain the
