@@ -40,6 +40,12 @@ class Assistant:
         # Memoire de court terme : le site ou l application dont on vient de
         # parler, afin que « recherche Damso » suive « va sur YouTube ».
         self.contexte: dict = {}
+        # Ecran de travail. Contrairement au reste du contexte, il N EXPIRE
+        # PAS : une fois qu on a demande l ecran 2, tout s y passe jusqu a ce
+        # qu on demande explicitement le contraire.
+        self.ecran_actif = 1
+        # Branche par l interface pour signaler visuellement un changement.
+        self.signal_ecran = None
         # Defilement en cours, s il y en a un : il doit pouvoir etre
         # interrompu par la voix pendant qu il tourne.
         from core.interaction import Defilement
@@ -119,6 +125,29 @@ class Assistant:
             return self.tts.arreter()
         except Exception:
             return False
+
+    def definir_ecran(self, index: int) -> bool:
+        """
+        Choisit l ecran sur lequel travailler.
+
+        Retourne True si l ecran a change. Le signal visuel n est envoye que
+        dans ce cas : reconfirmer l ecran courant ne doit pas faire clignoter
+        l ecran pour rien.
+        """
+        from core import desktop
+
+        index = int(index)
+        ecrans = desktop.ecrans()
+        if ecrans and not 1 <= index <= len(ecrans):
+            raise ValueError("écran " + str(index) + " inexistant")
+        change = index != self.ecran_actif
+        self.ecran_actif = index
+        if self.signal_ecran is not None:
+            try:
+                self.signal_ecran(index)
+            except Exception as exc:
+                log.debug("Signal d écran impossible : %s", exc)
+        return change
 
     def oublier_contexte(self) -> None:
         """Vide la memoire de court terme (fin de session)."""

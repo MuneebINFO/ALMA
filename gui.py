@@ -205,6 +205,10 @@ class AlmaApp:
 
         self._construire()
         self._brancher_sorties()
+        # Le changement d ecran est signale par un cadre lumineux. Tkinter
+        # n etant pilotable que depuis son thread principal, on passe par
+        # root.after() : les commandes, elles, tournent dans un thread.
+        assistant.signal_ecran = self.signaler_ecran
         self.root.after(40, self._traiter_evenements)
 
     # -- construction ---------------------------------------------------------
@@ -345,6 +349,21 @@ class AlmaApp:
             pass
         self._rafraichir_compte_a_rebours()
         self.root.after(40, self._traiter_evenements)
+
+    def signaler_ecran(self, index: int) -> None:
+        """Illumine brievement le contour de l ecran choisi."""
+        def dessiner():
+            from core import desktop, flash_ecran
+
+            ecran = next((e for e in desktop.ecrans() if e.index == index), None)
+            if ecran is None:
+                return
+            flash_ecran.flasher(self.root, ecran.rect, couleur=ETATS["voix"][0])
+
+        try:
+            self.root.after(0, dessiner)
+        except Exception:
+            pass
 
     def _rafraichir_compte_a_rebours(self) -> None:
         """Affiche le temps restant de la session, tant qu elle est ouverte."""

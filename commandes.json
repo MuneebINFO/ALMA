@@ -747,6 +747,23 @@
       "phrases": [
         "répète"
       ]
+    },
+    {
+      "action": "Choisir l'écran sur lequel travailler",
+      "phrases": [
+        "va sur l écran X",
+        "écran X",
+        "passe sur le deuxième écran",
+        "bascule sur l écran de droite",
+        "mets toi sur l écran X"
+      ]
+    },
+    {
+      "action": "Dire sur quel écran l'assistant travaille",
+      "phrases": [
+        "sur quel écran es-tu",
+        "quel écran"
+      ]
     }
   ]
 }

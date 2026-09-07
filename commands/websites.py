@@ -60,7 +60,8 @@ def termes_de_recherche(cle: str, entree) -> list:
     return [t for t in termes if t and " " not in t]
 
 
-def afficher_site(config, cle: str, url: str, naviguer: bool = False) -> tuple:
+def afficher_site(config, cle: str, url: str, naviguer: bool = False,
+                  assistant=None) -> tuple:
     """
     Affiche un site en reutilisant ce qui est deja ouvert.
 
@@ -81,9 +82,10 @@ def afficher_site(config, cle: str, url: str, naviguer: bool = False) -> tuple:
 
     entree = (config.get("websites", {}) or {}).get(cle, {})
     termes = termes_de_recherche(cle, entree)
+    ecran = getattr(assistant, "ecran_actif", None) if assistant is not None else None
 
     # 1) Un onglet existe-t-il, y compris en arriere-plan ?
-    onglet = browser_tabs.trouver_onglet(termes)
+    onglet = browser_tabs.trouver_onglet(termes, ecran=ecran)
     if onglet is not None:
         desktop.mettre_au_premier_plan(onglet.fenetre.handle)
         if onglet.activer():
@@ -93,7 +95,7 @@ def afficher_site(config, cle: str, url: str, naviguer: bool = False) -> tuple:
 
     # 2) Repli : une fenetre dont l onglet actif affiche deja le site.
     for terme in termes:
-        fenetre = desktop.trouver_fenetre(terme, navigateurs_seulement=True)
+        fenetre = desktop.trouver_fenetre(terme, navigateurs_seulement=True, ecran=ecran)
         if fenetre is None:
             continue
         if not naviguer:
@@ -136,7 +138,7 @@ def open_website(ctx: CommandContext) -> Response:
     key, url = resolved
     # On retient le site : « recherche Damso » juste apres devra s y appliquer.
     ctx.assistant.memoriser("site", key)
-    ok, mode = afficher_site(ctx.config, key, url, naviguer=False)
+    ok, mode = afficher_site(ctx.config, key, url, naviguer=False, assistant=ctx.assistant)
     if not ok:
         return Response.error("Je n'ai pas réussi à ouvrir " + url + ".")
     if mode == "onglet":
@@ -241,7 +243,7 @@ def site_search(ctx: CommandContext) -> Response:
     cible = modele.replace("{q}", quote_plus(requete)) if modele else url
 
     ctx.assistant.memoriser("site", cle)
-    ok, mode = afficher_site(ctx.config, cle, cible, naviguer=True)
+    ok, mode = afficher_site(ctx.config, cle, cible, naviguer=True, assistant=ctx.assistant)
     if not ok:
         return Response.error("Je n'ai pas réussi à ouvrir " + cle + ".")
     if not modele:
@@ -292,7 +294,7 @@ def site_search_contextuel(ctx: CommandContext) -> Response:
 
     cible = modele.replace("{q}", quote_plus(requete))
     ctx.assistant.memoriser("site", cle)          # on reste sur ce site
-    ok, mode = afficher_site(ctx.config, cle, cible, naviguer=True)
+    ok, mode = afficher_site(ctx.config, cle, cible, naviguer=True, assistant=ctx.assistant)
     if not ok:
         return Response.error("Je n'ai pas réussi à chercher sur " + cle + ".")
     return Response(text="Je cherche « " + requete + " » sur " + cle + ".")

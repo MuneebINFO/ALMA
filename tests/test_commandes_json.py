@@ -33,6 +33,9 @@ REMPLACEMENTS = {
     "fais pause à la X": "fais pause à la vidéo",
     "mets la X en pause": "mets la vidéo en pause",
     "pause la X": "pause la vidéo",
+    "va sur l écran X": "va sur l'écran 2",
+    "écran X": "écran 2",
+    "mets toi sur l écran X": "mets toi sur l'écran 2",
 }
 
 # Commandes qui n'ont de sens que dans une situation précise : vérifiées

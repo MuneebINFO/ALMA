@@ -81,20 +81,29 @@ def variantes_libelle(libelle: str) -> list:
 
 def fenetre_visee(ctx: CommandContext):
     """
-    Fenetre sur laquelle agir : celle du site en cours si on en a un en
-    memoire, sinon la fenetre de navigateur au premier plan.
+    Fenetre sur laquelle agir.
+
+    Priorite : le site dont on vient de parler, puis l ECRAN DE TRAVAIL.
+    Une fois qu on a demande l ecran 2, defiler et cliquer s y appliquent,
+    meme si une autre fenetre de navigateur traine sur l ecran 1.
     """
+    ecran = getattr(ctx.assistant, "ecran_actif", None)
     cle = ctx.assistant.rappeler("site")
     if cle:
         from commands.websites import termes_de_recherche
 
         entree = (ctx.config.get("websites", {}) or {}).get(cle, {})
         for terme in termes_de_recherche(cle, entree):
-            fenetre = desktop.trouver_fenetre(terme, navigateurs_seulement=True)
+            fenetre = desktop.trouver_fenetre(terme, navigateurs_seulement=True, ecran=ecran)
             if fenetre is not None:
                 return fenetre
-    fenetres = [f for f in desktop.fenetres() if f.est_navigateur]
-    return fenetres[0] if fenetres else None
+
+    navigateurs = [f for f in desktop.fenetres() if f.est_navigateur]
+    if ecran is not None:
+        sur_ecran = [f for f in navigateurs if f.ecran == ecran]
+        if sur_ecran:
+            return sur_ecran[0]
+    return navigateurs[0] if navigateurs else None
 
 
 def direction_demandee(ctx: CommandContext) -> int:

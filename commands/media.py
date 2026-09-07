@@ -80,7 +80,9 @@ def numero_ecran(ctx: CommandContext) -> int | None:
 )
 def media_pause_ecran(ctx: CommandContext) -> Response:
     """Met en pause uniquement le lecteur affiché sur l'écran demandé."""
-    index = numero_ecran(ctx)
+    # Sans numero explicite, on agit sur l ecran de travail : « mets pause »
+    # apres « va sur l ecran 2 » vise bien l ecran 2.
+    index = numero_ecran(ctx) or getattr(ctx.assistant, "ecran_actif", None)
     ecrans = desktop.ecrans()
     if index is None:
         return Response.error(
@@ -110,7 +112,7 @@ def media_pause_ecran(ctx: CommandContext) -> Response:
 )
 def media_reprise_ecran(ctx: CommandContext) -> Response:
     """Relance le lecteur affiché sur l'écran demandé."""
-    index = numero_ecran(ctx)
+    index = numero_ecran(ctx) or getattr(ctx.assistant, "ecran_actif", None)
     if index is None:
         return Response.error("Quel écran ? Dites « écran 1 » ou « écran 2 ».")
     ok, detail = media_control.agir_sur_ecran(index, "play")

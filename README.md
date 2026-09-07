@@ -300,6 +300,26 @@ cherche des images de montagne
 où est la gare centrale
 ```
 
+### Choosing a screen
+
+```
+va sur l'écran 2              everything now happens on screen 2
+passe sur le deuxième écran
+bascule sur l'écran de droite
+sur quel écran es-tu
+```
+
+The chosen screen **sticks**. Unlike the site context, it does not expire with
+the session — it changes only when you ask. Scrolling, clicking, pausing and
+opening sites all target it, and a bare "mets pause" pauses whatever plays
+there.
+
+It is a preference, not a cage: if a site is only open on the other screen,
+ALMA finds it there rather than claiming it is not open.
+
+When the screen changes, its **border lights up for half a second** so you can
+see where ALMA went. The frame is click-through and disappears on its own.
+
 ### Media, per screen or per app
 
 ALMA controls each player **separately**, through the Windows media sessions
@@ -662,6 +682,7 @@ alma/
 │   ├── browser_tabs.py     reads and activates browser tabs (UI Automation)
 │   ├── media_control.py    per-application playback control
 │   ├── interaction.py      continuous scrolling and clicking on screen
+│   ├── flash_ecran.py      lights up a screen border when the target changes
 │   ├── tts.py              speech synthesis (neural, SAPI5 fallback)
 │   ├── voice_neural.py     edge-tts neural voice
 │   ├── stt.py              speech recognition and microphone level metering

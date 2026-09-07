@@ -263,3 +263,72 @@ def capture_zone(ctx: CommandContext) -> Response:
     if win_utils.raccourci("win", "shift", "s"):
         return Response(text="Sélectionnez la zone à capturer.", speak=False)
     return Response.error("Je n'ai pas pu ouvrir l'outil de capture.")
+
+
+@command(
+    name="choisir_ecran",
+    patterns=[
+        # On tolere quelques mots entre le verbe et « ecran » :
+        # « passe sur le deuxieme ecran » doit marcher aussi.
+        r"^(?:va|vas|aller|passe|passer|bascule|basculer|travaille|reste|"
+        r"met[s]?\s+toi|place\s+toi|concentre\s+toi)\s+.{0,24}?"
+        r"\b(?:ecran|moniteur|affichage|screen)s?\b.*$",
+        r"^(?:ecran|moniteur)\s+(?:numero\s+)?(?:\d+|premier|deuxieme|second|"
+        r"troisieme|de\s+droite|de\s+gauche|principal|autre)\b.*$",
+        r"^(?:utilise|prends)\s+(?:l\s+)?(?:ecran|moniteur)\b.*$",
+    ],
+    category="Fenêtres",
+    description="Choisir l'écran sur lequel travailler",
+    examples=["va sur l'écran 2", "écran 1"],
+    priority=96,
+)
+def choisir_ecran(ctx: CommandContext) -> Response:
+    """
+    Fixe l'écran de travail pour toutes les commandes suivantes.
+
+    Le choix ne s'efface pas avec la session : une fois posé, il tient
+    jusqu'à ce qu'on en demande un autre.
+    """
+    from commands.media import numero_ecran
+    from core import desktop
+
+    index = numero_ecran(ctx)
+    ecrans = desktop.ecrans()
+    if index is None:
+        return Response.error(
+            "Quel écran ? Vous en avez " + str(len(ecrans)) + ". Dites « écran 1 » ou « écran 2 »."
+        )
+    try:
+        change = ctx.assistant.definir_ecran(index)
+    except ValueError:
+        return Response.error(
+            "Je ne vois que " + str(len(ecrans)) + " écran(s), pas d'écran " + str(index) + "."
+        )
+    if not change:
+        return Response(text="Déjà sur l'écran " + str(index) + ".", speak=False)
+    return Response(text="Écran " + str(index) + ".", speak=False)
+
+
+@command(
+    name="quel_ecran",
+    patterns=[
+        r"(?:sur\s+)?quel\s+ecran\s+(?:es\s+tu|tu\s+es|suis\s+je|on\s+est|travailles\s+tu)",
+        r"^(?:quel\s+est\s+l\s+ecran|ecran\s+actuel|quel\s+ecran)\s*\??$",
+    ],
+    keywords=[["quel", "ecran"]],
+    category="Fenêtres",
+    description="Dire sur quel écran l'assistant travaille",
+    examples=["sur quel écran es-tu"],
+    priority=98,
+)
+def quel_ecran(ctx: CommandContext) -> Response:
+    """Rappelle l'écran de travail courant."""
+    from core import desktop
+
+    ecrans = desktop.ecrans()
+    index = ctx.assistant.ecran_actif
+    detail = ""
+    for ecran in ecrans:
+        if ecran.index == index:
+            detail = " (" + str(ecran.largeur) + " sur " + str(ecran.hauteur) + ")"
+    return Response(text="Je travaille sur l'écran " + str(index) + detail + ".")

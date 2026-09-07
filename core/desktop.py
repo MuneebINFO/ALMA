@@ -202,13 +202,17 @@ def naviguer_dans_fenetre(fenetre: Fenetre, url: str) -> bool:
     return win_utils.press_key(win_utils.VK_RETURN)
 
 
-def trouver_fenetre(termes, navigateurs_seulement: bool = False):
+def trouver_fenetre(termes, navigateurs_seulement: bool = False, ecran: int | None = None):
     """
     Cherche une fenetre dont le titre contient tous les termes donnes.
 
     Sert a retrouver un site deja ouvert : le titre d une fenetre de
     navigateur reflete son onglet ACTIF, donc un titre qui mentionne Netflix
     signifie que l onglet Netflix est bien celui affiche.
+
+    `ecran` privilegie les fenetres affichees sur cet ecran, sans s y
+    enfermer : si le site n y est pas, on le cherche ailleurs plutot que de
+    repondre qu il n existe pas.
     """
     from core import text_utils
 
@@ -217,10 +221,18 @@ def trouver_fenetre(termes, navigateurs_seulement: bool = False):
     termes = [text_utils.normalize(t).strip() for t in termes if t]
     if not termes:
         return None
+
+    candidates = []
     for fenetre in fenetres():
         if navigateurs_seulement and not fenetre.est_navigateur:
             continue
         titre = text_utils.normalize(fenetre.titre)
         if all(terme in titre for terme in termes):
-            return fenetre
-    return None
+            candidates.append(fenetre)
+    if not candidates:
+        return None
+    if ecran is not None:
+        for fenetre in candidates:
+            if fenetre.ecran == ecran:
+                return fenetre
+    return candidates[0]
