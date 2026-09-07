@@ -318,7 +318,9 @@ It is a preference, not a cage: if a site is only open on the other screen,
 ALMA finds it there rather than claiming it is not open.
 
 When the screen changes, its **border lights up for half a second** so you can
-see where ALMA went. The frame is click-through and disappears on its own.
+see where ALMA went. The frame is click-through and disappears on its own. It is
+measured in real pixels, so it fits any monitor layout — including a setup that
+mixes display scalings, such as a 125 % laptop screen next to a 100 % monitor.
 
 ### Media, per screen or per app
 
@@ -343,6 +345,20 @@ Players that expose a media session (Chrome, Firefox, Spotify, Edge…) are paus
 precisely, without stealing focus. Streaming sites whose custom player registers
 no session fall back to bringing the window forward and sending the pause key —
 the same thing you would do by hand.
+
+**Every playback command stays on the current screen.** "mets pause à la vidéo",
+"pause", "lance la vidéo", "chanson suivante" and "qu'est-ce qui joue" all act on
+the screen ALMA is working on, and on nothing else. If nothing is playing there,
+nothing happens — a video running on the other screen is left alone. Say "mets
+tout en pause" when you really mean every screen at once, or name the screen
+explicitly with "mets pause sur l'écran 2".
+
+Windows declares one media session per *application*, not per window, so a Chrome
+window on each screen shares a single session. ALMA tells them apart by matching
+the media title against the window title: the window showing *Interstellar* is
+the one that gets paused. A player with no visible window at all (Spotify
+minimised to the notification area) belongs to no screen and stays controllable
+from wherever you are.
 
 ### Opening a site and searching inside it
 
@@ -482,6 +498,9 @@ arrête la musique
 resumes, the second only pauses. Bare "pause" or "play" stays a toggle. The
 object must end the sentence — "lance la vidéo Interstellar" names a specific
 video, so it is treated as a search rather than a playback command.
+
+All of these are confined to the current screen — see *Media, per screen or per
+app* above.
 
 ### Editing (applies to the app in front)
 ```

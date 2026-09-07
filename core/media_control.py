@@ -27,6 +27,25 @@ EN_PAUSE = 5
 VK_ESPACE = 0x20
 VK_K = 0x4B
 
+# Un navigateur est presque toujours ouvert : son titre seul dit s il affiche
+# un lecteur. Sert a decider si le repli clavier est legitime.
+SITES_MEDIA = (
+    # plateformes
+    "youtube", "netflix", "twitch", "prime video", "disney", "vimeo",
+    "dailymotion", "crunchyroll", "molotov", "arte", "france.tv", "canal",
+    "spotify", "deezer", "soundcloud", "plex", "apple music",
+    # indices generiques : les sites de streaming sont innombrables, leur
+    # titre trahit presque toujours ce qu ils affichent
+    "anime", "manga", "stream", "replay", "film", "video", "episode",
+    "saison", "vostfr", "lecteur", "player", "podcast",
+)
+
+
+def _titre_de_media(fenetre) -> bool:
+    """La fenetre affiche-t-elle une page de lecture reconnaissable ?"""
+    titre = (fenetre.titre or "").lower()
+    return any(site in titre for site in SITES_MEDIA)
+
 
 @dataclass
 class SessionMedia:
@@ -186,39 +205,99 @@ def reprendre_tout() -> list:
     return repris
 
 
+def _normaliser(texte: str) -> str:
+    """Minuscules sans accents, pour comparer un titre de media a un titre de fenetre."""
+    from core import text_utils
+
+    return text_utils.normalize(texte or "").lower()
+
+
+def _titres_se_recoupent(titre_session: str, titre_fenetre: str) -> bool:
+    """
+    Le titre du media apparait-il dans le titre de la fenetre ?
+
+    Un navigateur affiche l onglet actif dans son titre : « Interstellar -
+    YouTube - Google Chrome ». C est ce qui permet de savoir LAQUELLE des
+    fenetres Chrome joue, quand il y en a une par ecran.
+    """
+    a, b = _normaliser(titre_session), _normaliser(titre_fenetre)
+    if not a or not b:
+        return False
+    if a in b or b in a:
+        return True
+    # Titres tronques par Windows : on compare les premiers mots.
+    mots = [m for m in a.split() if len(m) > 3][:4]
+    return bool(mots) and sum(1 for m in mots if m in b) >= max(2, len(mots) - 1)
+
+
+def sessions_sur_ecran(index_ecran: int) -> list:
+    """
+    Les lecteurs qui jouent sur un ecran donne.
+
+    Une session media est declaree par application, pas par fenetre : Chrome
+    n en expose qu une seule meme s il a une fenetre sur chaque ecran. On
+    rattache donc chaque session a un ecran en croisant le processus ET le
+    titre, faute de quoi « mets pause » sur l ecran 1 arreterait la video
+    ouverte sur l ecran 2.
+    """
+    toutes = desktop.fenetres()
+    sur_ecran = [f for f in toutes if f.ecran == index_ecran]
+    retenues = []
+    for session in sessions():
+        candidates = [f for f in toutes if correspond(f.processus, session.application)]
+        if not candidates:
+            # Lecteur sans fenetre visible (Spotify reduit dans la zone de
+            # notification) : il n appartient a aucun ecran, on le laisse
+            # pilotable depuis celui ou l on travaille.
+            retenues.append(session)
+            continue
+        ici = [f for f in candidates if f.ecran == index_ecran]
+        if not ici:
+            continue
+        if len(candidates) == len(ici):
+            # L application n est presente que sur cet ecran : aucun doute.
+            retenues.append(session)
+            continue
+        # Plusieurs ecrans : seul le titre tranche.
+        if any(_titres_se_recoupent(session.titre, f.titre) for f in ici):
+            retenues.append(session)
+    return retenues
+
+
 def agir_sur_ecran(index_ecran: int, action: str = "pause") -> tuple:
     """
     Applique une action de lecture a ce qui joue sur un ecran donne.
 
-    Retourne (succes, description). On tente d abord les sessions media
-    (precis, sans voler le focus), puis on retombe sur le clavier.
+    Retourne (succes, description). Rien sur cet ecran signifie qu il n y a
+    rien a faire : on ne touche jamais a un lecteur affiche ailleurs.
     """
     fenetres = desktop.fenetres_sur_ecran(index_ecran)
     if not fenetres:
         return False, "aucune fenêtre sur cet écran"
 
-    liste_sessions = sessions()
     touchees = []
-
-    # 1) Lecteurs declares : on vise l application exacte.
-    for fenetre in fenetres:
-        for session in liste_sessions:
-            if not correspond(fenetre.processus, session.application):
-                continue
-            if action == "pause" and not session.joue:
-                continue
-            if action == "play" and session.joue:
-                continue
-            if _agir_sur_session(session.application, action):
-                titre = session.titre or fenetre.titre
-                touchees.append(session.application + " (" + titre[:45] + ")")
-            break
+    for session in sessions_sur_ecran(index_ecran):
+        if action == "pause" and not session.joue:
+            continue
+        if action == "play" and session.joue:
+            continue
+        if _agir_sur_session(session.application, action):
+            titre = session.titre or session.application
+            touchees.append(session.application + " (" + titre[:45] + ")")
 
     if touchees:
         return True, ", ".join(touchees)
 
-    # 2) Repli : la fenetre la plus plausible, mise au premier plan.
-    candidates = [f for f in fenetres if f.est_navigateur or f.est_lecteur]
+    # Repli clavier, uniquement pour ce qui ressemble vraiment a un lecteur :
+    # envoyer « espace » a une fenetre au hasard ferait defiler une page.
+    if action not in ("pause", "play", "bascule"):
+        return False, "aucun lecteur sur cet écran"
+    # Seules les fenetres qui ressemblent vraiment a un lecteur sont eligibles.
+    # Envoyer « espace » a un navigateur au hasard ferait defiler la page que
+    # l utilisateur est en train de lire ; s il n y a rien a mettre en pause
+    # sur cet ecran, il n y a rien a faire. Les fenetres arrivent dans l ordre
+    # d empilement : la premiere est celle que l utilisateur regarde.
+    candidates = [f for f in fenetres if f.est_lecteur or _titre_de_media(f)]
     if not candidates:
         return False, "rien qui ressemble à une lecture sur cet écran"
     if _pause_par_le_clavier(candidates[0]):

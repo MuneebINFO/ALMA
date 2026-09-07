@@ -88,7 +88,22 @@ def test_une_deduction_est_toujours_validee(assistant):
     ("quelle heure", "heures"),        # compris directement
     ("fais moi rire", None),           # compris directement
 ])
-def test_l_assistant_execute_la_demande_deduite(assistant, phrase, mot_attendu):
+def test_l_assistant_execute_la_demande_deduite(assistant, phrase, mot_attendu,
+                                                monkeypatch):
+    # « pause » ne fait quelque chose que s il y a un lecteur sur l ecran de
+    # travail : on en simule un, sinon le test mesurerait la machine de test
+    # plutot que la deduction.
+    from core import desktop, media_control
+
+    monkeypatch.setattr(desktop, "fenetres", lambda *a, **k: [
+        desktop.Fenetre(handle=1, titre="Une vidéo - YouTube - Google Chrome",
+                        processus="chrome.exe", ecran=1),
+    ])
+    monkeypatch.setattr(media_control, "sessions", lambda: [
+        media_control.SessionMedia("Chrome", "Une vidéo", media_control.EN_LECTURE),
+    ])
+    monkeypatch.setattr(media_control, "_agir_sur_session", lambda app, action: True)
+
     reponse = assistant.handle(phrase)
     assert reponse.ok, phrase + " -> " + reponse.text
     if mot_attendu:

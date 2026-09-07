@@ -1,14 +1,14 @@
 """
 Musique et video : lecture, pause, ciblage par ecran ou par application.
 
-Deux niveaux de controle :
-  - les SESSIONS MEDIA de Windows, qui exposent chaque lecteur separement
-    (Chrome, Firefox, Spotify...) et permettent de viser precisement ;
-  - les touches multimedia globales, en repli.
+Toutes ces commandes agissent sur le SEUL ecran de travail : celui nomme dans
+la phrase, sinon celui ou l assistant se trouve. Une video qui joue sur un
+autre ecran n est jamais touchee -- et s il n y a rien a piloter sur l ecran
+courant, il n y a rien a faire.
 
-C est ce qui rend possible « mets pause sur l ecran 2 » : on regarde quelles
-fenetres sont sur cet ecran, on retrouve le lecteur correspondant, et on ne
-met en pause que celui-la.
+Le pilotage passe par les SESSIONS MEDIA de Windows, qui exposent chaque
+lecteur separement (Chrome, Firefox, Spotify...). « mets tout en pause » est
+la seule commande volontairement globale : elle le dit.
 """
 
 from __future__ import annotations
@@ -66,6 +66,15 @@ def numero_ecran(ctx: CommandContext) -> int | None:
     return None
 
 
+def ecran_cible(ctx: CommandContext) -> int:
+    """
+    L ecran sur lequel agir : celui nomme dans la phrase, sinon celui ou
+    l assistant travaille. Toute action de lecture reste confinee a cet
+    ecran ; ce qui joue ailleurs n est jamais touche.
+    """
+    return numero_ecran(ctx) or getattr(ctx.assistant, "ecran_actif", 1) or 1
+
+
 @command(
     name="media_pause_ecran",
     patterns=[
@@ -82,13 +91,9 @@ def media_pause_ecran(ctx: CommandContext) -> Response:
     """Met en pause uniquement le lecteur affiché sur l'écran demandé."""
     # Sans numero explicite, on agit sur l ecran de travail : « mets pause »
     # apres « va sur l ecran 2 » vise bien l ecran 2.
-    index = numero_ecran(ctx) or getattr(ctx.assistant, "ecran_actif", None)
+    index = ecran_cible(ctx)
     ecrans = desktop.ecrans()
-    if index is None:
-        return Response.error(
-            "Quel écran ? Vous en avez " + str(len(ecrans)) + ". Dites « écran 1 » ou « écran 2 »."
-        )
-    if index > len(ecrans):
+    if ecrans and index > len(ecrans):
         return Response.error(
             "Je ne vois que " + str(len(ecrans)) + " écran(s), pas d'écran " + str(index) + "."
         )
@@ -112,9 +117,7 @@ def media_pause_ecran(ctx: CommandContext) -> Response:
 )
 def media_reprise_ecran(ctx: CommandContext) -> Response:
     """Relance le lecteur affiché sur l'écran demandé."""
-    index = numero_ecran(ctx) or getattr(ctx.assistant, "ecran_actif", None)
-    if index is None:
-        return Response.error("Quel écran ? Dites « écran 1 » ou « écran 2 ».")
+    index = ecran_cible(ctx)
     ok, detail = media_control.agir_sur_ecran(index, "play")
     if ok:
         return Response(text="Lecture reprise sur l'écran " + str(index) + " : " + detail + ".")
@@ -159,12 +162,14 @@ def media_pause_tout(ctx: CommandContext) -> Response:
 )
 def media_what_is_playing(ctx: CommandContext) -> Response:
     """Annonce les lectures en cours, avec leur application."""
-    sessions = media_control.sessions()
+    index = ecran_cible(ctx)
+    sessions = media_control.sessions_sur_ecran(index)
     en_cours = [s for s in sessions if s.joue]
     if not en_cours:
         if sessions:
-            return Response(text="Rien ne joue actuellement, tout est en pause.")
-        return Response(text="Aucune lecture en cours.")
+            return Response(text="Rien ne joue sur l'écran " + str(index)
+                                 + ", tout est en pause.")
+        return Response(text="Aucune lecture en cours sur l'écran " + str(index) + ".")
     parties = [
         (s.titre or "un contenu") + " sur " + s.application for s in en_cours
     ]
@@ -187,9 +192,11 @@ def media_what_is_playing(ctx: CommandContext) -> Response:
 )
 def media_play_pause(ctx: CommandContext) -> Response:
     """Bascule lecture/pause sur le lecteur actif."""
-    if media_control.basculer_tout():
+    index = ecran_cible(ctx)
+    ok, detail = media_control.agir_sur_ecran(index, "bascule")
+    if ok:
         return Response(text="C'est fait.", speak=False)
-    return Response.error("Je n'ai pas pu piloter le lecteur.")
+    return Response.error("Rien à piloter sur l'écran " + str(index) + " (" + detail + ").")
 
 
 @command(
@@ -208,9 +215,11 @@ def media_play_pause(ctx: CommandContext) -> Response:
 )
 def media_next(ctx: CommandContext) -> Response:
     """Morceau suivant."""
-    if win_utils.press_key(win_utils.VK_MEDIA_NEXT):
+    index = ecran_cible(ctx)
+    ok, detail = media_control.agir_sur_ecran(index, "suivant")
+    if ok:
         return Response(text="Morceau suivant.", speak=False)
-    return Response.error("Je n'ai pas pu piloter le lecteur.")
+    return Response.error("Rien à faire défiler sur l'écran " + str(index) + " (" + detail + ").")
 
 
 @command(
@@ -231,9 +240,11 @@ def media_next(ctx: CommandContext) -> Response:
 )
 def media_previous(ctx: CommandContext) -> Response:
     """Morceau précédent."""
-    if win_utils.press_key(win_utils.VK_MEDIA_PREV):
+    index = ecran_cible(ctx)
+    ok, detail = media_control.agir_sur_ecran(index, "precedent")
+    if ok:
         return Response(text="Morceau précédent.", speak=False)
-    return Response.error("Je n'ai pas pu piloter le lecteur.")
+    return Response.error("Rien à faire défiler sur l'écran " + str(index) + " (" + detail + ").")
 
 
 @command(
@@ -304,13 +315,11 @@ OBJET_LECTURE = r"(?:video|videos|film|musique|chanson|lecture|serie|episode|pod
 )
 def media_lecture(ctx: CommandContext) -> Response:
     """Relance ce qui est en pause, sans basculer si ça joue déjà."""
-    repris = media_control.reprendre_tout()
-    if repris:
-        return Response(
-            text="Lecture : " + ", ".join(s.application for s in repris) + ".",
-            speak=False,
-        )
-    return Response(text="C'est parti.", speak=False)
+    index = ecran_cible(ctx)
+    ok, detail = media_control.agir_sur_ecran(index, "play")
+    if ok:
+        return Response(text="Lecture : " + detail + ".", speak=False)
+    return Response.error("Rien à relancer sur l'écran " + str(index) + " (" + detail + ").")
 
 
 @command(
@@ -333,10 +342,8 @@ def media_lecture(ctx: CommandContext) -> Response:
 )
 def media_mettre_en_pause(ctx: CommandContext) -> Response:
     """Met en pause sans relancer si c'était déjà arrêté."""
-    arretes = media_control.mettre_en_pause_tout()
-    if arretes:
-        return Response(
-            text="En pause : " + ", ".join(s.application for s in arretes) + ".",
-            speak=False,
-        )
-    return Response(text="C'est en pause.", speak=False)
+    index = ecran_cible(ctx)
+    ok, detail = media_control.agir_sur_ecran(index, "pause")
+    if ok:
+        return Response(text="En pause : " + detail + ".", speak=False)
+    return Response.error("Rien à mettre en pause sur l'écran " + str(index) + " (" + detail + ").")
