@@ -10,6 +10,11 @@ IMPORTANT (bug corrige) : sous Windows, SAPI passe par COM et un moteur
 pyttsx3 cree dans un thread ne peut PAS etre pilote depuis un autre thread --
 runAndWait() s y fige indefiniment. Le thread de lecture cree donc lui-meme
 son moteur et reste le seul a y toucher.
+
+C est aussi pourquoi couper la parole ne passe PAS par engine.stop() : le
+texte est lu phrase par phrase et le thread de lecture verifie entre deux si
+l on a demande le silence. La voix neuronale, elle, s arrete instantanement
+(voir core.voice_neural).
 """
 
 from __future__ import annotations
@@ -31,6 +36,29 @@ PHRASES_PRECHAUFFEES = (
 )
 
 
+# Fins de phrase : points de coupure naturels pour une lecture interruptible.
+SEPARATEURS = ".!?;:" + chr(10)
+LONGUEUR_MIN = 30
+
+
+def decouper(texte: str) -> list:
+    """
+    Decoupe un texte en phrases, pour que la lecture SAPI5 puisse etre
+    interrompue entre deux. Les fragments trop courts sont recolles : couper
+    apres « M. » hacherait la voix sans rien apporter.
+    """
+    morceaux = []
+    courant = ""
+    for caractere in texte:
+        courant += caractere
+        if caractere in SEPARATEURS and len(courant.strip()) >= LONGUEUR_MIN:
+            morceaux.append(courant.strip())
+            courant = ""
+    if courant.strip():
+        morceaux.append(courant.strip())
+    return morceaux or [texte]
+
+
 class TextToSpeech:
     """Synthese vocale non bloquante : le moteur vit dans son propre thread."""
 
@@ -44,6 +72,9 @@ class TextToSpeech:
         self._ready = threading.Event()
         self._available = False
         self._stop = threading.Event()
+        # Leve pour couper la parole en cours ; le thread de lecture le
+        # consulte entre deux phrases.
+        self._interrompre = threading.Event()
         # Texte en cours de lecture : sert a reconnaitre notre propre voix si
         # le micro la capte, et a savoir si l on peut etre interrompu.
         self.texte_en_cours = ""
@@ -123,13 +154,20 @@ class TextToSpeech:
                 break
             texte, cacher = element
             self.texte_en_cours = texte
+            self._interrompre.clear()
             try:
                 joue = False
                 if self._neuronale is not None:
                     joue = self._neuronale.dire(texte, cacher=cacher)
                 if not joue and engine is not None:
-                    engine.say(texte)
-                    engine.runAndWait()
+                    # SAPI5 ne peut pas etre arrete depuis un autre thread :
+                    # engine.stop() s y fige. On lit donc phrase par phrase et
+                    # on s arrete entre deux des qu on demande le silence.
+                    for morceau in decouper(texte):
+                        if self._interrompre.is_set():
+                            break
+                        engine.say(morceau)
+                        engine.runAndWait()
             except Exception as exc:
                 log.debug("Echec de lecture : %s", exc)
             finally:
@@ -265,11 +303,9 @@ class TextToSpeech:
                 interrompu = True
         except Exception:
             pass
-        try:
-            if self._engine is not None:
-                self._engine.stop()
-        except Exception:
-            pass
+        # Pas d appel a engine.stop() : le moteur SAPI5 appartient au thread
+        # de lecture, qui s arretera de lui-meme a la phrase suivante.
+        self._interrompre.set()
         self.texte_en_cours = ""
         return interrompu
 

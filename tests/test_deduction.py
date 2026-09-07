@@ -116,3 +116,41 @@ def test_l_assistant_renonce_proprement(assistant):
     reponse = assistant.handle("xyzzy plover blorb")
     assert not reponse.ok
     assert reponse.text in SUGGESTIONS
+
+
+# --------------------------------------------------------------------------
+# Nombres mal entendus
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("mot,attendu", [
+    ("2", 2), ("deux", 2), ("de", 2), ("du", 2), ("des", 2),
+    ("premier", 1), ("un", 1),
+    ("toi", 3), ("trois", 3),
+    ("cat", 4), ("quatre", 4),
+    ("sain", 5),
+    # Ce qui n'est pas un nombre doit le rester.
+    ("droite", None), ("gauche", None), ("sur", None), ("le", None),
+    ("ecran", None), ("numero", None), ("", None), ("12", None),
+])
+def test_nombre_entendu(mot, attendu):
+    assert deduction.nombre_entendu(mot) == attendu
+
+
+@pytest.mark.parametrize("phrase,attendu", [
+    # Le cas signalé : « écran 2 » transcrit « écran de ».
+    ("va sur ecran de", 2),
+    ("va sur l'écran de", 2),
+    ("écran de", 2),
+    ("écran numéro de", 2),
+    ("va sur l'écran toi", 3),
+    # « de » y est une préposition, pas un chiffre.
+    ("va sur l'écran de droite", 2),
+    ("va sur l'écran de gauche", 1),
+    # Rien à déduire : mieux vaut demander que deviner.
+    ("va sur l'écran", None),
+])
+def test_le_numero_decran_est_deduit(assistant, phrase, attendu):
+    from commands.media import numero_ecran
+    from core.context import CommandContext, Utterance
+
+    ctx = CommandContext(utterance=Utterance.parse(phrase), assistant=assistant)
+    assert numero_ecran(ctx) == attendu

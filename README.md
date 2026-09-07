@@ -129,6 +129,14 @@ trigger anything.
 
 Length is set by `voice.armed_seconds` (60 by default).
 
+Numbers are the weak point of any speech recogniser, so ALMA reads them by
+sound as well as by spelling: "va sur l'écran 2" comes back as *"va sur écran
+de"* often enough that "de" next to "écran" is understood as **two** — along
+with "toi" for three, "cat" for four, "sain" for five. The reading is
+positional and only applies next to a word that expects a number, so "l'écran
+de droite" stays the right-hand screen. When nothing can be deduced, ALMA asks
+which screen rather than guessing.
+
 ### Following the conversation
 
 ALMA remembers what you were just talking about. After "va sur YouTube",
@@ -214,6 +222,21 @@ Other French female voices: `fr-FR-EloiseNeural`, `fr-CH-ArianeNeural`,
 Short replies ("Oui ?", "Je vous écoute") are **synthesised at startup** and
 replayed from a cache, so the answer to the wake word is instant instead of
 waiting on a network round trip.
+
+### Cutting her off
+
+Start speaking while ALMA is talking and she **stops mid-sentence**, within
+about 30 ms. She never finishes a sentence you have interrupted.
+
+Getting this right takes some care on Windows. The neural voice plays its MP3
+through MCI, and the obvious `play … wait` holds the device for the whole file:
+the `stop` sent by the listening thread then sits in a queue until playback
+ends, so the interruption arrives too late to interrupt anything. Playback is
+therefore started without `wait` and watched, which leaves the device free and
+makes `stop` immediate. The SAPI5 fallback cannot be stopped from another
+thread at all — `engine.stop()` freezes there — so its text is read sentence by
+sentence and the reading thread checks between two whether silence was asked
+for.
 
 ---
 

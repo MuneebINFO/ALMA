@@ -33,6 +33,11 @@ VOIX_PAR_DEFAUT = "fr-FR-DeniseNeural"
 _verrou_mci = threading.Lock()
 # Alias de la lecture en cours, publie pour qu un autre thread puisse la couper.
 _alias_courant = None
+# Leve des qu on demande le silence ; la boucle de surveillance en sort.
+_arret = threading.Event()
+
+INTERVALLE_SURVEILLANCE = 0.03   # 30 ms : coupure imperceptible a l oreille
+DELAI_DEMARRAGE = 0.6            # temps laisse a MCI pour passer en lecture
 
 
 def _mci(commande: str) -> int:
@@ -42,15 +47,31 @@ def _mci(commande: str) -> int:
     return ctypes.windll.winmm.mciSendStringW(commande, None, 0, None)
 
 
+def _mci_texte(commande: str) -> str:
+    """Envoie une commande MCI et lit sa reponse (« playing », « stopped »...)."""
+    import ctypes
+
+    tampon = ctypes.create_unicode_buffer(64)
+    if ctypes.windll.winmm.mciSendStringW(commande, tampon, 64, None) != 0:
+        return ""
+    return tampon.value.strip().lower()
+
+
 def jouer_fichier(chemin: Path) -> bool:
     """
     Joue un MP3 via MCI (aucune dependance externe).
 
-    L alias est publie AVANT le demarrage et la lecture se fait HORS du
-    verrou : sans cela, aucun autre thread ne pourrait couper la parole en
-    cours.
+    La lecture est lancee SANS l option « wait » puis surveillee.
+
+    « play ... wait » bloque le peripherique MCI pendant toute la duree du
+    fichier : la commande « stop » envoyee par un autre thread reste alors en
+    file d attente jusqu a la fin de la lecture, et couper la parole ne coupe
+    rien du tout. En surveillant l etat, le peripherique reste libre et le
+    « stop » prend effet immediatement.
     """
     global _alias_courant
+
+    import time
 
     alias = "alma_" + uuid.uuid4().hex[:8]
     try:
@@ -58,7 +79,19 @@ def jouer_fichier(chemin: Path) -> bool:
             if _mci('open "' + str(chemin) + '" type mpegvideo alias ' + alias) != 0:
                 return False
             _alias_courant = alias
-        _mci("play " + alias + " wait")
+            _arret.clear()
+        if _mci("play " + alias) != 0:
+            return False
+
+        debut = time.time()
+        en_lecture = False
+        while not _arret.is_set():
+            mode = _mci_texte("status " + alias + " mode")
+            if mode == "playing":
+                en_lecture = True
+            elif en_lecture or time.time() - debut > DELAI_DEMARRAGE:
+                break     # lecture terminee, ou jamais demarree
+            time.sleep(INTERVALLE_SURVEILLANCE)
         return True
     except Exception as exc:
         log.debug("Lecture MCI impossible : %s", exc)
@@ -67,10 +100,11 @@ def jouer_fichier(chemin: Path) -> bool:
         with _verrou_mci:
             if _alias_courant == alias:
                 _alias_courant = None
-        try:
-            _mci("close " + alias)
-        except Exception:
-            pass
+        for commande in ("stop " + alias, "close " + alias):
+            try:
+                _mci(commande)
+            except Exception:
+                pass
 
 
 def arreter_lecture() -> bool:
@@ -79,6 +113,7 @@ def arreter_lecture() -> bool:
         alias = _alias_courant
     if not alias:
         return False
+    _arret.set()
     try:
         _mci("stop " + alias)
         return True

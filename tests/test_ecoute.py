@@ -6,6 +6,8 @@ IMMÉDIATEMENT — pas finir sa phrase.
 """
 
 import queue
+import threading
+import time
 
 import pytest
 
@@ -95,6 +97,7 @@ def test_la_file_dattente_est_videe():
     tts.texte_en_cours = "en cours"
     tts._engine = None
     tts._available = True
+    tts._interrompre = threading.Event()
     tts._queue.put(("phrase suivante", False))
     tts._queue.put(("encore une", False))
 
@@ -111,3 +114,80 @@ def test_l_interruption_ne_plante_pas_si_la_synthese_echoue(assistant):
 
     assistant.tts = TTSCasse()
     assert assistant.interrompre_parole() is False
+
+
+# --------------------------------------------------------------------------
+# La lecture audio doit pouvoir etre coupee par un AUTRE thread
+# --------------------------------------------------------------------------
+def test_la_lecture_audio_sarrete_quand_un_autre_thread_la_coupe(monkeypatch, tmp_path):
+    """
+    Le bug : « play ... wait » monopolisait le périphérique MCI, si bien que
+    le « stop » envoyé par le thread d'écoute restait en file jusqu'à la fin
+    du fichier. ALMA finissait sa phrase malgré l'interruption.
+    """
+    from core import voice_neural
+
+    commandes = []
+    monkeypatch.setattr(voice_neural, "_mci",
+                        lambda c: commandes.append(c) or 0)
+    # Le périphérique se dit « en lecture » indéfiniment : seule une coupure
+    # peut faire sortir la boucle de surveillance.
+    monkeypatch.setattr(voice_neural, "_mci_texte", lambda c: "playing")
+    monkeypatch.setattr(voice_neural, "INTERVALLE_SURVEILLANCE", 0.005)
+
+    fichier = tmp_path / "voix.mp3"
+    fichier.write_bytes(b"0")
+
+    fini = threading.Event()
+    threading.Thread(
+        target=lambda: (voice_neural.jouer_fichier(fichier), fini.set()),
+        daemon=True,
+    ).start()
+
+    debut = time.time()
+    while voice_neural._alias_courant is None and time.time() - debut < 5:
+        time.sleep(0.005)
+    assert voice_neural._alias_courant, "la lecture n'a pas démarré"
+
+    assert voice_neural.arreter_lecture() is True
+    assert fini.wait(timeout=5), "la lecture ne s'est pas arrêtée"
+    assert any(c.startswith("play ") and not c.endswith(" wait") for c in commandes),         "la lecture doit être lancée sans « wait », sinon rien ne peut la couper"
+
+
+def test_aucune_lecture_a_couper():
+    from core import voice_neural
+
+    voice_neural._alias_courant = None
+    assert voice_neural.arreter_lecture() is False
+
+
+# --------------------------------------------------------------------------
+# Repli SAPI5 : interruptible entre deux phrases
+# --------------------------------------------------------------------------
+def test_le_texte_est_decoupe_en_phrases():
+    from core.tts import decouper
+
+    assert decouper(
+        "Bonjour. Comment allez-vous aujourd'hui ? Il fait beau et je vais bien."
+    ) == [
+        "Bonjour. Comment allez-vous aujourd'hui ?", "Il fait beau et je vais bien.",
+    ]
+    # Une réplique courte reste d'un seul tenant : la hacher n'apporterait rien.
+    assert decouper("Oui ?") == ["Oui ?"]
+    assert decouper("") == [""]
+
+
+def test_arreter_leve_le_drapeau_lu_par_le_thread_de_lecture():
+    """
+    SAPI5 ne peut pas être arrêté depuis un autre thread : c'est le thread de
+    lecture qui doit constater l'interruption entre deux phrases.
+    """
+    tts = TextToSpeech.__new__(TextToSpeech)
+    tts._queue = queue.Queue()
+    tts._interrompre = threading.Event()
+    tts.texte_en_cours = "en cours"
+    tts._engine = None
+    tts._available = True
+
+    tts.arreter()
+    assert tts._interrompre.is_set()

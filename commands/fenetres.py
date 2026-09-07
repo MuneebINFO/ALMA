@@ -273,8 +273,9 @@ def capture_zone(ctx: CommandContext) -> Response:
         r"^(?:va|vas|aller|passe|passer|bascule|basculer|travaille|reste|"
         r"met[s]?\s+toi|place\s+toi|concentre\s+toi)\s+.{0,24}?"
         r"\b(?:ecran|moniteur|affichage|screen)s?\b.*$",
-        r"^(?:ecran|moniteur)\s+(?:numero\s+)?(?:\d+|premier|deuxieme|second|"
-        r"troisieme|de\s+droite|de\s+gauche|principal|autre)\b.*$",
+        # Un mot suffit apres « ecran » : s il ne designe aucun numero, la
+        # commande le dira, plutot que de laisser la phrase sans reponse.
+        r"^(?:ecran|moniteur|screen)\s+\S+.*$",
         r"^(?:utilise|prends)\s+(?:l\s+)?(?:ecran|moniteur)\b.*$",
         # Formulations tronquees par la transcription : « pour le premier
         # ecran » ou « le deuxieme ecran » doivent suffire.

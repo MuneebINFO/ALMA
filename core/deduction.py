@@ -76,6 +76,63 @@ def se_ressemblent(a: str, b: str, seuil: float = 0.8) -> bool:
 
 
 # --------------------------------------------------------------------------
+# Nombres : « ecran 2 » revient souvent en « ecran de »
+# --------------------------------------------------------------------------
+NOMBRES_MOTS = {
+    "un": 1, "une": 1, "premier": 1, "premiere": 1,
+    "deux": 2, "second": 2, "seconde": 2, "deuxieme": 2,
+    "trois": 3, "troisieme": 3,
+    "quatre": 4, "quatrieme": 4,
+    "cinq": 5, "cinquieme": 5,
+    "six": 6, "sixieme": 6,
+    "sept": 7, "septieme": 7,
+    "huit": 8, "huitieme": 8,
+    "neuf": 9, "neuvieme": 9,
+}
+
+# Transcriptions fautives constatees. Certaines de ces formes sont des mots
+# courants (« si », « cette ») : cette table ne s applique qu au mot voisin
+# d un nombre attendu, jamais a une phrase entiere.
+NOMBRES_ENTENDUS = {
+    "d": 2, "de": 2, "du": 2, "des": 2, "dos": 2, "deu": 2, "oeufs": 2,
+    "toi": 3, "troie": 3, "trop": 3,
+    "cat": 4, "quatr": 4, "car": 4,
+    "sain": 5, "sein": 5, "saint": 5, "cinque": 5,
+    "si": 6, "sis": 6, "scie": 6,
+    "cette": 7, "cet": 7, "set": 7,
+    "wit": 8, "uit": 8, "huite": 8,
+    "neu": 9, "oeuf": 9,
+}
+
+
+def nombre_entendu(mot: str, maximum: int = 9):
+    """
+    Le nombre qu un mot designe, meme mal transcrit. None si ce n en est pas un.
+
+    A n utiliser que la ou un nombre est attendu -- typiquement le mot voisin
+    de « ecran ». « va sur l ecran 2 » est regulierement transcrit « va sur
+    ecran de » : sans cette lecture, l assistant demande quel ecran alors que
+    l utilisateur vient de le dire.
+    """
+    mot = text_utils.normalize(mot or "").strip().lower()
+    if not mot:
+        return None
+    if mot.isdigit():
+        valeur = int(mot)
+        return valeur if 1 <= valeur <= maximum else None
+    for table in (NOMBRES_MOTS, NOMBRES_ENTENDUS):
+        valeur = table.get(mot)
+        if valeur is not None and valeur <= maximum:
+            return valeur
+    # Dernier recours : la sonorite. « toi » pour « trois », « cat » pour
+    # « quatre ».
+    for texte, valeur in NOMBRES_MOTS.items():
+        if valeur <= maximum and se_ressemblent(mot, texte):
+            return valeur
+    return None
+
+
+# --------------------------------------------------------------------------
 # 1. Confusions connues
 # --------------------------------------------------------------------------
 # Chaque correction est VERIFIEE avant d etre retenue : elle ne s applique

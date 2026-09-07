@@ -41,10 +41,38 @@ def music_folder(config) -> Path:
     return Path(win_utils.expand(configure or "%USERPROFILE%/Music"))
 
 
+# Les mots qui designent un ecran, et ceux qui s intercalent avant son numero.
+MOTS_ECRAN = ("ecran", "ecrans", "moniteur", "moniteurs", "affichage", "screen")
+MOTS_LIAISON = ("numero", "no", "l", "le", "la", "les", "sur", "est")
+
+
+def nombre_voisin_d_un_ecran(tokens) -> int | None:
+    """
+    Le numero colle au mot « ecran », meme mal transcrit.
+
+    « va sur l ecran 2 » revient souvent en « va sur ecran de » : le nombre
+    est perdu par la reconnaissance vocale, mais sa place dans la phrase, elle,
+    ne bouge pas. On ne regarde donc que les mots voisins immediats -- lire
+    « de » comme « deux » n aurait aucun sens ailleurs.
+    """
+    from core import deduction
+
+    for i, token in enumerate(tokens):
+        if token not in MOTS_ECRAN:
+            continue
+        for j in (i + 1, i + 2, i - 1):
+            if not 0 <= j < len(tokens) or tokens[j] in MOTS_LIAISON:
+                continue
+            valeur = deduction.nombre_entendu(tokens[j])
+            if valeur is not None:
+                return valeur
+    return None
+
+
 def numero_ecran(ctx: CommandContext) -> int | None:
     """
     Extrait le numero d ecran d une phrase : « ecran 2 », « deuxieme ecran »,
-    « ecran de droite », « autre ecran ».
+    « ecran de droite », « autre ecran », « ecran de » (2 mal entendu).
     """
     tokens = ctx.tokens
     for i, token in enumerate(tokens):
@@ -53,6 +81,8 @@ def numero_ecran(ctx: CommandContext) -> int | None:
         if token in ORDINAUX:
             return ORDINAUX[token]
 
+    # Les reperes de position passent AVANT la deduction phonetique : dans
+    # « ecran de droite », « de » est une preposition, pas le chiffre deux.
     ecrans = desktop.ecrans()
     if any(text_utils.fuzzy_in(mot, tokens) for mot in ("droite", "droit")):
         return len(ecrans) if ecrans else None
@@ -63,7 +93,7 @@ def numero_ecran(ctx: CommandContext) -> int | None:
     if text_utils.fuzzy_in("autre", tokens):
         # « l autre ecran » : celui qui n affiche pas la fenetre active.
         return 2 if len(ecrans) > 1 else None
-    return None
+    return nombre_voisin_d_un_ecran(tokens)
 
 
 def ecran_cible(ctx: CommandContext) -> int:
