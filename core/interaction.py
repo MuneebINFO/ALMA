@@ -344,11 +344,19 @@ def _clic_physique(cible: Cible, restaurer: bool = True) -> bool:
                 pass
 
 
-def cliquer(cible: Cible) -> bool:
-    """Active l element, avec repli sur un clic reel."""
+def cliquer(cible: Cible, physique: bool = False) -> bool:
+    """
+    Active l element, avec repli sur un clic reel.
+
+    `physique` force d emblee le clic a la souris. L activation par l API
+    d accessibilite est plus propre -- elle ne bouge pas le pointeur -- mais
+    une page peut l accepter sans rien en faire : elle repond alors « c est
+    fait » alors que rien n a bouge. Quand l appelant sait verifier l effet,
+    il peut donc redemander un vrai clic.
+    """
     from core import desktop
 
-    if _activer(cible):
+    if not physique and _activer(cible):
         return True
     fenetre = getattr(cible, "fenetre", None)
     if fenetre is not None:

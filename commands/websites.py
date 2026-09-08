@@ -443,3 +443,249 @@ def retour_accueil(ctx: CommandContext) -> Response:
     if desktop.naviguer_dans_fenetre(fenetre, accueil):
         return Response(text="Retour à l'accueil de " + nom + ".")
     return Response.error("Je n'ai pas pu revenir à l'accueil de " + nom + ".")
+
+
+# --------------------------------------------------------------------------
+# « mets la serie The Flash » : rechercher, ouvrir la fiche, s arreter la
+# --------------------------------------------------------------------------
+# Ce qu on demande a un service de streaming tient en trois gestes : chercher,
+# choisir le bon resultat, ouvrir sa fiche. La lecture elle-meme reste au
+# doigt de l utilisateur -- c est l ecran ou l on appuie sur « Lecture » qui
+# est vise, pas le film lance a son insu.
+NATURES = (r"(?:serie|series|film|films|saison|episode|episodes|documentaire|"
+           r"anime|animes|dessin\s+anime|emission|spectacle|match|programme)")
+
+VERBES_LANCER = (r"(?:met[s]?|mettre|lance|lancer|joue|jouer|regarde|regarder|"
+                 r"ouvre|ouvrir|trouve|trouver|cherche|chercher|affiche|afficher)")
+
+# Ce qui prouve qu on est arrive sur la fiche d un titre.
+MOTS_LECTURE = ("lecture", "play", "lire", "reprendre", "regarder maintenant",
+                "bande-annonce", "bande annonce", "episodes", "saison")
+
+ATTENTE_RESULTATS = 12.0     # les catalogues sont lents a repondre
+ATTENTE_FICHE = 6.0
+TENTATIVES_CLIC = 2
+STABILISATION = 1.5
+
+# Un resultat de catalogue est une affiche. En dessous de cette taille, c est
+# un fragment de texte -- souvent celui du message « nous n avons pas ce
+# titre, mais voici autre chose », qu il ne faut surtout pas prendre pour un
+# resultat.
+TAILLE_VIGNETTE = 56
+
+# Ce a quoi ressemble l adresse d un lecteur : le service a lance la lecture
+# de lui-meme au lieu d ouvrir la fiche.
+ADRESSES_LECTURE = ("/watch", "/play/", "/video/", "/lecture")
+PAS_DE_SONDAGE = 0.8
+
+
+def _site_courant(ctx: CommandContext):
+    """
+    Le service sur lequel on travaille. Retourne (cle, url) ou None.
+
+    D abord celui dont on vient de parler, puis celui affiche sur l ecran de
+    travail -- reconnu par son adresse, sinon par le titre de sa fenetre.
+    """
+    from commands.interaction import fenetre_visee
+    from core import browser_tabs
+
+    cle = ctx.assistant.rappeler("site")
+    sites = ctx.config.get("websites", {}) or {}
+    if cle and cle in sites:
+        entree = sites[cle]
+        url = entree.get("url") if isinstance(entree, dict) else str(entree)
+        if url:
+            return cle, url
+
+    fenetre = fenetre_visee(ctx)
+    if fenetre is None:
+        return None
+    hote = browser_tabs.racine_du_site(browser_tabs.adresse_courante(fenetre))
+    if hote:
+        jetons = set(text_utils.tokenize(text_utils.normalize(hote)))
+        for cle, entree in sites.items():
+            url = entree.get("url") if isinstance(entree, dict) else str(entree)
+            if not url:
+                continue
+            for terme in termes_de_recherche(cle, entree):
+                if text_utils.normalize(terme).strip() in jetons:
+                    return cle, url
+    return site_du_titre(ctx.config, fenetre.titre)
+
+
+def _attendre(fenetre, predicat, delai: float, taille_min: int = 12):
+    """Sonde la page jusqu a ce que `predicat` reponde, ou que le delai expire."""
+    import time
+
+    from core import interaction
+
+    fin = time.time() + delai
+    while True:
+        trouve = predicat(interaction.elements_cliquables(fenetre, taille_min=taille_min))
+        if trouve:
+            return trouve
+        if time.time() >= fin:
+            return None
+        time.sleep(PAS_DE_SONDAGE)
+
+
+# Ce qui suit la nature n est pas toujours un titre : « mets le film PLUS
+# FORT » est un reglage de volume, « mets la serie EN PAUSE » une commande de
+# lecture. Ces phrases appartiennent a d autres commandes, qui les traitent
+# mieux ; on leur rend la main.
+FAUX_TITRES = (
+    "plus fort", "moins fort", "en pause", "sur pause", "en marche",
+    "en lecture", "en route", "en sourdine", "en silence", "en avant",
+    "en arriere", "au debut", "a la fin", "plus vite", "moins vite",
+    "en plein ecran", "en boucle",
+)
+
+
+def _est_un_titre(ctx: CommandContext) -> bool:
+    """Garde : ce qui suit doit ressembler a un titre, pas a un ordre."""
+    titre = text_utils.normalize(_titre_propre(ctx.group("titre"))).strip()
+    return bool(titre) and titre not in FAUX_TITRES
+
+
+def _titre_propre(titre: str) -> str:
+    """
+    Retire l article qui relie la nature au titre.
+
+    « mets un episode DE Friends » : le titre cherche est « Friends », pas
+    « de Friends », qui ne ressortirait dans aucun catalogue.
+    """
+    titre = (titre or "").strip()
+    for liaison in ("de ", "du ", "des ", "d ", "d'"):
+        if titre.lower().startswith(liaison):
+            return titre[len(liaison):].strip()
+    return titre
+
+
+def _ouvrir_le_resultat(fenetre, titre):
+    """
+    Clique le bon resultat et attend d etre sur sa fiche.
+
+    Retourne (cible, nom) ; `nom` vaut None si la fiche ne s est pas ouverte.
+
+    Deux precautions, apprises en observant les catalogues. Le resultat
+    apparait avant que la page ne soit prete a l ouvrir : on laisse donc
+    passer un instant, et l element est RETROUVE juste avant chaque essai,
+    car une page qui se construit encore remplace ses noeuds sous nos pieds.
+    """
+    import time
+
+    from core import interaction
+
+    cible = None
+    for tentative in range(TENTATIVES_CLIC):
+        cible = _attendre(
+            fenetre,
+            lambda cibles: interaction.chercher_cible(cibles, titre),
+            ATTENTE_RESULTATS if tentative == 0 else 2.0,
+            taille_min=TAILLE_VIGNETTE,
+        )
+        if cible is None:
+            return None, None
+        if tentative == 0:
+            time.sleep(STABILISATION)
+            # La grille a pu se reorganiser entre-temps.
+            cible = interaction.chercher_cible(
+                interaction.elements_cliquables(fenetre, taille_min=TAILLE_VIGNETTE),
+                titre) or cible
+        interaction.cliquer(cible)
+        if _attendre(fenetre, _fiche_ouverte, ATTENTE_FICHE):
+            return cible, interaction.titre_affiche(cible.nom)[:60]
+        time.sleep(1.0)
+    return cible, None
+
+
+def _fiche_ouverte(cibles) -> bool:
+    """La page propose-t-elle de lancer la lecture ?"""
+    for cible in cibles:
+        nom = text_utils.normalize(cible.nom).strip()
+        if any(mot in nom for mot in MOTS_LECTURE):
+            return True
+    return False
+
+
+@command(
+    name="lancer_titre",
+    patterns=[
+        r"^" + VERBES_LANCER + r"\s+(?:moi\s+)?"
+        r"(?:la\s+|le\s+|l\s+|les\s+|un\s+|une\s+|des\s+)?"
+        + NATURES
+        + r"\s+(?P<titre>.+?)(?:\s+sur\s+(?P<site>[\w\s+.-]+))?$",
+    ],
+    keywords=[["mets", "serie"], ["mets", "film"], ["lance", "serie"], ["lance", "film"]],
+    category="Sites web",
+    description="Chercher un film ou une série et ouvrir sa fiche",
+    examples=["mets la série The Flash", "lance le film Interstellar sur Netflix"],
+    priority=98,
+    guard=_est_un_titre,
+)
+def lancer_titre(ctx: CommandContext) -> Response:
+    """
+    Fait toute la demarche : recherche, choix du bon resultat, ouverture de
+    la fiche. On s arrete devant le bouton « Lecture » -- lancer le film est
+    une decision qui revient a l utilisateur.
+    """
+    from urllib.parse import quote_plus
+
+    from commands.interaction import fenetre_visee
+    from core import interaction
+
+    titre = _titre_propre(ctx.group("titre"))
+    dit_site = (ctx.group("site") or "").strip()
+    resolu = resolve_website(ctx.config, dit_site) if dit_site else None
+    if dit_site and resolu is None:
+        # « sur » faisait partie du titre : « Le Pont sur la riviere Kwai ».
+        titre = (titre + " sur " + dit_site).strip()
+    if not titre:
+        return Response.error("Quel titre dois-je chercher ?")
+
+    if resolu is None:
+        resolu = _site_courant(ctx)
+    if resolu is None:
+        return Response.error(
+            "Sur quel service ? Dites par exemple « mets la série "
+            + titre + " sur Netflix »."
+        )
+    cle, url = resolu
+    entree = (ctx.config.get("websites", {}) or {}).get(cle, {})
+    modele = entree.get("search_url") if isinstance(entree, dict) else None
+    if not modele:
+        return Response.error("Je ne sais pas chercher un titre sur " + cle + ".")
+
+    ctx.assistant.memoriser("site", cle)
+    ok, _mode = afficher_site(ctx.config, cle,
+                              modele.replace("{q}", quote_plus(titre)),
+                              naviguer=True, assistant=ctx.assistant)
+    if not ok:
+        return Response.error("Je n'ai pas réussi à ouvrir " + cle + ".")
+
+    fenetre = fenetre_visee(ctx)
+    if fenetre is None:
+        return Response.error("Je ne vois plus la fenêtre de " + cle + ".")
+
+    resultat, nom = _ouvrir_le_resultat(fenetre, titre)
+    if resultat is None:
+        return Response.error(
+            "Je ne trouve pas « " + titre + " » sur " + cle + "."
+        )
+    if nom is not None:
+        # Certains services ouvrent la fiche, d autres reprennent la lecture
+        # d un seul clic. On dit ce qui s est reellement passe.
+        from core import browser_tabs
+
+        adresse = browser_tabs.adresse_courante(fenetre).lower()
+        if any(marque in adresse for marque in ADRESSES_LECTURE):
+            return Response(text="Je lance " + nom + ".")
+        return Response(text=nom + " est ouvert. Dites « clique sur lecture » pour lancer.")
+    nom = interaction.titre_affiche(resultat.nom)[:60]
+    # Le resultat a ete clique mais rien ne propose de le lire : c est souvent
+    # que le catalogue ne l a pas et que la page suggere autre chose.
+    return Response.error(
+        "J'ai ouvert « " + nom + " » sur " + cle
+        + ", mais je n'y vois pas de bouton de lecture. "
+        "Le titre n'est peut-être pas disponible sur ce service."
+    )

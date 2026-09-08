@@ -40,6 +40,14 @@
       ]
     },
     {
+      "action": "Chercher un film ou une série et ouvrir sa fiche",
+      "phrases": [
+        "mets la série X",
+        "lance le film X sur Y",
+        "regarde le documentaire X"
+      ]
+    },
+    {
       "action": "Lister les sites que je sais ouvrir",
       "phrases": [
         "quels sites connais-tu"

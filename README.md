@@ -492,6 +492,34 @@ YouTube       "à 30" → 30    "à 75" → 75    (1.0 s)
 Netflix lands one point off because its own slider does not sit exactly on a
 whole percent — that is the player's granularity, not a rounding error.
 
+### Putting a film or a series on
+
+```
+mets la série The Flash               on the service you are already on
+lance le film Interstellar sur Netflix
+regarde le documentaire Cosmos
+mets un épisode de Friends
+```
+
+ALMA does the whole errand: it opens the service — reusing the tab if one is
+already there — searches for the title, picks the matching result and opens its
+page. **It stops in front of the Play button.** Starting the film is your
+decision, not something that happens while your back is turned. Say
+"clique sur lecture" when you are ready.
+
+Two things had to be learned by watching the real catalogues. A result appears
+in the page before the page is ready to open it, so ALMA lets it settle and
+looks the element up again just before clicking — a grid still being built
+replaces its nodes underfoot. And a search that finds nothing still puts the
+words on screen: Netflix answers *We don't have "The Flash", but…* with the
+title in a 91×30 line of text. A poster is 364×205, so anything that small is
+not a result, and ALMA says it cannot find the title instead of clicking the
+apology.
+
+Some services resume playback on a single click rather than opening the page —
+a title you had already started, typically. ALMA reads the address afterwards
+and tells you which of the two happened.
+
 ### Opening a site and searching inside it
 
 ```
