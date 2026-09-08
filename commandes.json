@@ -557,12 +557,11 @@
       ]
     },
     {
-      "action": "Ouvrir une application (Chrome, Word, VS Code, Spotify...)",
+      "action": "Ouvrir une application, au besoin sur un écran précis",
       "phrases": [
         "ouvre Chrome",
         "lance la calculatrice",
-        "démarre le bloc-notes",
-        "ouvre Spotify"
+        "ouvre Visual Studio Code sur l'écran 1"
       ]
     },
     {

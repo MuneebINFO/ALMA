@@ -223,6 +223,93 @@ def mettre_au_premier_plan(hwnd) -> bool:
         return False
 
 
+SW_RESTORE = 9
+SW_MAXIMISER = 3
+SWP_SANS_ORDRE = 0x0004
+SWP_SANS_ACTIVER = 0x0010
+MARGE_ECRAN = 60          # on ne colle pas la fenetre aux bords
+
+
+def poignees_visibles() -> set:
+    """Les fenetres visibles a cet instant, pour reperer celles qui arrivent."""
+    return {f.handle for f in fenetres()}
+
+
+# Fenetres de passage : beaucoup de lanceurs sont des scripts, et la console
+# qui les execute apparait avant l application. La deplacer a la place de
+# l application serait la seule chose visible du travail demande.
+PROCESSUS_DE_PASSAGE = ("cmd.exe", "conhost.exe", "powershell.exe",
+                        "windowsterminal.exe", "openconsole.exe", "pwsh.exe")
+
+
+def attendre_nouvelle_fenetre(connues: set, delai: float = 12.0,
+                              processus: str = "") -> Fenetre | None:
+    """
+    Attend qu une fenetre inconnue apparaisse. Retourne la fenetre, ou None.
+
+    Une application met du temps a s afficher, et certaines ouvrent d abord
+    une console ou un ecran de demarrage : on prend la premiere fenetre
+    nommee qui n etait pas la avant, en laissant passer les consoles -- sauf
+    si c est justement une console qu on a demandee.
+    """
+    import time
+
+    attendu = (processus or "").lower()
+    fin = time.time() + delai
+    while time.time() < fin:
+        for fenetre in fenetres():
+            if fenetre.handle in connues or not fenetre.titre.strip():
+                continue
+            nom = fenetre.processus.lower()
+            if attendu:
+                if attendu not in nom:
+                    continue
+            elif nom in PROCESSUS_DE_PASSAGE:
+                continue
+            return fenetre
+        time.sleep(0.25)
+    return None
+
+
+def deplacer_vers_ecran(handle, index: int) -> bool:
+    """
+    Deplace une fenetre sur l ecran demande, en gardant sa taille.
+
+    Une fenetre agrandie doit d abord etre restauree : agrandie, elle est
+    collee a son ecran et refuse de bouger. On la ragrandit ensuite, sur le
+    nouvel ecran cette fois.
+    """
+    if user32 is None:
+        return False
+    cible = next((e for e in ecrans() if e.index == index), None)
+    if cible is None:
+        return False
+    try:
+        agrandie = bool(user32.IsZoomed(handle))
+        if agrandie:
+            user32.ShowWindow(handle, SW_RESTORE)
+            import time
+
+            time.sleep(0.25)
+        rect = wintypes.RECT()
+        if not user32.GetWindowRect(handle, ctypes.byref(rect)):
+            return False
+        largeur = min(rect.right - rect.left, cible.largeur - MARGE_ECRAN)
+        hauteur = min(rect.bottom - rect.top, cible.hauteur - MARGE_ECRAN)
+        largeur = max(largeur, 320)
+        hauteur = max(hauteur, 240)
+        gauche = cible.rect[0] + (cible.largeur - largeur) // 2
+        haut = cible.rect[1] + (cible.hauteur - hauteur) // 2
+        user32.SetWindowPos(handle, 0, gauche, haut, largeur, hauteur,
+                            SWP_SANS_ORDRE | SWP_SANS_ACTIVER)
+        if agrandie:
+            user32.ShowWindow(handle, SW_MAXIMISER)
+        return True
+    except Exception as exc:
+        log.debug("Deplacement de fenetre impossible : %s", exc)
+        return False
+
+
 def naviguer_dans_fenetre(fenetre: Fenetre, url: str) -> bool:
     """
     Fait naviguer l onglet ACTIF d une fenetre de navigateur vers une URL.

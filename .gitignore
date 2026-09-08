@@ -44,3 +44,6 @@ desktop.ini
 
 # Vidages de plantage laisses par des outils Windows
 *.stackdump
+
+# Inventaire des applications installees : propre a chaque machine
+data/applications_installees.json

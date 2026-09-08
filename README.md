@@ -443,6 +443,37 @@ address bar cannot be read, the window title identifies the site instead —
 minus the browser's own name, or every Chrome window would look like a Google
 page.
 
+### Opening any installed application
+
+```
+ouvre Discord
+lance IntelliJ
+ouvre Visual Studio Code sur l'écran 1
+ouvre Paint sur le deuxième écran
+```
+
+`config.yaml` lists the common applications with their exact paths, and those
+still come first. Everything else is looked for where Windows keeps it: the
+**Start Menu** — 96 shortcuts read in 0.03 s on the reference machine, which
+covers nearly everything — and, only if that finds nothing, the system's own
+list, which adds the Store applications that have no shortcut. That second
+source costs about two seconds, so it is cached on disk for a day.
+
+Naming one word of the application is enough: "ouvre code" finds *Visual Studio
+Code*. Uninstallers, documentation and release notes are filtered out, since
+offering them would help nobody.
+
+**A new window opens on screen 1 unless you say otherwise**, so it does not
+land on top of whatever the other screen is showing. Name a screen and it goes
+there instead — "sur l'écran 2", "sur le deuxième écran", "sur l'écran de
+droite" all work, and so does the "de" that speech recognition returns in place
+of "deux".
+
+One subtlety worth knowing: several launchers are scripts, and the console that
+runs them appears before the application does. Moving *that* would be the only
+visible result of the request, so console windows are skipped — unless a console
+is what you asked for.
+
 ### Two volumes
 
 A video on a streaming site has a level of its own, separate from the
@@ -896,6 +927,7 @@ alma/
 │   ├── tts.py              speech synthesis (neural, SAPI5 fallback)
 │   ├── voice_neural.py     edge-tts neural voice
 │   ├── stt.py              speech recognition and microphone level metering
+│   ├── applications.py     inventory of the applications installed on the machine
 │   ├── scheduler.py        reminders and timers
 │   ├── storage.py          JSON storage (atomic writes)
 │   ├── win_utils.py        Windows helpers (volume, screenshots…)

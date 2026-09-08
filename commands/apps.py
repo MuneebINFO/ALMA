@@ -7,9 +7,13 @@ La table nom parle -> executable vit dans config.yaml (section
 
 from __future__ import annotations
 
+import logging
+
 from core import text_utils, win_utils
 from core.context import CommandContext, Response
 from core.registry import command
+
+log = logging.getLogger(__name__)
 
 # Mots parasites fréquents devant un nom d application.
 _FILLERS = (
@@ -86,29 +90,185 @@ def _is_known_app(ctx: CommandContext) -> bool:
     return cible not in alias_exacts(ctx.config.get("websites", {}))
 
 
+# Une application ouverte sans precision va sur l ecran principal : c est la
+# ou l on travaille, l autre servant souvent a autre chose.
+ECRAN_PAR_DEFAUT = 1
+
+
+# Mots qui relient le nom de l application a la mention d ecran, et qui ne
+# font donc partie ni de l un ni de l autre.
+LIAISONS_ECRAN = ("sur", "dans", "a", "vers", "l", "le", "la", "du", "de", "des")
+
+
+def separer_ecran(demande: str) -> tuple:
+    """
+    Detache la mention d ecran du nom d application.
+
+    Retourne (nom, numero d ecran ou None). Le numero se lit comme partout
+    ailleurs : chiffre, ordinal, « de droite », et meme « de » tout court,
+    que la reconnaissance vocale rend a la place de « deux ».
+    """
+    from commands.media import MOTS_ECRAN
+    from core import deduction, desktop
+
+    mots = text_utils.tokenize(text_utils.normalize(demande or ""))
+    position = next((i for i, mot in enumerate(mots) if mot in MOTS_ECRAN), None)
+    if position is None or position == 0:
+        return (demande or "").strip(), None
+
+    apres = mots[position + 1:position + 3]
+    avant = mots[max(0, position - 2):position]
+
+    numero, mot_du_numero = None, None
+    if any(mot in ("droite", "droit") for mot in apres):
+        numero = len(desktop.ecrans()) or None
+    elif "gauche" in apres or "principal" in apres:
+        numero = 1
+    else:
+        # Apres « ecran » d abord, puis juste avant : « le deuxieme ecran ».
+        for candidat in list(apres) + list(reversed(avant)):
+            numero = deduction.nombre_entendu(candidat)
+            if numero is not None:
+                mot_du_numero = candidat
+                break
+    if numero is None:
+        return (demande or "").strip(), None
+
+    # Tout ce qui introduit la mention d ecran appartient a la mention, pas
+    # au nom de l application : « Paint sur le deuxieme ecran » -> « Paint ».
+    coupe = position
+    while coupe > 0 and (mots[coupe - 1] in LIAISONS_ECRAN
+                         or mots[coupe - 1] == mot_du_numero):
+        coupe -= 1
+    if coupe == 0:
+        return "", numero
+
+    # On revient au texte d origine pour garder accents et majuscules.
+    norme = text_utils.normalize(demande)
+    curseur, fin = 0, 0
+    for i, mot in enumerate(mots[:coupe]):
+        curseur = norme.find(mot, curseur)
+        if curseur < 0:
+            break
+        curseur += len(mot)
+        fin = curseur
+    return demande[:fin].strip(), numero
+
+
+def _est_une_application(ctx: CommandContext) -> bool:
+    """
+    Guard : la phrase designe-t-elle une application ?
+
+    Trois cas, dans l ordre. Un nom qui figure tel quel dans la configuration
+    des applications en est une. Un nom qui figure tel quel dans celle des
+    SITES n en est pas une -- « ouvre Google » veut la page, pas le navigateur
+    qui porte son nom. Sinon, on regarde ce qui est reellement installe.
+    """
+    from core import applications
+
+    nom, _ecran = separer_ecran(ctx.arg)
+    cible = clean_target(nom)
+    if not cible:
+        return False
+    if cible in alias_exacts(ctx.config.get("applications", {})):
+        return True
+    if cible in alias_exacts(ctx.config.get("websites", {})):
+        return False
+    if resolve_app(ctx.config, nom) is not None:
+        return True
+    return applications.chercher(nom) is not None
+
+
+def _placer(connues: set, index: int, processus: str = "") -> bool:
+    """
+    Attend que la fenetre apparaisse et l amene sur l ecran demande.
+
+    `processus` vient de la configuration quand elle le precise : c est le
+    seul moyen sur de reconnaitre l application parmi les fenetres qui
+    s ouvrent en meme temps.
+    """
+    from core import desktop
+
+    fenetre = desktop.attendre_nouvelle_fenetre(connues, processus=processus)
+    if fenetre is None:
+        return False
+    if fenetre.ecran == index:
+        return True
+    return desktop.deplacer_vers_ecran(fenetre.handle, index)
+
+
+def _joli(libelle: str) -> str:
+    """« bloc note » se dit « Bloc note » quand on l annonce."""
+    libelle = (libelle or "").strip()
+    return libelle[:1].upper() + libelle[1:] if libelle else libelle
+
+
 @command(
     name="open_app",
     patterns=[r"^" + OPEN_VERBS + r"\s+(.+)$"],
     category="Applications",
-    description="Ouvrir une application (Chrome, Word, VS Code, Spotify...)",
-    examples=["ouvre Chrome", "lance la calculatrice", "demarre VS Code"],
+    description="Ouvrir une application, au besoin sur un écran précis",
+    examples=["ouvre Chrome", "lance la calculatrice",
+              "ouvre Visual Studio Code sur l'écran 1"],
     priority=60,
-    guard=_is_known_app,
+    guard=_est_une_application,
 )
 def open_app(ctx: CommandContext) -> Response:
-    """Ouvre une application declaree dans la configuration."""
-    resolved = resolve_app(ctx.config, ctx.arg)
-    if resolved is None:
-        return Response.error("Je ne connais pas cette application.")
-    key, entry = resolved
-    label = (entry.get("aliases") or [key])[0]
-    ok, detail = win_utils.launch(entry.get("paths", []) or [])
-    if ok:
-        return Response(text="J'ouvre " + label + ".")
-    return Response.error(
-        "Impossible d ouvrir " + label + ". Vérifiez le chemin dans config.yaml "
-        "(applications." + key + ".paths). Détail : " + detail
-    )
+    """
+    Ouvre une application, declaree ou simplement installee.
+
+    La configuration reste prioritaire -- elle donne les chemins exacts --
+    puis on cherche dans ce qui est installe sur la machine. La fenetre est
+    amenee sur l ecran demande, ou sur l ecran principal par defaut.
+    """
+    from core import applications, desktop
+
+    nom, ecran = separer_ecran(ctx.arg)
+    if not nom:
+        return Response.error("Quelle application dois-je ouvrir ?")
+    ecrans = desktop.ecrans()
+    if ecran is not None and ecrans and ecran > len(ecrans):
+        return Response.error(
+            "Je ne vois que " + str(len(ecrans)) + " écran(s), pas d'écran " + str(ecran) + "."
+        )
+    index = ecran or ECRAN_PAR_DEFAUT
+    connues = desktop.poignees_visibles()
+
+    resolu = resolve_app(ctx.config, nom)
+    if resolu is not None and _prefere_lapplication(ctx.config, nom):
+        cle, entree = resolu
+        libelle = (entree.get("aliases") or [cle])[0]
+        ok, detail = win_utils.launch(entree.get("paths", []) or [])
+        if ok:
+            _placer(connues, index, processus=str(entree.get("process", "") or ""))
+            return Response(text="J'ouvre " + _joli(libelle) + _sur(ecran) + ".")
+        # Le chemin configure est faux : l application est peut-etre installee
+        # ailleurs, on continue plutot que d abandonner.
+        log.debug("Chemin configure inutilisable pour %s : %s", cle, detail)
+
+    trouvee = applications.chercher(nom)
+    if trouvee is None:
+        return Response.error(
+            "Je ne trouve pas d'application « " + nom + " » sur cet ordinateur."
+        )
+    libelle, cible = trouvee
+    ok, detail = applications.lancer(cible)
+    if not ok:
+        return Response.error("Impossible d'ouvrir " + libelle + ". " + detail)
+    _placer(connues, index)
+    return Response(text="J'ouvre " + _joli(libelle) + _sur(ecran) + ".")
+
+
+def _sur(ecran) -> str:
+    return (" sur l'écran " + str(ecran)) if ecran else ""
+
+
+def _prefere_lapplication(config, nom: str) -> bool:
+    """La configuration l emporte, sauf si le nom designe exactement un site."""
+    cible = clean_target(nom)
+    if cible in alias_exacts(config.get("applications", {})):
+        return True
+    return cible not in alias_exacts(config.get("websites", {}))
 
 
 @command(
