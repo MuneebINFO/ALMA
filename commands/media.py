@@ -178,6 +178,7 @@ def media_pause_tout(ctx: CommandContext) -> Response:
 
 @command(
     name="media_what_is_playing",
+    informatif=True,
     patterns=[
         r"(?:qu\s+est\s+ce\s+qui\s+joue|qu\s+est\s+ce\s+qu\s+on\s+ecoute|"
         r"quelle?\s+(?:musique|chanson|video)\s+(?:joue|passe|est\s+en\s+cours)|"

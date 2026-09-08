@@ -10,6 +10,7 @@ from core.registry import by_category, command
 
 @command(
     name="help",
+    informatif=True,
     patterns=[
         r"^(?:aide|help|aide\s+moi|commandes?|menu)$",
         r"(?:que|qu\s+est\s+ce\s+que)\s+(?:tu\s+)?(?:peux|sais)\s+(?:tu\s+)?faire",
@@ -45,6 +46,7 @@ def show_help(ctx: CommandContext) -> Response:
 
 @command(
     name="repeat_last",
+    informatif=True,
     patterns=[r"^(?:repete|repeter|refais|encore|again|recommence)\s*(?:la\s+derniere\s+commande)?$"],
     category="Divers",
     description="Répéter la dernière commande",
@@ -62,6 +64,7 @@ def repeat_last(ctx: CommandContext) -> Response:
 
 @command(
     name="history",
+    informatif=True,
     patterns=[
         r"(?:qu\s+est\s+ce\s+que\s+je\s+t\s+ai\s+demande|historique|mes\s+dernieres\s+commandes)",
         r"^history$",
@@ -107,6 +110,7 @@ def clear_history(ctx: CommandContext) -> Response:
 
 @command(
     name="exit",
+    informatif=True,
     # "quitte" et "stop" sont ancres en fin de phrase : sans cela,
     # "quitte Spotify" fermerait Alma au lieu de fermer Spotify.
     # "salut Alma" reste une salutation, pas un adieu.

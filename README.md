@@ -126,6 +126,18 @@ general:
 If a particular mis-transcription keeps coming back, `python diagnostic_appel.py`
 shows exactly what was heard and prints the lines to add to `wake_variants`.
 
+**Proper nouns are matched by ear.** "Muneeb" comes back from the recogniser as
+"Mounib" — two thirds alike in letters, which is below any sane threshold, but
+the same word out loud. When nothing else matches, names are compared by sound,
+so a profile or a title still gets found.
+
+**It answers questions, not commands.** Asking the time, the weather, a
+calculation, a joke or a list gets a spoken reply. An action that works does
+not: scrolling, clicking, opening a tab, setting the volume all show their own
+result, and narrating them would talk over what you are looking at. The text
+still appears under the orb — it is only the voice that stays quiet. Failures
+always speak, since nothing on screen would tell you otherwise.
+
 ### Three ways to talk to it
 
 | You say | What happens |

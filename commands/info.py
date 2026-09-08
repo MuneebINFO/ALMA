@@ -33,6 +33,7 @@ WMO_CODES = {
 
 @command(
     name="get_time",
+    informatif=True,
     patterns=[
         r"(?:quelle?\s+heure\s+(?:est\s+il|il\s+est)|il\s+est\s+quelle\s+heure)",
         r"^(?:heure|l\s+heure)$",
@@ -53,6 +54,7 @@ def get_time(ctx: CommandContext) -> Response:
 
 @command(
     name="get_date",
+    informatif=True,
     patterns=[
         r"(?:quel\s+jour\s+(?:sommes\s+nous|est\s+on|on\s+est)|quelle?\s+est\s+la\s+date)",
         r"^(?:date|la\s+date|quel\s+jour)$",
@@ -110,6 +112,7 @@ def _forecast(latitude: float, longitude: float, timeout: int = 8):
 
 @command(
     name="weather",
+    informatif=True,
     # Motifs ancres en debut de phrase : sinon "google météo Bruxelles"
     # serait capture ici au lieu de partir vers la recherche Google.
     patterns=[

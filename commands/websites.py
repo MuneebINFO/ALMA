@@ -171,6 +171,7 @@ def open_raw_url(ctx: CommandContext) -> Response:
 
 @command(
     name="list_websites",
+    informatif=True,
     patterns=[r"(quels?|liste|list).*(sites?|websites?)"],
     category="Sites web",
     description="Lister les sites que je sais ouvrir",
@@ -680,7 +681,7 @@ def lancer_titre(ctx: CommandContext) -> Response:
         adresse = browser_tabs.adresse_courante(fenetre).lower()
         if any(marque in adresse for marque in ADRESSES_LECTURE):
             return Response(text="Je lance " + nom + ".")
-        return Response(text=nom + " est ouvert. Dites « clique sur lecture » pour lancer.")
+        return Response(text=nom + " est ouvert.")
     nom = interaction.titre_affiche(resultat.nom)[:60]
     # Le resultat a ete clique mais rien ne propose de le lire : c est souvent
     # que le catalogue ne l a pas et que la page suggere autre chose.

@@ -7,6 +7,7 @@ securite, un score sur mots-cles tolerant aux fautes de frappe.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 from dataclasses import dataclass
@@ -120,5 +121,20 @@ class Router:
         if result is None:
             return Response(text="", speak=False), resolution
         if isinstance(result, str):
-            return Response(text=result), resolution
-        return result, resolution
+            result = Response(text=result)
+        return _a_voix_haute(result, resolution.command), resolution
+
+
+def _a_voix_haute(reponse: Response, commande) -> Response:
+    """
+    Decide si la reponse doit etre LUE, en plus d etre affichee.
+
+    Regle : on ne parle que pour repondre a une question, ou pour dire qu on
+    n a pas compris. Une action qui aboutit se voit -- la commenter reviendrait
+    a expliquer a l utilisateur ce qu il vient de demander.
+    """
+    if not reponse.ok or getattr(commande, "informatif", False):
+        return reponse
+    if not reponse.speak:
+        return reponse
+    return dataclasses.replace(reponse, speak=False)

@@ -102,6 +102,7 @@ def formater(valeur) -> str:
 
 @command(
     name="calculer",
+    informatif=True,
     patterns=[
         r"^(?:combien\s+(?:font|fait|ca\s+fait)|calcule|calculer|resultat\s+de)\s+(.+)$",
         r"^(?:combien\s+ca\s+fait)\s+(.+)$",
@@ -123,6 +124,7 @@ def calculer(ctx: CommandContext) -> Response:
 
 @command(
     name="pile_ou_face",
+    informatif=True,
     patterns=[r"(?:pile\s+ou\s+face|lance\s+(?:une\s+)?piece|tire\s+a\s+pile\s+ou\s+face)"],
     keywords=[["pile", "face"]],
     category="Divers",
@@ -136,6 +138,7 @@ def pile_ou_face(ctx: CommandContext) -> Response:
 
 @command(
     name="lancer_de",
+    informatif=True,
     # « \b » en tete : sans lui, « balance de la musique » contient
     # « lance de » et declencherait un lancer de de.
     patterns=[r"\b(?:lance|jette|tire)\s+(?:un\s+|les\s+)?des?\b",
@@ -157,6 +160,7 @@ def lancer_de(ctx: CommandContext) -> Response:
 
 @command(
     name="nombre_aleatoire",
+    informatif=True,
     patterns=[r"(?:un\s+)?(?:nombre|chiffre)\s+(?:au\s+hasard|aleatoire)\s*"
               r"(?:entre\s+(\d+)\s+et\s+(\d+))?",
               r"(?:tire|choisis|donne)\s+(?:moi\s+)?un\s+nombre\s+entre\s+(\d+)\s+et\s+(\d+)"],

@@ -58,9 +58,32 @@ def resolve_app(config, spoken: str):
     return None
 
 
+def alias_exacts(entrees) -> set:
+    """Tous les noms sous lesquels ces entrees se laissent appeler."""
+    noms = set()
+    for cle, entree in (entrees or {}).items():
+        noms.add(text_utils.normalize(cle).strip())
+        alias = entree.get("aliases", []) if isinstance(entree, dict) else []
+        for nom in alias or ():
+            noms.add(text_utils.normalize(str(nom)).strip())
+    return {n for n in noms if n}
+
+
 def _is_known_app(ctx: CommandContext) -> bool:
-    """Guard : ne prend la main que si la cible est une application connue."""
-    return resolve_app(ctx.config, ctx.arg) is not None
+    """
+    Guard : la cible est-elle une application connue ?
+
+    Nuance : un nom qui designe EXACTEMENT un site connu lui revient, meme
+    s il ressemble au nom d une application. « ouvre Google » veut la page
+    Google, pas le navigateur qui porte son nom -- alors que « ouvre Chrome »,
+    lui, nomme bien l application.
+    """
+    if resolve_app(ctx.config, ctx.arg) is None:
+        return False
+    cible = clean_target(ctx.arg)
+    if cible in alias_exacts(ctx.config.get("applications", {})):
+        return True
+    return cible not in alias_exacts(ctx.config.get("websites", {}))
 
 
 @command(
@@ -118,6 +141,7 @@ def close_app(ctx: CommandContext) -> Response:
 
 @command(
     name="list_apps",
+    informatif=True,
     patterns=[r"(quelles?|liste|list).*(applications?|apps?|logiciels?)",
               r"^(?:liste|montre)\s+(?:les\s+)?apps?$"],
     category="Applications",

@@ -152,7 +152,8 @@ def defiler(ctx: CommandContext) -> Response:
     ):
         return Response.error("Je n'ai pas pu lancer le défilement.")
     sens = "vers le haut" if direction == interaction.HAUT else "vers le bas"
-    return Response(text="Je fais défiler " + sens + ". Dites « arrête » quand ça suffit.")
+    # Pas de mode d emploi : le defilement se voit, et « arrete » l arrete.
+    return Response(text="Je fais défiler " + sens + ".")
 
 
 @command(
@@ -295,10 +296,7 @@ def cliquer_sur(ctx: CommandContext) -> Response:
                 return _cliquer(cible)
 
     quoi = (mot_type + " ") if mot_type else ""
-    return Response.error(
-        "Je ne trouve pas " + quoi + "« " + libelle + " » à l'écran. "
-        "Dites « clique sur la première vidéo » pour choisir par position."
-    )
+    return Response.error("Je ne trouve pas " + quoi + "« " + libelle + " » à l'écran.")
 
 
 def _cliquer(cible) -> Response:

@@ -316,6 +316,7 @@ def choisir_ecran(ctx: CommandContext) -> Response:
 
 @command(
     name="quel_ecran",
+    informatif=True,
     patterns=[
         r"(?:sur\s+)?quel\s+ecran\s+(?:es\s+tu|tu\s+es|suis\s+je|on\s+est|travailles\s+tu)",
         r"^(?:quel\s+est\s+l\s+ecran|ecran\s+actuel|quel\s+ecran)\s*\??$",

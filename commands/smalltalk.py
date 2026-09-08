@@ -31,6 +31,7 @@ def greeting_for_now(user_name: str = "") -> str:
 
 @command(
     name="greet",
+    informatif=True,
     patterns=[r"^(?:bonjour|salut|coucou|bonsoir|hello|hey|yo|hi)\b"],
     category="Conversation",
     description="Dire bonjour",
@@ -45,6 +46,7 @@ def greet(ctx: CommandContext) -> Response:
 
 @command(
     name="how_are_you",
+    informatif=True,
     patterns=[r"(?:comment\s+(?:ca\s+va|vas\s+tu|allez\s+vous)|ca\s+va\s*\?*$|how\s+are\s+you)"],
     category="Conversation",
     description="Prendre des nouvelles",
@@ -63,6 +65,7 @@ def how_are_you(ctx: CommandContext) -> Response:
 
 @command(
     name="thanks",
+    informatif=True,
     patterns=[r"^(?:merci|merci\s+beaucoup|thanks|thank\s+you|nickel|parfait|super)\b"],
     category="Conversation",
     description="Répondre à un remerciement",
@@ -76,6 +79,7 @@ def thanks(ctx: CommandContext) -> Response:
 
 @command(
     name="who_are_you",
+    informatif=True,
     patterns=[r"(?:qui\s+es\s+tu|tu\s+es\s+qui|presente\s+toi|who\s+are\s+you|c\s+est\s+quoi\s+alma)"],
     category="Conversation",
     description="Se présenter",
@@ -94,6 +98,7 @@ def who_are_you(ctx: CommandContext) -> Response:
 
 @command(
     name="joke",
+    informatif=True,
     patterns=[r"(?:raconte|dis|donne)\s*(?:moi)?\s*(?:une|un)?\s*(?:blague|histoire\s+drole|joke)",
               r"^(?:blague|joke)$", r"fais\s+moi\s+rire"],
     keywords=[["blague"], ["joke"]],

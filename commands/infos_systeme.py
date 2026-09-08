@@ -11,6 +11,7 @@ from core.registry import command
 
 @command(
     name="batterie",
+    informatif=True,
     patterns=[r"(?:niveau|etat|combien)\s+(?:de\s+|d\s+)?batterie",
               r"^batterie$", r"(?:il\s+me\s+reste|reste)\s+combien\s+de\s+batterie",
               r"(?:je\s+suis|suis\s+je)\s+charge"],
@@ -44,6 +45,7 @@ def batterie(ctx: CommandContext) -> Response:
 
 @command(
     name="espace_disque",
+    informatif=True,
     patterns=[r"(?:espace|place)\s+(?:libre\s+)?(?:sur\s+le\s+)?disque",
               r"(?:combien|reste)\s+(?:de\s+)?(?:place|espace)",
               r"^disque\s+dur$"],
@@ -72,6 +74,7 @@ def espace_disque(ctx: CommandContext) -> Response:
 
 @command(
     name="adresse_ip",
+    informatif=True,
     patterns=[r"(?:quelle?\s+est\s+)?(?:mon|l)\s+adresse\s+ip",
               r"^(?:adresse\s+)?ip$", r"(?:quelle?\s+est\s+)?mon\s+ip"],
     keywords=[["adresse", "ip"]],

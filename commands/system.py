@@ -231,6 +231,7 @@ def volume_unmute(ctx: CommandContext) -> Response:
 
 @command(
     name="volume_status",
+    informatif=True,
     patterns=[r"(?:quel|quelle)\s+(?:est\s+)?(?:le\s+)?(?:niveau\s+(?:du|de)\s+)?volume"],
     category="Système",
     description="Connaître le niveau de volume",

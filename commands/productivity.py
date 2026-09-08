@@ -34,6 +34,7 @@ def add_note(ctx: CommandContext) -> Response:
 
 @command(
     name="read_notes",
+    informatif=True,
     patterns=[
         r"(?:lis|lire|montre|affiche|liste|donne)\s*(?:moi)?\s*(?:mes|les)?\s*notes",
         r"^(?:mes\s+notes|notes)$",
@@ -144,6 +145,7 @@ def set_timer(ctx: CommandContext) -> Response:
 
 @command(
     name="list_reminders",
+    informatif=True,
     patterns=[
         r"(?:liste|montre|affiche|quels?\s+sont)\s*(?:moi)?\s*(?:mes|les)\s+(?:rappels|minuteurs|alarmes)",
         r"^(?:mes\s+rappels|rappels)$",
@@ -182,6 +184,7 @@ def cancel_reminders(ctx: CommandContext) -> Response:
 
 @command(
     name="read_clipboard",
+    informatif=True,
     patterns=[
         r"(?:lis|lire|montre|affiche|donne)\s*(?:moi)?\s*(?:le\s+)?presse\s*papiers?",
         r"qu\s+est\s+ce\s+qu\s+il\s+y\s+a\s+dans\s+le\s+presse\s*papiers?",

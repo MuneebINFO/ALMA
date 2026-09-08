@@ -56,10 +56,13 @@ DEFAULTS: dict = {
         "stt_engine": "google",
         "stt_language": "fr-FR",
         "vosk_model_path": "",
-        # Seuil de detection de la voix. Beaucoup de micros integres ont un
-        # gain faible : ce plancher volontairement bas evite que Alma reste
-        # sourd. Voir « python diagnostic_micro.py ».
-        "min_threshold": 0.004,
+        # Plancher de detection de la voix. Volontairement bas : une piece
+        # calme se mesure autour de 0,00003, et un plancher trop haut oblige
+        # a crier -- surtout quand un media joue, car l annulation d echo de
+        # la carte son attenue la voix en meme temps que les haut-parleurs.
+        # Montez-le si l assistant se declenche tout seul, et voyez
+        # « python diagnostic_micro.py » pour mesurer votre micro.
+        "min_threshold": 0.0015,
         "noise_factor": 3.5,
         # Duree pendant laquelle Alma reste receptif apres un « Alma » seul.
         "armed_seconds": 60,

@@ -40,6 +40,11 @@ class Command:
     # True quand la commande ne se declenche que si un contexte existe
     # (« recherche Damso » n a de sens qu apres « va sur YouTube »).
     contextuel: bool = False
+    # True quand la commande REPOND quelque chose : une heure, une meteo, une
+    # blague, la liste des notes. Ce sont les seules a etre lues a voix haute
+    # quand tout se passe bien. Une action reussie se voit -- la commenter
+    # ferait perdre du temps a l utilisateur et couvrirait ce qu il regarde.
+    informatif: bool = False
 
     def accepts_source(self, source: str) -> bool:
         return source in self.sources
@@ -61,6 +66,7 @@ def command(
     sources: Sequence = ALL_SOURCES,
     hidden: bool = False,
     contextuel: bool = False,
+    informatif: bool = False,
 ):
     """
     Decorateur d enregistrement d'une commande.
@@ -75,6 +81,9 @@ def command(
     - guard : predicat optionnel ; s il renvoie False, le routeur continue de
       chercher (permet a "ouvre X" d essayer les apps puis les sites web).
     - sources : d ou la commande peut être declenchee (texte, voix, gestes).
+    - informatif : la commande repond quelque chose (heure, meteo, blague).
+      Les autres executent une action, dont le resultat se voit : elles ne
+      sont pas lues a voix haute quand elles reussissent.
     """
 
     def decorator(func: Handler) -> Handler:
@@ -93,6 +102,7 @@ def command(
             sources=tuple(sources),
             hidden=hidden,
             contextuel=contextuel,
+            informatif=informatif,
         )
         _REGISTRY.append(cmd)
         func.command = cmd

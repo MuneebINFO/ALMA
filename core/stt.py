@@ -219,9 +219,22 @@ class LevelMeterListener:
     """
 
     # Plancher absolu : en dessous, on considere que c est du bruit de fond.
-    PLANCHER = 0.004
+    #
+    # Volontairement bas. Le bruit d une piece calme se mesure autour de
+    # 0,00003 : un plancher a 0,004 vaut alors cent trente fois le bruit
+    # reel, et il faut presque crier pour le franchir. C est surtout vrai
+    # quand un media joue : l annulation d echo de la carte son efface le
+    # son des haut-parleurs -- mesure a 0,00001, donc elle marche -- mais
+    # elle attenue la voix par la meme occasion.
+    PLANCHER = 0.0015
     # Multiplicateur applique au bruit ambiant mesure.
     FACTEUR = 3.5
+    # Marge au-dessus du bruit le plus fort entendu pendant la calibration :
+    # c est lui, et non la moyenne, qui dit ce qu il faut depasser.
+    MARGE_PIC = 1.6
+    # Au-dela, on demanderait de crier : mieux vaut quelques declenchements
+    # a vide qu un assistant sourd.
+    SEUIL_MAX = 0.04
 
     def __init__(self, plancher: float | None = None, facteur: float | None = None) -> None:
         self.plancher = self.PLANCHER if plancher is None else float(plancher)
@@ -229,6 +242,7 @@ class LevelMeterListener:
         self.ambient = 0.0
         self.threshold = self.plancher
         self.pic_recent = 0.0        # sert a l auto-gain de l animation
+        self.pic_calibration = 0.0
         self._audio = None
         self._stream = None
 
@@ -288,8 +302,19 @@ class LevelMeterListener:
         return garde
 
     def _appliquer_seuil(self, ambient: float) -> float:
+        """
+        Seuil de declenchement : au-dessus du bruit, aussi bas que possible.
+
+        Trois reperes, dont on garde le plus haut : le plancher absolu, un
+        multiple du bruit moyen, et une marge au-dessus du pic entendu pendant
+        la calibration. Le tout plafonne, car un seuil trop haut rend sourd.
+        """
         self.ambient = ambient
-        self.threshold = max(self.plancher, ambient * self.facteur)
+        self.threshold = min(self.SEUIL_MAX, max(
+            self.plancher,
+            ambient * self.facteur,
+            self.pic_calibration * self.MARGE_PIC,
+        ))
         return self.threshold
 
     def niveau_affiche(self, niveau: float) -> float:
@@ -318,6 +343,9 @@ class LevelMeterListener:
             # On ignore les pics (claquement, toux) : moyenne des 70% les plus bas.
             niveaux.sort()
             retenus = niveaux[: max(1, int(len(niveaux) * 0.7))]
+            # Le bruit le plus fort de la periode, hors valeur aberrante,
+            # dit ce que le seuil doit depasser pour ne pas se declencher seul.
+            self.pic_calibration = niveaux[int(len(niveaux) * 0.97)] if niveaux else 0.0
             return self._appliquer_seuil(sum(retenus) / len(retenus))
         except Exception as exc:
             log.debug("Calibration impossible : %s", exc)

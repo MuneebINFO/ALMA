@@ -52,6 +52,7 @@ def search_youtube(ctx: CommandContext) -> Response:
 
 @command(
     name="ask_claude",
+    informatif=True,
     patterns=[
         r"^(?:demande|demander|pose|poser)\s+a\s+claude\s*(?:que|de|:)?\s*(.*)$",
         r"^claude\s*,?\s+(.+)$",
@@ -84,6 +85,7 @@ def ask_claude(ctx: CommandContext) -> Response:
 
 @command(
     name="search_wikipedia",
+    informatif=True,
     patterns=[
         r"^" + SEARCH_VERBS + r"\s+(.+?)\s+sur\s+wikipedia$",
         r"^wikipedia\s+(.+)$",
@@ -183,6 +185,7 @@ def search_wikipedia(ctx: CommandContext) -> Response:
 
 @command(
     name="translate",
+    informatif=True,
     patterns=[
         r"^(?:traduis|traduire|traduit|translate)\s+(.+?)\s+(?:en|in|vers|to)\s+([a-z]+)$",
         r"^(?:traduis|traduire|traduit|translate)\s+(.+)$",

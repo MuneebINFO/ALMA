@@ -590,4 +590,16 @@ def chercher_cible(cibles: list, termes: str, types=None):
             score = text_utils.similarity(voulu, texte)
             if score > ecart:
                 meilleur, ecart = cible, score
-    return meilleur if ecart >= 0.72 else None
+    if ecart >= 0.72:
+        return meilleur
+
+    # Ultime recours : la SONORITE. Un nom propre est ce que la reconnaissance
+    # vocale rend le plus mal -- « Muneeb » revient en « Mounib », qui ne se
+    # ressemble qu a 0,67 en lettres mais s entend pareil. On ne s autorise
+    # cette comparaison qu ici, quand plus rien d autre n a repondu.
+    from core import deduction
+
+    for cible in cibles:
+        if deduction.se_ressemblent(voulu, titre_visible(cible.nom)):
+            return cible
+    return None
