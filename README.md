@@ -96,6 +96,16 @@ This creates an `Alma` shortcut, with icon, in the project folder and on your
 desktop. Double-click it and the app opens, calibrates the microphone and starts
 listening. There is no text field — everything goes through speech.
 
+The microphone is opened **once**, during that calibration, and stays open for
+as long as ALMA listens. Opening it costs 488 ms the first time and around
+200 ms afterwards, and "Alma" is spoken in less than a second: reopening the
+stream for every listen left a deaf window at each turn of the loop, and a long
+one at the very start — which is why the first call used to go unheard and had
+to be repeated. One open, then 20 ms per turn. Whatever is captured while ALMA
+is thinking, acting or replying is discarded except for its last fraction of a
+second, so a word spoken just as listening resumes is not cut in half, while
+ALMA never re-reads its own voice.
+
 ### Three ways to talk to it
 
 | You say | What happens |

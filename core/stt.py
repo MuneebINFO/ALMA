@@ -141,6 +141,11 @@ class SpeechToText:
         """Remesure le bruit ambiant (utile si l environnement change)."""
         return self._compteur().calibrate(duration, on_level=on_level)
 
+    def fermer(self) -> None:
+        """Libere le micro. Le flux est garde ouvert tant qu on ecoute."""
+        if self._meter is not None:
+            self._meter.fermer()
+
     def _transcribe(self, audio) -> str:
         import speech_recognition as sr
 
@@ -224,6 +229,8 @@ class LevelMeterListener:
         self.ambient = 0.0
         self.threshold = self.plancher
         self.pic_recent = 0.0        # sert a l auto-gain de l animation
+        self._audio = None
+        self._stream = None
 
     def _open_stream(self):
         import pyaudio
@@ -237,6 +244,48 @@ class LevelMeterListener:
             frames_per_buffer=CHUNK,
         )
         return audio, stream
+
+    def flux(self):
+        """
+        Le flux d entree, ouvert UNE SEULE FOIS et conserve.
+
+        Ouvrir le micro coute cher : 488 ms la premiere fois sur la machine
+        de reference, 200 ms ensuite. Or « Alma » se prononce en moins d une
+        seconde. Rouvrir le flux a chaque ecoute creait donc une fenetre
+        sourde a chaque tour de boucle, et une longue au tout debut : le
+        premier appel passait a la trappe et il fallait le repeter.
+        """
+        if self._stream is not None:
+            return self._stream
+        self._audio, self._stream = self._open_stream()
+        return self._stream
+
+    def fermer(self) -> None:
+        """Libere le micro (arret de l application)."""
+        if self._stream is None:
+            return
+        audio, stream = self._audio, self._stream
+        self._audio = self._stream = None
+        self._close(audio, stream)
+
+    def _rattraper(self, stream) -> list:
+        """
+        Vide le retard accumule pendant qu on ne lisait pas, en gardant les
+        tout derniers instants.
+
+        Le flux continue d enregistrer pendant qu Alma reflechit, execute et
+        repond : sans cela on relirait sa propre voix. On conserve juste de
+        quoi ne pas couper le debut d un mot prononce a l instant meme ou
+        l ecoute reprend.
+        """
+        garde: list = []
+        try:
+            while stream.get_read_available() >= CHUNK:
+                garde.append(stream.read(CHUNK, exception_on_overflow=False))
+                del garde[:-PRE_BUFFER_CHUNKS]
+        except Exception as exc:
+            log.debug("Rattrapage impossible : %s", exc)
+        return garde
 
     def _appliquer_seuil(self, ambient: float) -> float:
         self.ambient = ambient
@@ -256,9 +305,9 @@ class LevelMeterListener:
 
     def calibrate(self, duration: float = 1.0, on_level=None) -> float:
         """Mesure le bruit ambiant et en deduit le seuil de declenchement."""
-        audio = stream = None
         try:
-            audio, stream = self._open_stream()
+            stream = self.flux()
+            self._rattraper(stream)
             blocs = max(1, int(duration * SAMPLE_RATE / CHUNK))
             niveaux = []
             for _ in range(blocs):
@@ -272,9 +321,8 @@ class LevelMeterListener:
             return self._appliquer_seuil(sum(retenus) / len(retenus))
         except Exception as exc:
             log.debug("Calibration impossible : %s", exc)
+            self.fermer()          # flux abime : la prochaine fois, on rouvre
             return self.threshold
-        finally:
-            self._close(audio, stream)
 
     def listen(self, on_level=None, timeout: float = 8.0, phrase_limit: float = 12.0,
                doit_continuer=None):
@@ -286,12 +334,11 @@ class LevelMeterListener:
         `doit_continuer()` permet d interrompre proprement depuis l interface.
         Retourne les octets audio bruts, ou None si rien n a ete capte.
         """
-        audio = stream = None
         try:
-            audio, stream = self._open_stream()
+            stream = self.flux()
         except Exception as exc:
             log.warning("Micro inaccessible : %s", exc)
-            self._close(audio, stream)
+            self.fermer()
             return None
 
         blocs_par_seconde = SAMPLE_RATE / CHUNK
@@ -299,7 +346,9 @@ class LevelMeterListener:
         max_phrase = int(phrase_limit * blocs_par_seconde)
         blocs_silence_fin = int(SILENCE_SECONDS * blocs_par_seconde)
 
-        pre_buffer: list = []
+        # Ce qui a ete capte pendant qu on ne lisait pas : on n en garde que
+        # la fin, qui devient le debut du pre-tampon.
+        pre_buffer: list = self._rattraper(stream)
         frames: list = []
         parle = False
         silence = 0
@@ -339,11 +388,11 @@ class LevelMeterListener:
             return b"".join(frames) if frames else None
         except Exception as exc:
             log.debug("Echec de capture : %s", exc)
+            self.fermer()          # flux abime : la prochaine fois, on rouvre
             return b"".join(frames) if frames else None
         finally:
             if on_level:
                 on_level(0.0, STATE_DONE)
-            self._close(audio, stream)
 
     @staticmethod
     def _close(audio, stream) -> None:

@@ -573,6 +573,11 @@ class AlmaApp:
     def quitter(self) -> None:
         self.ecoute_active.clear()
         try:
+            # Le micro reste ouvert tant qu on ecoute : il faut le rendre.
+            self.stt.fermer()
+        except Exception:
+            pass
+        try:
             self.assistant.shutdown()
         except Exception:
             pass
