@@ -41,3 +41,6 @@ Alma.lnk
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Vidages de plantage laisses par des outils Windows
+*.stackdump
