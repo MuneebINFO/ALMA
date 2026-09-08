@@ -152,9 +152,13 @@ def test_le_seuil_est_plus_strict_pour_les_noms_courts():
     assert seuil_similarite("assistant") < seuil_similarite("vesna")
 
 
-@pytest.mark.parametrize("mot_proche", ["alba", "ala", "arme", "ame", "alpha", "elsa"])
+# « Alba » et « ala » sont a UNE lettre de « alma » : aucun calcul ne les
+# distingue d'une transcription ratee du nom. Prononces SEULS, ils reveillent
+# donc l'assistant -- c'est le prix a payer pour qu'un appel isole soit
+# entendu, et cela se desactive par general.wake_tolerate_alone.
+@pytest.mark.parametrize("mot_proche", ["arme", "ame", "alpha", "elsa"])
 def test_les_mots_proches_ne_reveillent_pas(moteur, mot_proche):
-    """« Alba » ne doit jamais réveiller « Alma »."""
+    """« Elsa » ne doit jamais réveiller « Alma »."""
     moteur.desarmer()
     assert moteur.analyser(mot_proche).etat == IGNORE, mot_proche
 
@@ -234,3 +238,71 @@ def test_les_prefixes_techniques_sont_jetes(moteur):
     for prefixe in ("ok", "dis", "hey"):
         moteur.desarmer()
         assert moteur.analyser(prefixe + " Alma").etat == REVEIL_SEUL
+
+
+# --------------------------------------------------------------------------
+# Le nom prononce SEUL
+# --------------------------------------------------------------------------
+# Sans contexte, la reconnaissance vocale n'a rien pour trancher entre
+# « Alma », « Elma » et « Arma » : c'est le cas le plus mal transcrit, et
+# c'est justement celui où l'on appelle l'assistant.
+@pytest.mark.parametrize("entendu", [
+    "Alma", "alma", "ALMA",
+    "Elma", "Arma", "Alba", "Alva", "Ilma", "Aima",   # une lettre de travers
+    "Ama", "Aluma",                                    # une lettre en moins/en trop
+    "Halma", "Almat", "Almas",                         # variantes deja connues
+    "ok Alma", "hey Alma",                             # prefixe technique
+])
+def test_le_nom_seul_reveille_meme_mal_transcrit(moteur, entendu):
+    assert moteur.analyser(entendu).etat in (REVEIL_SEUL, REVEIL_COMMANDE), entendu
+
+
+@pytest.mark.parametrize("entendu", [
+    "stop", "pause", "oui", "merci", "salut", "suivant", "annule",
+    "Anna", "Ana", "ame", "bonjour", "encore", "voila",
+])
+def test_un_autre_mot_seul_ne_reveille_pas(moteur, entendu):
+    assert moteur.analyser(entendu).etat != REVEIL_SEUL, entendu
+
+
+@pytest.mark.parametrize("phrase", [
+    "tu as vu Alba hier",
+    "elle s appelle Elma",
+    "arma le fusil",
+    "le lama est un animal",
+    "on ira a Alba demain",
+])
+def test_au_milieu_dune_phrase_la_regle_reste_stricte(moteur, phrase):
+    """
+    C'est la raison d'être du seuil strict : dans une conversation, un nom de
+    quatre lettres attraperait n'importe quoi. La tolérance ne s'applique
+    qu'au mot isolé.
+    """
+    assert moteur.analyser(phrase).etat == IGNORE, phrase
+
+
+def test_le_nom_exact_marche_toujours_dans_une_phrase(moteur):
+    analyse = moteur.analyser("Alma quelle heure est-il")
+    assert analyse.etat == REVEIL_COMMANDE
+    assert "heure" in analyse.commande
+
+
+def test_un_nom_long_garde_son_propre_seuil(config):
+    """Un nom assez long a deja un seuil permissif : rien ne change pour lui."""
+    reglages = copy.deepcopy(config)
+    reglages.data["general"]["wake_word"] = "jarvis"
+    long = MoteurEcoute(reglages)
+    assert long.seuil < 1.0
+    assert long.est_mot_appel("jarvis", seul=True) is True
+    assert long.est_mot_appel("jarvis") is True
+
+
+@pytest.mark.parametrize("mot_proche", ["alba", "ala"])
+def test_la_tolerance_se_desactive(config, mot_proche):
+    """
+    Qui a un « Alba » dans son entourage peut couper la tolérance : on
+    retrouve alors l'exigence d'une transcription exacte.
+    """
+    strict = MoteurEcoute(config_nommee(config, wake_tolerate_alone=False))
+    assert strict.analyser(mot_proche).etat == IGNORE
+    assert strict.analyser("Alma").etat == REVEIL_SEUL

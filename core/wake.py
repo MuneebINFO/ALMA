@@ -91,6 +91,18 @@ def seuil_similarite(mot: str) -> float:
     return 0.75
 
 
+# Tolerance quand la phrase entiere se reduit au nom.
+#
+# Le seuil strict ci-dessus protege des conversations : dans « tu as vu Alba
+# hier ? », un nom de quatre lettres attraperait n importe quoi. Mais une
+# phrase d UN SEUL mot n est pas une conversation -- c est quelqu un qui
+# appelle. Et c est precisement le cas ou la reconnaissance vocale se trompe
+# le plus : sans contexte, elle n a rien pour trancher entre « Alma »,
+# « Elma » et « Arma ». D ou un seuil de 0,75, qui rattrape exactement une
+# lettre de travers sur un mot de quatre.
+SEUIL_MOT_SEUL = 0.75
+
+
 def generer_variantes(mot: str) -> set:
     """
     Variantes d orthographe que la reconnaissance vocale peut produire.
@@ -139,6 +151,7 @@ class MoteurEcoute:
             for p in (lire("general.wake_prefixes", PREFIXES_PAR_DEFAUT) or ())
         )
         self.prefixe_obligatoire = bool(lire("general.wake_require_prefix", False))
+        self.tolere_seul = bool(lire("general.wake_tolerate_alone", True))
         self.duree_armement = float(
             duree_armement if duree_armement is not None
             else lire("voice.armed_seconds", 12)
@@ -153,15 +166,24 @@ class MoteurEcoute:
         self._arme_jusqu_a = 0.0
 
     # -- reconnaissance du nom ------------------------------------------------
-    def est_mot_appel(self, mot: str) -> bool:
-        """Le mot correspond-il au nom de l assistant ?"""
+    def est_mot_appel(self, mot: str, seul: bool = False) -> bool:
+        """
+        Le mot correspond-il au nom de l assistant ?
+
+        `seul` indique que la phrase entiere se reduit a ce mot : on tolere
+        alors l a-peu-pres, faute de quoi le simple fait d appeler par son
+        nom -- sans rien d autre -- serait le cas le moins bien reconnu.
+        """
         if not mot:
             return False
         if mot in self.variantes:
             return True
-        if self.seuil >= 1.0:
-            return False        # nom court : correspondance exacte exigee
-        return text_utils.similarity(mot, self.mot_appel) >= self.seuil
+        seuil = self.seuil
+        if seul and self.tolere_seul:
+            seuil = min(seuil, SEUIL_MOT_SEUL)
+        if seuil >= 1.0:
+            return False        # nom court au milieu d une phrase : exact
+        return text_utils.similarity(mot, self.mot_appel) >= seuil
 
     def separer_mot_appel(self, texte: str) -> tuple[bool, str]:
         """
@@ -175,9 +197,14 @@ class MoteurEcoute:
 
         # Le nom est cherche dans les deux premiers mots : cela couvre
         # « Alma ... », « OK Alma ... » et aussi « Salut Alma ».
+        # « Alma » tout court : rien d autre a interpreter, donc rien a
+        # confondre. Les prefixes techniques ne comptent pas comme un mot.
+        utiles = [t for t in tokens if t not in self.prefixes]
+        seul = len(utiles) <= 1
+
         index = None
         for position_mot in range(min(2, len(tokens))):
-            if self.est_mot_appel(tokens[position_mot]):
+            if self.est_mot_appel(tokens[position_mot], seul=seul):
                 index = position_mot
                 break
         if index is None:

@@ -76,6 +76,7 @@ python creer_raccourci.py --bureau
 | `python main.py --list-commands` | print every command |
 | `python main.py --list-voices` | list the voices installed on Windows |
 | `python diagnostic_micro.py` | check that the microphone picks up your voice |
+| `python diagnostic_appel.py` | check what the recogniser hears when you say the name |
 | `python main.py --debug` | show debug logs |
 
 > `-c` is ideal for a Windows shortcut or a macro key — for example a key bound
@@ -105,6 +106,25 @@ to be repeated. One open, then 20 ms per turn. Whatever is captured while ALMA
 is thinking, acting or replying is discarded except for its last fraction of a
 second, so a word spoken just as listening resumes is not cut in half, while
 ALMA never re-reads its own voice.
+
+**Calling it by name alone is the hardest case for the recogniser.** With no
+surrounding words it has nothing to disambiguate with, so a lone "Alma" often
+comes back as *Elma*, *Arma* or *Alba*. A four-letter name normally demands an
+exact match — otherwise it would fire on half the conversation in the room — so
+ALMA relaxes that rule **only when the whole utterance is the name**, which is
+someone calling, not someone talking. Inside a sentence the strict rule holds:
+"tu as vu Alba hier" wakes nothing.
+
+The price is that a lone "Alba" or "ala" does wake it. If someone around you is
+called that, turn it off:
+
+```yaml
+general:
+  wake_tolerate_alone: false
+```
+
+If a particular mis-transcription keeps coming back, `python diagnostic_appel.py`
+shows exactly what was heard and prints the lines to add to `wake_variants`.
 
 ### Three ways to talk to it
 
@@ -813,6 +833,7 @@ alma/
 ├── main.py                 console entry point and CLI options
 ├── gui.py                  voice application (animated orb, Tkinter)
 ├── diagnostic_micro.py     level meter to check the microphone
+├── diagnostic_appel.py     what the recogniser hears when you call the name
 ├── creer_raccourci.py      creates the Windows shortcut with icon
 ├── build_exe.py            builds dist/Alma.exe (PyInstaller)
 ├── make_icon.py            generates assets/alma.ico

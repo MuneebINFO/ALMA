@@ -34,6 +34,12 @@ DEFAULTS: dict = {
         # true = le nom seul ne suffit plus, il faut « OK Alma » / « dis Alma ».
         # Utile si le nom choisi ressemble a un mot ou prenom courant.
         "wake_require_prefix": False,
+        # Accepter une transcription approchante quand la phrase se reduit au
+        # seul nom. C est le cas ou la reconnaissance vocale se trompe le plus
+        # -- sans contexte, « Alma » revient souvent en « Elma » ou « Alba » --
+        # et c est aussi celui ou l on ne fait qu appeler. Passez a false si un
+        # mot proche du nom est prononce seul autour de vous.
+        "wake_tolerate_alone": True,
         "confirm_dangerous_actions": True,
     },
     "voice": {
