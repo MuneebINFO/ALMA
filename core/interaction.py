@@ -249,8 +249,73 @@ def _visible_dans(rect: tuple, zone: tuple) -> bool:
                 or rect[3] <= zone[1] or rect[1] >= zone[3])
 
 
+TYPE_DOCUMENT = 50030          # UIA_DocumentControlTypeId
+
+
+def zone_page(fenetre):
+    """
+    Le rectangle de la PAGE, sans l habillage du navigateur.
+
+    Une fenetre de navigateur contient deux mondes : sa propre interface --
+    barre d onglets, barre d adresse, favoris -- et la page. Ils se
+    ressemblent a s y meprendre pour qui lit l arbre d accessibilite : un
+    onglet nomme « Tik Tok - Recherche Google » repond aussi bien a « clique
+    sur Tik Tok » que le resultat cherche. Le document, lui, est un element
+    a part, et son rectangle delimite exactement la page.
+
+    Retourne None hors navigateur, ou si le document est introuvable.
+    """
+    from core import browser_tabs
+
+    uia, module = browser_tabs._client()
+    if uia is None:
+        return None
+    try:
+        racine = uia.ElementFromHandle(fenetre.handle)
+        condition = uia.CreatePropertyCondition(module.UIA_ControlTypePropertyId,
+                                                TYPE_DOCUMENT)
+        documents = racine.FindAll(module.TreeScope_Descendants, condition)
+    except Exception as exc:
+        log.debug("Zone de page introuvable : %s", exc)
+        return None
+    zone = None
+    for index in range(documents.Length):
+        try:
+            r = documents.GetElement(index).CurrentBoundingRectangle
+            if r.right <= r.left or r.bottom <= r.top:
+                continue
+            rect = (r.left, r.top, r.right, r.bottom)
+            zone = rect if zone is None else (
+                min(zone[0], rect[0]), min(zone[1], rect[1]),
+                max(zone[2], rect[2]), max(zone[3], rect[3]),
+            )
+        except Exception:
+            continue
+    return zone
+
+
+MARGE_PAGE = 4          # tolerance de bordure, en pixels
+
+
+def _dans(rect: tuple, zone: tuple) -> bool:
+    """
+    Le rectangle tient-il ENTIEREMENT dans la zone ?
+
+    Le centre ne suffit pas : une fenetre de navigateur contient un volet
+    qui la couvre en entier et porte le titre de la page. Son centre tombe
+    dans la page, mais il deborde sur la barre d onglets -- et cliquer
+    dessus ne fait rien. Exiger l inclusion l ecarte, avec tous les autres
+    conteneurs, sans toucher au contenu.
+    """
+    return (rect[0] >= zone[0] - MARGE_PAGE
+            and rect[1] >= zone[1] - MARGE_PAGE
+            and rect[2] <= zone[2] + MARGE_PAGE
+            and rect[3] <= zone[3] + MARGE_PAGE)
+
+
 def elements_cliquables(fenetre, taille_min: int = 12,
-                        visibles_seulement: bool = True) -> list:
+                        visibles_seulement: bool = True,
+                        page_seulement: bool = False) -> list:
     """
     Liste les elements nommes d une fenetre, en ordre de lecture (de haut en
     bas, puis de gauche a droite).
@@ -265,6 +330,9 @@ def elements_cliquables(fenetre, taille_min: int = 12,
     if uia is None:
         return []
     zone = _rectangle_fenetre(fenetre.handle) if visibles_seulement else None
+    # Restreindre a la page ecarte d un coup les onglets, la barre d adresse
+    # et les favoris, qui portent souvent les memes mots que ce qu on cherche.
+    page = zone_page(fenetre) if page_seulement else None
     try:
         racine = uia.ElementFromHandle(fenetre.handle)
         tous = racine.FindAll(module.TreeScope_Descendants, uia.CreateTrueCondition())
@@ -284,6 +352,8 @@ def elements_cliquables(fenetre, taille_min: int = 12,
             if rect[2] - rect[0] < taille_min or rect[3] - rect[1] < taille_min:
                 continue
             if zone is not None and not _visible_dans(rect, zone):
+                continue
+            if page is not None and not _dans(rect, page):
                 continue
             cible = Cible(nom, rect, element, element.CurrentControlType)
             cible.fenetre = fenetre
@@ -519,14 +589,22 @@ def _mots_utiles(texte: str) -> list:
     return [m for m in mots if m not in MOTS_VIDES] or mots
 
 
-def _rang(cible, voulu: str, mots_voulus: set) -> tuple | None:
+# En dessous de ce niveau, la correspondance est litterale : le libelle le
+# plus court est alors le plus proche de ce qui a ete demande. Au-dessus,
+# elle est approchante, et c est l ordre de lecture qui renseigne le mieux --
+# sur une page de resultats, le premier est celui qu on veut.
+NIVEAU_APPROCHANT = 3
+
+
+def _rang(cible, voulu: str, mots_voulus: set, position: int = 0) -> tuple | None:
     """
     A quel point cette cible correspond ? Plus petit est meilleur.
 
     Du plus sur au plus large : le titre exact, le titre qui contient la
-    demande, le nom complet qui la contient, puis tous les mots presents --
-    ce dernier cas rattrape la ponctuation et les esperluettes, qui font
-    echouer toute comparaison litterale.
+    demande, le nom complet qui la contient, la meme chose une fois les
+    espaces retires -- la voix dit « Tik Tok », la page ecrit « TikTok » --
+    puis tous les mots presents, ce qui rattrape la ponctuation et les
+    esperluettes.
     """
     from core import text_utils
 
@@ -534,21 +612,26 @@ def _rang(cible, voulu: str, mots_voulus: set) -> tuple | None:
     titre = titre_visible(cible.nom)
     if not nom:
         return None
+    serre = voulu.replace(" ", "")
     if nom == voulu or titre == voulu:
         niveau = 0
     elif voulu and voulu in titre:
         niveau = 1
     elif voulu and voulu in nom:
         niveau = 2
-    elif mots_voulus and mots_voulus <= set(_mots(titre)):
+    elif serre and serre in titre.replace(" ", ""):
         niveau = 3
-    elif mots_voulus and mots_voulus <= set(_mots(nom)):
+    elif serre and serre in nom.replace(" ", ""):
         niveau = 4
+    elif mots_voulus and mots_voulus <= set(_mots(titre)):
+        niveau = 5
+    elif mots_voulus and mots_voulus <= set(_mots(nom)):
+        niveau = 6
     else:
         return None
-    # A niveau egal, le libelle le plus court est le plus proche de ce qui a
-    # ete demande : « Damso » plutot qu un titre de 80 caracteres.
-    return (niveau, len(titre) or len(nom), len(nom))
+    if niveau < NIVEAU_APPROCHANT:
+        return (niveau, len(titre) or len(nom), len(nom))
+    return (niveau, position, len(nom))
 
 
 def chercher_cible(cibles: list, termes: str, types=None):
@@ -574,8 +657,8 @@ def chercher_cible(cibles: list, termes: str, types=None):
             return trouve
     mots_voulus = set(_mots_utiles(voulu))
     classees = []
-    for cible in cibles:
-        rang = _rang(cible, voulu, mots_voulus)
+    for position, cible in enumerate(cibles):
+        rang = _rang(cible, voulu, mots_voulus, position)
         if rang is not None:
             classees.append((rang, cible))
     if classees:

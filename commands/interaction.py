@@ -208,9 +208,22 @@ def cliquer_ordinal(ctx: CommandContext) -> Response:
         return Response.error("Je ne vois aucune fenêtre où cliquer.")
 
     rang = _ordinal_demande(ctx) or 1
-    cibles = [c for c in interaction.elements_cliquables(fenetre) if len(c.nom) >= 12]
-    if not cibles:
+    # Dans la PAGE seulement : « le premier lien » designe le premier resultat,
+    # jamais le premier onglet du navigateur.
+    visibles = [c for c in interaction.elements_cliquables(fenetre, page_seulement=True)
+                if len(c.nom) >= 12]
+    if not visibles:
+        visibles = [c for c in interaction.elements_cliquables(fenetre)
+                    if len(c.nom) >= 12]
+    if not visibles:
         return Response.error("Je ne trouve rien de cliquable à l'écran.")
+
+    # La nature dite compte : « le premier LIEN » ne doit pas designer un
+    # bouton de la barre de recherche, qui vient pourtant avant dans la page.
+    types = TYPES_PAR_MOT.get(text_utils.normalize(ctx.group("quoi")).strip())
+    cibles = [c for c in visibles if c.type_controle in types] if types else visibles
+    if not cibles:
+        cibles = visibles
     if rang == -1:
         cible = cibles[-1]
     elif rang <= len(cibles):
@@ -221,7 +234,7 @@ def cliquer_ordinal(ctx: CommandContext) -> Response:
         )
 
     if interaction.cliquer(cible):
-        return Response(text="J'ouvre « " + cible.nom[:60] + " ».")
+        return Response(text="J'ouvre « " + interaction.titre_affiche(cible.nom)[:60] + " ».")
     return Response.error("Je n'ai pas réussi à cliquer sur « " + cible.nom[:40] + " ».")
 
 
@@ -265,8 +278,14 @@ def cliquer_sur(ctx: CommandContext) -> Response:
     types = TYPES_PAR_MOT.get(mot_type)
     variantes = variantes_libelle(libelle)
 
-    def chercher():
-        cibles = interaction.elements_cliquables(fenetre)
+    # « clique sur l onglet X » vise l habillage du navigateur ; tout le
+    # reste vise la page. On regarde donc la page d abord, et on n elargit
+    # a la fenetre entiere que si elle ne contient pas ce qu on cherche.
+    dans_la_page = mot_type not in ("onglet", "onglets")
+
+    def chercher(page_seulement=True):
+        cibles = interaction.elements_cliquables(
+            fenetre, page_seulement=page_seulement and dans_la_page)
         for variante in variantes:
             trouve = interaction.chercher_cible(cibles, variante, types=types)
             if trouve is not None:
@@ -281,6 +300,9 @@ def cliquer_sur(ctx: CommandContext) -> Response:
 
         time.sleep(1.2)
         cible = chercher()
+    if cible is None:
+        # Toujours rien dans la page : c est peut-etre un bouton du navigateur.
+        cible = chercher(page_seulement=False)
 
     if cible is not None:
         return _cliquer(cible)

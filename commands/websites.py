@@ -114,6 +114,37 @@ def ouvrir_ou_reutiliser(config, cle: str, url: str) -> tuple:
     return afficher_site(config, cle, url, naviguer=True)
 
 
+# « ouvre » et « va sur » ne demandent pas la meme chose. Ouvrir, c est
+# arriver sur le site ; y aller, c est retrouver l onglet ou l on etait.
+# La nuance compte : un onglet « Tik Tok - Recherche Google » porte le nom
+# de Google sans etre Google, et le reprendre donnait l impression que rien
+# ne se passait.
+VERBES_D_OUVERTURE = ("ouvre", "ouvrir", "ouvres", "lance", "lancer", "lances",
+                      "demarre", "demarrer", "open", "launch", "start")
+
+
+def _demande_une_ouverture(ctx: CommandContext) -> bool:
+    mots = text_utils.tokenize(text_utils.normalize(ctx.raw))
+    return bool(mots) and mots[0] in VERBES_D_OUVERTURE
+
+
+def _nouvel_onglet(ctx: CommandContext, url: str) -> bool:
+    """Un onglet de plus, dans le navigateur deja ouvert si possible."""
+    import webbrowser
+
+    from core import desktop
+
+    ecran = getattr(ctx.assistant, "ecran_actif", None)
+    for candidat in (desktop.trouver_fenetre("", navigateurs_seulement=True, ecran=ecran),
+                     desktop.trouver_fenetre("", navigateurs_seulement=True)):
+        if candidat is not None and desktop.ouvrir_onglet(candidat, url):
+            return True
+    try:
+        return bool(webbrowser.open_new_tab(url))
+    except Exception:
+        return False
+
+
 @command(
     name="open_website",
     patterns=[
@@ -138,6 +169,12 @@ def open_website(ctx: CommandContext) -> Response:
     key, url = resolved
     # On retient le site : « recherche Damso » juste apres devra s y appliquer.
     ctx.assistant.memoriser("site", key)
+
+    if _demande_une_ouverture(ctx):
+        if _nouvel_onglet(ctx, url):
+            return Response(text="J'ouvre " + key + ".")
+        return Response.error("Je n'ai pas réussi à ouvrir " + key + ".")
+
     ok, mode = afficher_site(ctx.config, key, url, naviguer=False, assistant=ctx.assistant)
     if not ok:
         return Response.error("Je n'ai pas réussi à ouvrir " + url + ".")

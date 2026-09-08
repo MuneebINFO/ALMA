@@ -425,6 +425,18 @@ the one that gets paused. A player with no visible window at all (Spotify
 minimised to the notification area) belongs to no screen and stays controllable
 from wherever you are.
 
+### Opening a site, or going back to it
+
+"ouvre YouTube" and "va sur YouTube" no longer mean the same thing, because they
+never did. **Opening puts you on the site**, in a new tab of the browser already
+running — Ctrl+T, the address, Enter, exactly as you would. **Going there brings
+back the tab you were on**, without reloading it, which is what keeps a playing
+video alive.
+
+The distinction was forced by a real failure: a tab called *Tik Tok - Recherche
+Google* carries the name of Google without being Google, so "ouvre Google"
+reused it and nothing appeared to happen.
+
 ### Back to the home page
 
 ```
@@ -656,6 +668,23 @@ titles overlap, the exact one wins: "Le Diable s'habille en Prada" and the same
 phrase followed by "2" reach different films. Profiles work the same way —
 "clique sur le profil Muneeb" finds *Profil de Muneeb. Sélectionnez cette
 option…*.
+
+**Clicking looks inside the page, not around it.** A browser window holds two
+worlds that read alike through the accessibility API: its own furniture — tab
+strip, address bar, bookmarks — and the page. A tab titled *Tik Tok - Recherche
+Google* answered "clique sur Tik Tok" just as well as the search result did, and
+that is what got clicked. The page is a separate element with its own rectangle,
+so targets are now taken from inside it; the rest of the window is only searched
+if the page holds nothing, and "clique sur l'onglet X" still aims at the tabs on
+purpose. Containers are excluded too: the pane that covers the whole window
+carries the page title, and its centre falls inside the page, but clicking it
+does nothing.
+
+**Speech separates what pages write joined.** You say "Tik Tok", the page writes
+*TikTok*. Labels are compared with the spaces removed as well. And where the
+match is approximate rather than literal, reading order decides between
+candidates — on a page of results the first one is the one you meant, even when
+a shorter label sits further down.
 
 **A closed control bar is not merely invisible.** It is gone from the
 accessibility tree, and its buttons with it — on the Netflix player, nine

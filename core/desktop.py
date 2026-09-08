@@ -310,6 +310,30 @@ def deplacer_vers_ecran(handle, index: int) -> bool:
         return False
 
 
+def ouvrir_onglet(fenetre: Fenetre, url: str) -> bool:
+    """
+    Ouvre un NOUVEL onglet sur une adresse, dans cette fenetre de navigateur.
+
+    Passer par le navigateur par defaut ouvrirait souvent une fenetre de
+    plus ; ici on reste dans celle qui est deja la : Ctrl+T, l adresse,
+    Entree -- exactement ce que ferait l utilisateur.
+    """
+    from core import win_utils
+
+    if not mettre_au_premier_plan(fenetre.handle):
+        return False
+    import time
+
+    time.sleep(0.25)
+    if not win_utils.press_combo(win_utils.VK_CONTROL, ord("T")):
+        return False
+    time.sleep(0.35)                       # l onglet doit exister avant qu on ecrive
+    if not win_utils.type_text(url):
+        return False
+    time.sleep(0.15)
+    return win_utils.press_key(win_utils.VK_RETURN)
+
+
 def naviguer_dans_fenetre(fenetre: Fenetre, url: str) -> bool:
     """
     Fait naviguer l onglet ACTIF d une fenetre de navigateur vers une URL.
