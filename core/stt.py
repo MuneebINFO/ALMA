@@ -178,6 +178,12 @@ SAMPLE_RATE = 16000
 CHUNK = 1024
 SAMPLE_WIDTH = 2          # int16
 SILENCE_SECONDS = 0.9     # silence qui marque la fin d une phrase
+# Une phrase breve -- « stop », « arrete », « pause » -- n a pas besoin d une
+# aussi longue attente : elle est finie, et c est justement la qu on veut une
+# reaction immediate. Au-dela de DUREE_BREVE de parole, on reprend l attente
+# complete, car une phrase longue se dit souvent avec des respirations.
+SILENCE_BREF = 0.6
+DUREE_BREVE = 1.1
 PRE_BUFFER_CHUNKS = 4     # on garde le debut du mot, avant le declenchement
 
 # Etats remontes a l interface pendant l ecoute.
@@ -373,6 +379,8 @@ class LevelMeterListener:
         max_attente = int(timeout * blocs_par_seconde)
         max_phrase = int(phrase_limit * blocs_par_seconde)
         blocs_silence_fin = int(SILENCE_SECONDS * blocs_par_seconde)
+        blocs_silence_bref = int(SILENCE_BREF * blocs_par_seconde)
+        blocs_brefs = int(DUREE_BREVE * blocs_par_seconde)
 
         # Ce qui a ete capte pendant qu on ne lisait pas : on n en garde que
         # la fin, qui devient le debut du pre-tampon.
@@ -381,6 +389,7 @@ class LevelMeterListener:
         parle = False
         silence = 0
         blocs_forts = 0
+        blocs_actifs = 0          # blocs reellement parles, silences exclus
 
         try:
             for index in range(max_attente + max_phrase):
@@ -410,8 +419,14 @@ class LevelMeterListener:
                     if on_level:
                         on_level(affiche, STATE_SPEAKING)
                     frames.append(bloc)
-                    silence = silence + 1 if niveau <= self.threshold else 0
-                    if silence >= blocs_silence_fin:
+                    if niveau <= self.threshold:
+                        silence += 1
+                    else:
+                        silence = 0
+                        blocs_actifs += 1
+                    attendu = (blocs_silence_bref if blocs_actifs <= blocs_brefs
+                               else blocs_silence_fin)
+                    if silence >= attendu:
                         break
             return b"".join(frames) if frames else None
         except Exception as exc:

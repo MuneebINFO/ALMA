@@ -97,14 +97,28 @@ def test_une_action_reussie_reste_silencieuse(assistant, phrase):
     assert reponse.speak is False, phrase
 
 
+def test_ce_qui_nest_pas_compris_se_dit(assistant):
+    """
+    Le seul échec qui se dit : celui où rien n'a été compris. Sans voix,
+    l'utilisateur attendrait une action qui ne viendra jamais.
+    """
+    reponse = assistant.handle("xyzzy plover blorb")
+    assert not reponse.ok
+    assert reponse.speak is True
+
+
 @pytest.mark.parametrize("phrase", [
-    "xyzzy plover blorb",          # rien de compris
-    "va sur l'écran 9",            # demande impossible
+    "va sur l'écran 9",                        # écran inexistant
+    "mets le volume de la vidéo à 30",         # rien ne joue ici
 ])
-def test_un_echec_se_dit(assistant, phrase):
+def test_une_action_impossible_saffiche_sans_se_dire(assistant, phrase):
+    """
+    La demande a été comprise, mais elle n'a pas abouti. Le texte l'explique
+    à l'écran ; le dire à voix haute reviendrait à commenter l'action.
+    """
     reponse = assistant.handle(phrase)
     assert not reponse.ok
-    assert reponse.speak is True, phrase
+    assert reponse.speak is False, phrase
 
 
 def test_aucune_action_nexplique_a_lutilisateur_quoi_dire():

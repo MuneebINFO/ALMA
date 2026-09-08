@@ -461,6 +461,10 @@ class AlmaApp:
                 # la transcription : attendre reviendrait a finir sa phrase
                 # pendant que l utilisateur parle.
                 self.assistant.interrompre_parole()
+                # Et on arrete ce qui est en cours, pour la meme raison :
+                # transcrire « arrete » demande plus d une seconde, pendant
+                # laquelle la page continuerait de defiler. Parler suffit.
+                self.assistant.interrompre()
             else:
                 etat = self._etat_repos()
             self.evenements.put(("niveau", (niveau, etat)))
@@ -512,8 +516,10 @@ class AlmaApp:
 
             if analyse.etat == wake.FIN_SESSION:
                 # « arrête » pendant un défilement doit arrêter le défilement,
-                # pas refermer la session : on interrompt d'abord l'action.
-                if self.assistant.interrompre():
+                # pas refermer la session. Le défilement a déjà été stoppé dès
+                # qu'on a entendu une voix : `vient_d_interrompre` s'en
+                # souvient, sans quoi le mot serait pris pour un adieu.
+                if self.assistant.interrompre() or self.assistant.vient_d_interrompre():
                     self.moteur.armer()          # la session continue
                     self.evenements.put(("journal", ("Vous", texte)))
                     self.evenements.put(("journal", (self.nom, "J'arrête.")))

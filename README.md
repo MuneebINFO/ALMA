@@ -131,12 +131,22 @@ shows exactly what was heard and prints the lines to add to `wake_variants`.
 the same word out loud. When nothing else matches, names are compared by sound,
 so a profile or a title still gets found.
 
-**It answers questions, not commands.** Asking the time, the weather, a
-calculation, a joke or a list gets a spoken reply. An action that works does
-not: scrolling, clicking, opening a tab, setting the volume all show their own
-result, and narrating them would talk over what you are looking at. The text
-still appears under the orb — it is only the voice that stays quiet. Failures
-always speak, since nothing on screen would tell you otherwise.
+**It answers questions, and otherwise it just acts.** Asking the time, the
+weather, a calculation, a joke or a list gets a spoken reply. A request to *do*
+something never does — not even when it fails. Scrolling, clicking, opening a
+tab, setting the volume all show their own result, and a request that could not
+be carried out explains itself in the text under the orb, which is where you
+would look anyway. The one thing still said out loud is a sentence understood by
+nothing at all: there, silence would leave you waiting for something that is
+never coming.
+
+**Speaking stops what is running.** Ask for a scroll, then say anything at all
+and it stops — 128 ms after your voice is detected, rather than the 1.1 s it
+takes to hear the end of "arrête" and get it transcribed. The word itself still
+matters afterwards, and saying "arrête" this way does not close the listening
+session: the scroll was already stopped by then, so ALMA remembers having
+stopped it. A short sentence also ends sooner, after 0.6 s of silence instead of
+0.9 s, while longer ones keep the full wait — they are said with pauses.
 
 ### Three ways to talk to it
 

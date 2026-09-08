@@ -191,3 +191,73 @@ def test_arreter_leve_le_drapeau_lu_par_le_thread_de_lecture():
 
     tts.arreter()
     assert tts._interrompre.is_set()
+
+
+# --------------------------------------------------------------------------
+# Ce qui est en cours s arrete aussi des qu on parle
+# --------------------------------------------------------------------------
+def test_le_defilement_sarrete_des_la_detection_de_la_voix(assistant):
+    """
+    Même raison que pour la parole : transcrire « arrête » demande plus d'une
+    seconde, pendant laquelle la page continuerait de défiler. Le fait de
+    parler suffit à arrêter ce qui est en cours.
+    """
+    arrets = []
+    assistant.defilement = type("D", (), {
+        "arreter": lambda _s: arrets.append(True) or True,
+    })()
+
+    def sur_niveau(etat_audio):
+        if etat_audio == "parole":
+            assistant.interrompre()
+
+    sur_niveau("attente")
+    assert arrets == [], "le silence ne doit rien arrêter"
+    sur_niveau("parole")
+    assert arrets == [True]
+
+
+def test_interrompre_ne_casse_rien_sans_rien_a_arreter(assistant):
+    assistant.defilement = type("D", (), {"arreter": lambda _s: False})()
+    assert assistant.interrompre() is False
+
+
+def test_linterface_arrete_bien_laction_en_cours():
+    """
+    Garde-fou : le rappel de niveau de l'interface doit appeler les deux
+    interruptions. Un test unitaire ne verrait pas qu'on a oublié le câblage.
+    """
+    from pathlib import Path
+
+    racine = Path(__file__).resolve().parent.parent
+    source = (racine / "gui.py").read_text(encoding="utf-8")
+    debut = source.index("def sur_niveau(")
+    corps = source[debut:debut + 1200]
+    assert "interrompre_parole()" in corps, "la parole n'est plus coupée"
+    assert "self.assistant.interrompre()" in corps, "l'action en cours n'est plus arrêtée"
+
+
+def test_arreter_un_defilement_ne_referme_pas_la_session(assistant):
+    """
+    Piège introduit par la réactivité : le défilement est stoppé dès qu'on
+    entend une voix, donc quand « arrête » arrive transcrit il n'y a plus
+    rien à arrêter. Sans mémoire de ce geste, le mot passerait pour un adieu.
+    """
+    assistant.defilement = type("D", (), {"arreter": lambda _s: True})()
+    assistant.interrompre()                      # ce que fait la détection
+
+    assistant.defilement = type("D", (), {"arreter": lambda _s: False})()
+    # La décision de l'interface, rejouée telle quelle.
+    assert assistant.interrompre() or assistant.vient_d_interrompre()
+
+
+def test_un_arret_ancien_ne_retient_plus_la_session(assistant):
+    """Passé le délai, « arrête » redevient une demande de fin de session."""
+    assistant.defilement = type("D", (), {"arreter": lambda _s: False})()
+    assistant._arret_a = -1e9
+    assert not (assistant.interrompre() or assistant.vient_d_interrompre())
+
+
+def test_sans_defilement_arreter_ferme_bien_la_session(assistant):
+    assistant.defilement = type("D", (), {"arreter": lambda _s: False})()
+    assert assistant.vient_d_interrompre() is False

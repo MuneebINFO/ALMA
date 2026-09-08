@@ -11,7 +11,8 @@ d'une seconde : le premier appel tombait entièrement dans cette fenêtre sourde
 import pytest
 
 from core import stt
-from core.stt import CHUNK, PRE_BUFFER_CHUNKS, LevelMeterListener
+from core.stt import (CHUNK, PRE_BUFFER_CHUNKS, SAMPLE_RATE,
+                      LevelMeterListener)
 
 
 class FluxFactice:
@@ -175,3 +176,69 @@ def test_fermer_sans_micro_ouvert_ne_casse_rien():
     moteur = stt.SpeechToText.__new__(stt.SpeechToText)
     moteur._meter = None
     moteur.fermer()
+
+
+# --------------------------------------------------------------------------
+# Fin de phrase : plus vite quand la phrase est breve
+# --------------------------------------------------------------------------
+BLOC_FORT = bytes([0, 0x40]) * CHUNK      # niveau ~0,5 : franchement au-dessus
+BLOC_SILENCE = bytes(2) * CHUNK
+
+
+class FluxScripte:
+    """Un flux qui rejoue une suite de blocs decidee a l'avance."""
+
+    def __init__(self, blocs):
+        self.blocs = list(blocs)
+        self.lus = 0
+
+    def read(self, taille, exception_on_overflow=True):
+        self.lus += 1
+        if self.blocs:
+            return self.blocs.pop(0)
+        return BLOC_SILENCE
+
+    def get_read_available(self):
+        return 0
+
+    def stop_stream(self):
+        pass
+
+    def close(self):
+        pass
+
+
+def blocs(secondes):
+    return int(secondes * SAMPLE_RATE / CHUNK)
+
+
+def ecouter(duree_parole, monkeypatch):
+    """Fait entendre `duree_parole` de voix, puis du silence. Rend le nombre
+    de blocs lus avant que l'écoute ne se termine."""
+    flux = FluxScripte([BLOC_FORT] * blocs(duree_parole))
+    ecouteur = LevelMeterListener()
+    monkeypatch.setattr(ecouteur, "flux", lambda: flux)
+    monkeypatch.setattr(ecouteur, "_rattraper", lambda f: [])
+    ecouteur.threshold = 0.01
+    ecouteur.listen(timeout=5.0, phrase_limit=12.0)
+    return flux.lus - blocs(duree_parole)
+
+
+def test_une_phrase_breve_se_termine_plus_vite(monkeypatch):
+    """
+    « arrête » ne demande pas d'attendre neuf dixièmes de seconde : la phrase
+    est finie, et c'est justement là qu'on veut une réaction immédiate.
+    """
+    silence = ecouter(0.5, monkeypatch)
+    assert blocs(stt.SILENCE_BREF) <= silence <= blocs(stt.SILENCE_BREF) + 2
+
+
+def test_une_phrase_longue_garde_lattente_complete(monkeypatch):
+    """Une phrase longue se dit avec des respirations : on ne la coupe pas."""
+    silence = ecouter(2.0, monkeypatch)
+    assert blocs(stt.SILENCE_SECONDS) <= silence <= blocs(stt.SILENCE_SECONDS) + 2
+
+
+def test_le_seuil_de_brievete_est_bien_place():
+    assert stt.SILENCE_BREF < stt.SILENCE_SECONDS
+    assert 0.5 <= stt.SILENCE_BREF <= 0.8

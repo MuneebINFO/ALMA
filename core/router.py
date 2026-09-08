@@ -129,12 +129,15 @@ def _a_voix_haute(reponse: Response, commande) -> Response:
     """
     Decide si la reponse doit etre LUE, en plus d etre affichee.
 
-    Regle : on ne parle que pour repondre a une question, ou pour dire qu on
-    n a pas compris. Une action qui aboutit se voit -- la commenter reviendrait
-    a expliquer a l utilisateur ce qu il vient de demander.
+    Une seule regle : on ne parle que pour repondre a une QUESTION. Une
+    demande d action se juge a son effet -- qu elle aboutisse ou non, la
+    commenter reviendrait a raconter a l utilisateur ce qu il vient de
+    demander. Le texte reste affiche : c est la qu on lit pourquoi ca n a
+    pas marche.
+
+    Reste dite, parce qu elle ne passe pas par ici : la phrase qu on n a pas
+    comprise du tout, ou l assistant doit bien signaler qu il n a rien fait.
     """
-    if not reponse.ok or getattr(commande, "informatif", False):
-        return reponse
-    if not reponse.speak:
+    if getattr(commande, "informatif", False) or not reponse.speak:
         return reponse
     return dataclasses.replace(reponse, speak=False)

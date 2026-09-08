@@ -8,6 +8,7 @@ CommandContext (config, storage, io, historique, confirmations).
 from __future__ import annotations
 
 import logging
+import time
 
 from config import load_config
 from core.context import SOURCE_TEXT, Response, Utterance
@@ -46,6 +47,9 @@ class Assistant:
         self.ecran_actif = 1
         # Branche par l interface pour signaler visuellement un changement.
         self.signal_ecran = None
+        # Instant du dernier arret d action, pour savoir si « arrete » visait
+        # cette action ou la session d ecoute.
+        self._arret_a = -1e9
         # Defilement en cours, s il y en a un : il doit pouvoir etre
         # interrompu par la voix pendant qu il tourne.
         from core.interaction import Defilement
@@ -111,7 +115,21 @@ class Assistant:
         a bien ete interrompu : dire « arrete » pendant un defilement doit
         arreter le defilement, pas refermer la session d ecoute.
         """
-        return self.defilement.arreter()
+        arrete = self.defilement.arreter()
+        if arrete:
+            self._arret_a = time.monotonic()
+        return arrete
+
+    def vient_d_interrompre(self, delai: float = 5.0) -> bool:
+        """
+        Une action vient-elle d etre arretee ?
+
+        L interface arrete le defilement des qu elle ENTEND une voix, sans
+        attendre de savoir ce qui a ete dit. Quand « arrete » arrive enfin
+        transcrit, il n y a donc plus rien a arreter -- et sans cette
+        memoire, le mot serait pris pour une fin de session.
+        """
+        return time.monotonic() - self._arret_a <= delai
 
     def interrompre_parole(self) -> bool:
         """
