@@ -33,6 +33,7 @@ from __future__ import annotations
 import ctypes
 import logging
 import os
+import re
 import subprocess
 import time
 from urllib.parse import quote_plus
@@ -50,6 +51,19 @@ TYPE_DOCUMENT = 50030
 # En deca, une ligne qui ne se termine pas est un libelle d interface, pas une
 # phrase.
 LONGUEUR_PROSE = 40
+
+# Ce qui, sous la reponse, n en fait plus partie. L avertissement de bas de
+# page est une phrase complete : sans l ecarter, il passe pour la reponse des
+# que la vraie est trop courte pour en avoir l air.
+FINS_DE_REPONSE = (
+    "Les réponses de l'IA peuvent contenir des erreurs",
+    "Résultats de recherche",
+    "Historique du Mode",
+)
+
+# Un debut de reponse chiffree : « 15 x 4 = », « 60 ». Ni l un ni l autre ne
+# ressemble a une phrase, et pourtant les deux le sont ensemble.
+DEBUT_CHIFFRE = re.compile(r"^[\d\s.,+\-*/=x×%()€$]+$")
 
 # U+FFFC remplace les images dans le texte rendu par l accessibilite.
 OBJET_INCORPORE = "￼"
@@ -229,11 +243,24 @@ def _est_de_la_prose(ligne: str) -> bool:
         return False
     if ligne.endswith(("Résultats associés", "S'ouvre dans un nouvel onglet.")):
         return False
+    if any(marque in ligne for marque in FINS_DE_REPONSE):
+        return False
     return len(ligne) >= LONGUEUR_PROSE or ligne.endswith((".", "!", "?"))
 
 
 def _sans_blancs(texte: str) -> str:
     return " ".join((texte or "").split()).lower()
+
+
+def _est_un_debut_de_reponse(ligne: str) -> bool:
+    """
+    Une ligne courte peut ouvrir la reponse au lieu d etre du decor.
+
+    C est le cas des calculs, que Google decoupe : « 15 x 4 = » d un cote,
+    « 60 » de l autre. On n accepte que ce qui ne contient que des chiffres et
+    des signes -- un libelle d interface, lui, contient des mots.
+    """
+    return bool(DEBUT_CHIFFRE.match(ligne))
 
 
 def reponse(fenetre, question: str) -> str:
@@ -267,10 +294,26 @@ def reponse(fenetre, question: str) -> str:
     if depart is None:
         return ""
 
+    morceaux = []
     for ligne in lignes[depart:]:
-        if _est_de_la_prose(ligne):
-            return " ".join(ligne.split())
-    return ""
+        nette = " ".join(ligne.split())
+        if not nette:
+            continue
+        if any(marque in nette for marque in FINS_DE_REPONSE):
+            break
+        if not _est_de_la_prose(nette):
+            # Une reponse peut tenir en deux bouts trop courts pour etre pris
+            # separement pour des phrases : « 15 x 4 = », puis « 60 ». Les
+            # sauter laissait passer l avertissement de bas de page, qui lui
+            # est bien une phrase -- et Alma lisait « les reponses de l IA
+            # peuvent contenir des erreurs ».
+            if morceaux or _est_un_debut_de_reponse(nette):
+                morceaux.append(nette)
+                continue
+            break
+        morceaux.append(nette)
+        break
+    return _raccourcir(" ".join(morceaux))
 
 
 def _attendre_la_reponse(fenetre, question: str, delai: float) -> str:

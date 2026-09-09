@@ -21,6 +21,9 @@ from core.registry import command
 OPERATEURS = (
     ("divise par", "/"), ("divisee par", "/"), ("sur", "/"),
     ("multiplie par", "*"), ("multipliee par", "*"), ("fois", "*"),
+    # « 15 x 4 » se dit et s ecrit autant que « 15 fois 4 ». Le remplacement
+    # se fait entoure d espaces : seul un « x » isole devient une operation.
+    ("x", "*"),
     ("plus", "+"), ("moins", "-"), ("au carre", "**2"),
     ("plus que", "+"), ("plus de", "+"),
 )
@@ -103,7 +106,7 @@ def formater(valeur) -> str:
 # Les mots qui trahissent une operation. Ils suffisent a tenter le calcul --
 # le guard tranche ensuite, en verifiant que la phrase s evalue vraiment.
 MOTS_OPERATION = (r"fois|plus|moins|divise\s+par|divisee\s+par|multiplie\s+par|"
-                  r"multipliee\s+par|au\s+carre|pourcent|pour\s+cent")
+                  r"multipliee\s+par|au\s+carre|pourcent|pour\s+cent|x")
 
 
 def _est_un_calcul(ctx: CommandContext) -> bool:

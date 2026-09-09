@@ -110,6 +110,25 @@ def test_sans_reponse_on_ne_rend_rien(lecture):
     assert gemini_provider.reponse(None, QUESTION) == ""
 
 
+def test_l_avertissement_de_bas_de_page_n_est_pas_la_reponse(lecture):
+    """
+    Le défaut constaté à l'usage. « combien font 15 x 4 » : Google découpe le
+    résultat en « 15 x 4 = » puis « 60 », deux bouts trop courts pour avoir
+    l'air de phrases. ALMA les sautait et lisait la ligne suivante, qui en est
+    une : « Les réponses de l'IA peuvent contenir des erreurs ».
+    """
+    lecture("combien font 15 x 4", "￼", "15 x 4 =", "60",
+            "Les réponses de l'IA peuvent contenir des erreurs. En savoir plus")
+    assert gemini_provider.reponse(None, "combien font 15 x 4") == "15 x 4 = 60"
+
+
+def test_sans_reponse_l_avertissement_ne_comble_pas_le_vide(lecture):
+    """Mieux vaut ne rien dire que de réciter le bas de page."""
+    lecture("une question sans réponse", "￼",
+            "Les réponses de l'IA peuvent contenir des erreurs. En savoir plus")
+    assert gemini_provider.reponse(None, "une question sans réponse") == ""
+
+
 def test_une_page_vide_ne_fait_pas_tomber(lecture):
     lecture("")
     assert gemini_provider.reponse(None, QUESTION) == ""
