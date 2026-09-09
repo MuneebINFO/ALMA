@@ -21,6 +21,7 @@ Consequences importantes, volontaires :
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import shutil
@@ -32,10 +33,16 @@ log = logging.getLogger(__name__)
 DEFAULT_COMMAND = "claude"
 DEFAULT_TIMEOUT = 120
 
+# L etat de connexion se lit en une seconde : assez court pour le diagnostic,
+# assez long pour un disque lent.
+SONDAGE_TIMEOUT = 20
+
 AVERTISSEMENT_CONNEXION = (
     "Claude Code est installe mais pas connecte sur cette machine. Ouvrez un "
-    "terminal, lancez « claude », puis « /login » : la delegation fonctionnera "
-    "ensuite sans rien changer d autre."
+    "terminal et lancez « claude auth login » : la delegation fonctionnera "
+    "ensuite sans rien changer d autre. Attention, la connexion de "
+    "l application Claude ne vaut pas pour le CLI : ce sont deux comptes "
+    "ouverts separement."
 )
 
 AVERTISSEMENT_CLE_API = (
@@ -79,6 +86,33 @@ class ClaudeCodeProvider:
     def api_key_detected(self) -> bool:
         """True si une cle API est presente (donc facturation API, pas abonnement)."""
         return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+
+    def connexion(self) -> tuple:
+        """
+        Etat de connexion du CLI, sans consommer de quota.
+
+        `claude auth status` repond en JSON et n appelle pas le modele : c est
+        la seule facon de savoir AVANT d essayer. Le compte de l application
+        Claude et celui du CLI sont deux connexions distinctes -- l une peut
+        etre ouverte et l autre non.
+
+        Retourne (connecte, methode). `connecte` vaut None si la question n a
+        pas pu etre posee.
+        """
+        binaire = self.resolve_command()
+        if not binaire:
+            return None, ""
+        try:
+            resultat = subprocess.run(
+                [binaire, "auth", "status"],
+                capture_output=True, text=True, errors="replace",
+                stdin=subprocess.DEVNULL, timeout=SONDAGE_TIMEOUT,
+            )
+            etat = json.loads((resultat.stdout or "").strip() or "{}")
+        except Exception as exc:
+            log.debug("Etat de connexion illisible : %s", exc)
+            return None, ""
+        return bool(etat.get("loggedIn")), str(etat.get("authMethod", "") or "")
 
     def check(self) -> list:
         """Liste des problemes bloquants, vide si tout est pret."""

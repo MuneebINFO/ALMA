@@ -312,9 +312,16 @@ def verifier_ia(config) -> None:
                 manque(probleme)
         else:
             ok("CLI Claude Code prêt, périmètre : " + str(provider_cc.resolve_working_dir()))
-            # La connexion ne se verifie pas sans consommer du quota : on le dit
-            # plutot que d afficher un feu vert qui pourrait etre faux.
-            note("Connexion vérifiée au premier appel ; sinon lancez « claude » puis « /login »")
+            connecte, methode = provider_cc.connexion()
+            if connecte:
+                ok("CLI connecté (" + (methode or "compte Anthropic") + ")")
+            elif connecte is None:
+                note("État de connexion du CLI illisible ; il sera vérifié au premier appel")
+            else:
+                # Le compte de l application Claude et celui du CLI sont deux
+                # connexions distinctes : l une peut etre ouverte et l autre non.
+                manque("CLI non connecté — lancez « claude auth login » "
+                       "(la connexion de l'application Claude ne compte pas pour le CLI)")
         if provider_cc.api_key_detected():
             note("ANTHROPIC_API_KEY est définie : facturation API au lieu de l'abonnement")
     else:

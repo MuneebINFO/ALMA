@@ -157,7 +157,33 @@ def test_pas_connecte_explique_quoi_faire(config_active, claude_present, monkeyp
                         RunEspion(stdout="Not logged in · Please run /login",
                                   returncode=1, stderr=""))
     reponse = ClaudeCodeProvider(config_active).generate("bonjour")
-    assert "/login" in reponse and "claude" in reponse.lower()
+    assert "auth login" in reponse
+    # Le piege a eviter : croire que l application Claude ouverte suffit.
+    assert "application" in reponse.lower()
+
+
+def test_l_etat_de_connexion_se_lit_sans_consommer_de_quota(
+    config_active, claude_present, monkeypatch
+):
+    """`claude auth status` repond en JSON et n appelle pas le modele."""
+    espion = RunEspion(stdout='{"loggedIn": true, "authMethod": "claude.ai"}')
+    monkeypatch.setattr(subprocess, "run", espion)
+    assert ClaudeCodeProvider(config_active).connexion() == (True, "claude.ai")
+    argv = espion.appels[0][0]
+    assert argv[1:] == ["auth", "status"], "aucune requete ne doit partir au modele"
+
+
+def test_un_cli_deconnecte_est_reconnu(config_active, claude_present, monkeypatch):
+    monkeypatch.setattr(subprocess, "run",
+                        RunEspion(stdout='{"loggedIn": false, "authMethod": "none"}',
+                                  returncode=1))
+    assert ClaudeCodeProvider(config_active).connexion() == (False, "none")
+
+
+def test_un_etat_illisible_ne_ment_pas(config_active, claude_present, monkeypatch):
+    """Mieux vaut « je ne sais pas » qu un feu vert ou rouge invente."""
+    monkeypatch.setattr(subprocess, "run", RunEspion(stdout="pas du json"))
+    assert ClaudeCodeProvider(config_active).connexion() == (None, "")
 
 
 def test_timeout_configurable(config, tmp_path, claude_present, monkeypatch):

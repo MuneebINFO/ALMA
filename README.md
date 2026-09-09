@@ -1161,9 +1161,11 @@ ai_fallback:
     timeout_seconds: 120     # the call is blocking
 ```
 
-The CLI also has to be signed in on that machine: run `claude` once in a
-terminal, then `/login`. Until then ALMA answers with exactly that instruction
-rather than a bare error.
+The CLI also has to be signed in on that machine: `claude auth login`. Being
+signed in to the **Claude desktop application is not enough** — the app and the
+CLI hold two separate logins. `doctor.py` reads the CLI's state with
+`claude auth status`, which costs no quota, and until it is signed in ALMA
+answers with that instruction rather than a bare error.
 
 > **This is the only AI entry point in the project.** There is no second channel
 > to any API: `PROVIDERS` contains only `none`, `ollama` (a model running on
