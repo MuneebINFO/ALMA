@@ -84,13 +84,53 @@ def variantes_libelle(libelle: str) -> list:
 
 
 
+# Alma ne doit jamais se cliquer elle-meme : sa propre fenetre est au premier
+# plan des qu on la regarde.
+PROCESSUS_ALMA = ("pythonw.exe", "python.exe", "alma.exe")
+
+
+def _est_alma(fenetre, ctx) -> bool:
+    nom = str(ctx.config.get("general.assistant_name", "Alma") or "Alma").lower()
+    return (fenetre.processus.lower() in PROCESSUS_ALMA
+            and nom in (fenetre.titre or "").lower())
+
+
+def fenetre_au_premier_plan(ctx):
+    """
+    La fenetre que l utilisateur regarde, si elle est sur l ecran de travail.
+
+    C est la reponse la plus juste a « clique sur X » : on clique dans ce
+    qu on a sous les yeux. Restait a ne pas viser Alma elle-meme.
+    """
+    try:
+        import ctypes
+
+        poignee = ctypes.windll.user32.GetForegroundWindow()
+    except Exception:
+        return None
+    ecran = getattr(ctx.assistant, "ecran_actif", None)
+    for fenetre in desktop.fenetres():
+        if fenetre.handle != poignee:
+            continue
+        if _est_alma(fenetre, ctx):
+            return None
+        if ecran is not None and fenetre.ecran != ecran:
+            return None
+        return fenetre
+    return None
+
+
 def fenetre_visee(ctx: CommandContext):
     """
     Fenetre sur laquelle agir.
 
-    Priorite : le site dont on vient de parler, puis l ECRAN DE TRAVAIL.
-    Une fois qu on a demande l ecran 2, defiler et cliquer s y appliquent,
-    meme si une autre fenetre de navigateur traine sur l ecran 1.
+    Dans l ordre : le site dont on vient de parler -- une intention explicite
+    prime sur tout --, puis la fenetre AU PREMIER PLAN, puis les navigateurs
+    de l ecran de travail.
+
+    Le premier plan a ete ajoute pour que « clique sur X » atteigne aussi les
+    applications : la liste se limitait aux navigateurs, si bien que rien
+    n etait cliquable dans une fenetre ordinaire.
     """
     ecran = getattr(ctx.assistant, "ecran_actif", None)
     cle = ctx.assistant.rappeler("site")
@@ -102,6 +142,10 @@ def fenetre_visee(ctx: CommandContext):
             fenetre = desktop.trouver_fenetre(terme, navigateurs_seulement=True, ecran=ecran)
             if fenetre is not None:
                 return fenetre
+
+    devant = fenetre_au_premier_plan(ctx)
+    if devant is not None:
+        return devant
 
     navigateurs = [f for f in desktop.fenetres() if f.est_navigateur]
     if ecran is not None:
