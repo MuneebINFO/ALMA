@@ -28,6 +28,7 @@ class SpeechToText:
         self._recognizer = None
         self._microphone = None
         self._vosk_model = None
+        self._whisper = None
         self._meter = None        # compteur de niveau, cree a la demande
         self.engine = str((config.get("voice.stt_engine") if config else "google") or "google")
         self.language = str((config.get("voice.stt_language") if config else "fr-FR") or "fr-FR")
@@ -53,6 +54,42 @@ class SpeechToText:
             return
         if self.engine == "vosk":
             self._init_vosk()
+        elif self.engine == "whisper":
+            self._init_whisper()
+
+    def _init_whisper(self) -> None:
+        """
+        Charge Whisper, qui transcrit SUR LA MACHINE.
+
+        Interet : rien ne part chez Google. Prix : le modele met une trentaine
+        de secondes a se charger, puis une a trois secondes par phrase sur
+        processeur, la ou l API repond en deux cents millisecondes. Mesure
+        faite ici sur des phrases de test : il n est pas plus juste que Google
+        sur les noms propres, qui sont pourtant le point faible commun aux
+        deux. A choisir pour la confidentialite, pas pour la precision.
+        """
+        import sys
+        import types
+
+        taille = str(self.config.get("voice.whisper_model", "small")
+                     if self.config else "small") or "small"
+        # `av` ne sert qu a DECODER DES FICHIERS audio ; nous fournissons du
+        # PCM brut. Sur une machine ou le controle d application de Windows
+        # bloque sa DLL, ce bouchon evite un echec qui n a pas lieu d etre.
+        if "av" not in sys.modules:
+            try:
+                import av  # noqa: F401
+            except Exception:
+                sys.modules["av"] = types.ModuleType("av")
+        try:
+            from faster_whisper.transcribe import WhisperModel
+
+            self._whisper = WhisperModel(taille, device="cpu", compute_type="int8")
+        except Exception as exc:
+            self.error = ("Whisper indisponible (" + str(exc)
+                          + ") : repli sur le moteur Google.")
+            log.warning(self.error)
+            self.engine = "google"
 
     def _init_vosk(self) -> None:
         """Charge un modele Vosk pour la reconnaissance hors ligne."""
@@ -146,9 +183,41 @@ class SpeechToText:
         if self._meter is not None:
             self._meter.fermer()
 
+    # Ce que Whisper ecrit quand il n entend que du silence : le modele a ete
+    # entraine sur des sous-titres, et il en reproduit les mentions. Les
+    # laisser passer ferait executer des commandes fantomes.
+    HALLUCINATIONS = (
+        "sous-titres realises par", "sous-titrage", "amara.org",
+        "merci d avoir regarde", "merci a tous", "abonnez vous",
+        "sous-titres par la communaute", "thanks for watching",
+    )
+
+    def _transcrire_whisper(self, audio) -> str:
+        """Transcription locale, sans reseau."""
+        import numpy as np
+
+        from core import text_utils
+
+        brut = audio.get_raw_data(convert_rate=SAMPLE_RATE, convert_width=2)
+        echantillons = np.frombuffer(brut, dtype=np.int16).astype(np.float32) / 32768.0
+        try:
+            segments, _info = self._whisper.transcribe(
+                echantillons, language=self.language.split("-")[0], beam_size=5,
+            )
+            texte = " ".join(s.text for s in segments).strip()
+        except Exception as exc:
+            log.debug("Echec Whisper : %s", exc)
+            return ""
+        norme = text_utils.normalize(texte)
+        if any(mention in norme for mention in self.HALLUCINATIONS):
+            return ""
+        return texte
+
     def _transcribe(self, audio) -> str:
         import speech_recognition as sr
 
+        if self.engine == "whisper" and self._whisper is not None:
+            return self._transcrire_whisper(audio)
         if self.engine == "vosk" and self._vosk_model is not None:
             try:
                 from vosk import KaldiRecognizer

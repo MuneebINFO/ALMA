@@ -53,7 +53,13 @@ DEFAULTS: dict = {
         "volume": 1.0,
         "voice_id": "",
         # --- reconnaissance ---
+        # « google » : rapide (180 ms) mais l audio part chez Google.
+        # « whisper » : tout reste sur la machine, au prix d une trentaine de
+        # secondes au demarrage et d une a trois secondes par phrase. Mesure
+        # faite ici : il n est PAS plus juste sur les noms propres.
+        # « vosk » : hors ligne aussi, plus leger, moins precis.
         "stt_engine": "google",
+        "whisper_model": "small",    # tiny | base | small | medium
         "stt_language": "fr-FR",
         "vosk_model_path": "",
         # Plancher de detection de la voix. Volontairement bas : une piece
@@ -87,7 +93,19 @@ DEFAULTS: dict = {
     # declenche : les demandes non reconnues recoivent un message poli.
     "ai_fallback": {
         "enabled": False,
-        "provider": "claude_code",
+        # « ollama » : un modele de langage LOCAL, sans compte ni cle, qui ne
+        # fait que REPONDRE aux questions restees sans commande. « claude_code »
+        # delegue au CLI installe sur la machine.
+        "provider": "ollama",
+        "ollama": {
+            # Serveur local d Ollama. Jamais une adresse distante : tout
+            # l interet est que rien ne sorte de la machine.
+            "hote": "http://localhost:11434",
+            # Un petit modele suffit pour repondre en deux phrases, et il
+            # repond vite. Telechargez-le par « ollama pull qwen2.5:3b ».
+            "modele": "qwen2.5:3b",
+            "timeout_seconds": 30,
+        },
         "claude_code": {
             # Binaire du CLI Claude Code (doit etre dans le PATH).
             "command": "claude",

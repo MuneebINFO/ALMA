@@ -77,6 +77,11 @@ class Storage:
         self.notes = JsonCollection(config.resolve_path("notes", "data/notes.json"))
         self.reminders = JsonCollection(config.resolve_path("reminders", "data/reminders.json"))
         self.history = JsonCollection(config.resolve_path("history", "data/history.json"))
+        # Ce qu Alma retient d une session a l autre : preferences, proches,
+        # projets. A distinguer des notes, qui sont des pense-betes dates, et
+        # du contexte de session, qui expire au bout d une minute.
+        self.souvenirs = JsonCollection(
+            config.resolve_path("memory", "data/souvenirs.json"))
 
     def log_command(self, text: str, command_name: str, source: str, response: str = "") -> None:
         """Journalise une commande executee (limite aux 500 dernières)."""

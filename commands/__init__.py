@@ -21,6 +21,7 @@ MODULES = (
     "infos_systeme",
     "interaction",
     "media",
+    "memoire",
     "misc",
     "productivity",
     "search",

@@ -806,6 +806,26 @@
         "sur quel écran es-tu",
         "quel écran"
       ]
+    },
+    {
+      "action": "Retenir un fait durablement",
+      "phrases": [
+        "retiens que je suis allergique aux arachides",
+        "souviens-toi que ma sœur s'appelle Yasmine"
+      ]
+    },
+    {
+      "action": "Dire ce qui a été retenu",
+      "phrases": [
+        "qu'est-ce que tu sais sur moi",
+        "de quoi te souviens-tu"
+      ]
+    },
+    {
+      "action": "Oublier ce qui a été retenu sur un sujet",
+      "phrases": [
+        "oublie que je suis allergique aux arachides"
+      ]
     }
   ]
 }

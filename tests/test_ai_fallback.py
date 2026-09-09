@@ -91,8 +91,34 @@ def test_aucune_cle_api_dans_la_configuration(config):
     assert "api_key" not in (config.get("ai_fallback") or {})
 
 
-def test_claude_code_est_le_seul_provider_reel():
-    assert set(PROVIDERS) == {"none", "claude_code"}
+def test_la_liste_des_providers_est_close():
+    """
+    Aucun canal IA ne doit apparaître sans être déclaré ici. La liste est
+    volontairement courte, et chacun de ses membres est vérifié ci-dessous.
+    """
+    assert set(PROVIDERS) == {"none", "ollama", "claude_code"}
+
+
+def test_aucun_provider_ne_sort_de_la_machine(config):
+    """
+    La promesse du projet : rien de payant, rien qui parte vers une API.
+    Ollama tourne en local ; Claude Code délègue à un binaire déjà installé.
+    """
+    from core.providers.ollama_provider import OllamaProvider
+
+    hote = OllamaProvider(config).hote
+    assert hote.startswith("http://localhost") or "127.0.0.1" in hote
+
+
+def test_le_modele_local_ne_peut_rien_executer(config):
+    """
+    Le cerveau reste le moteur de règles : le modèle ne fait que répondre.
+    Sa consigne le lui dit, faute de quoi il promettrait des actions.
+    """
+    from core.providers.ollama_provider import CONSIGNE
+
+    consigne = CONSIGNE.lower()
+    assert "rien" in consigne and "ordinateur" in consigne
 
 
 @pytest.mark.parametrize("domaine", DOMAINES_INTERDITS)

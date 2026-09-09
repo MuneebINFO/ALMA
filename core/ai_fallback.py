@@ -5,16 +5,20 @@ Etat par defaut (ai_fallback.enabled = false) : quand aucune commande locale ne
 correspond, on repond poliment et on suggere "aide".
 AUCUN appel reseau, AUCUN sous-processus, AUCUN cout.
 
-Quand il est active, le fallback delegue la requete au CLI Claude Code deja
-installe sur la machine (voir core/providers/claude_code_provider.py). C est la
-SEULE porte d entree IA du projet : il n existe aucun autre canal vers une API.
+Quand il est active, deux providers existent, et aucun autre canal vers une
+IA n existe dans le projet :
+
+  - ollama : un modele de langage qui tourne SUR LA MACHINE. Aucun compte,
+    aucune cle, rien qui sorte de l ordinateur. Il REPOND seulement -- il
+    n execute aucune action, le corps d Alma reste le moteur de regles ;
+  - claude_code : delegation au CLI Claude Code deja installe.
 
 Pour l activer, dans config.yaml :
     ai_fallback:
       enabled: true
-      provider: claude_code
-      claude_code:
-        working_dir: C:/chemin/vers/un/dossier   # obligatoire
+      provider: ollama              # ou claude_code
+      ollama:
+        modele: qwen2.5:3b          # telecharge par « ollama pull »
 """
 
 from __future__ import annotations
@@ -43,6 +47,13 @@ class NullProvider:
         return random.choice(SUGGESTIONS)
 
 
+def _ollama_factory(config):
+    """Import paresseux : le module n est charge que si le provider est demande."""
+    from core.providers.ollama_provider import OllamaProvider
+
+    return OllamaProvider(config)
+
+
 def _claude_code_factory(config):
     """Import paresseux : le module n est charge que si le provider est demande."""
     from core.providers.claude_code_provider import ClaudeCodeProvider
@@ -54,6 +65,7 @@ def _claude_code_factory(config):
 # core/providers/ puis ajouter une entree ici. Rien d autre ne change.
 PROVIDERS = {
     "none": lambda config: NullProvider(),
+    "ollama": _ollama_factory,
     "claude_code": _claude_code_factory,
 }
 

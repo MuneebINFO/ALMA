@@ -75,6 +75,7 @@ python creer_raccourci.py --bureau
 | `python main.py -c "ouvre Chrome"` | run one command and exit |
 | `python main.py --list-commands` | print every command |
 | `python main.py --list-voices` | list the voices installed on Windows |
+| `python doctor.py` | check the whole chain and say what is missing |
 | `python diagnostic_micro.py` | check that the microphone picks up your voice |
 | `python diagnostic_appel.py` | check what the recogniser hears when you say the name |
 | `python main.py --debug` | show debug logs |
@@ -495,6 +496,28 @@ One subtlety worth knowing: several launchers are scripts, and the console that
 runs them appears before the application does. Moving *that* would be the only
 visible result of the request, so console windows are skipped — unless a console
 is what you asked for.
+
+### What it remembers
+
+```
+retiens que je suis allergique aux arachides
+souviens-toi que ma sœur s'appelle Yasmine
+qu'est-ce que tu sais sur ma sœur
+de quoi te souviens-tu
+oublie que je suis allergique aux arachides
+```
+
+Three things that are easy to confuse, and live in different places. The
+**session context** — "recherche Damso" after "va sur YouTube" — expires after
+a minute. **Notes** are dated reminders you read back and delete. **Memories**
+are lasting facts: a preference, a relative, a project. They do not expire, and
+they come back by subject: asking about your sister does not recite what you
+think of tea.
+
+Forgetting requires most of the subject's words to match, not one: "ma sœur
+s'appelle Yasmine" and "mon frère s'appelle Karim" share *appelle*, and a single
+common word would take both. Everything lives in `data/souvenirs.json`, in
+clear text — your file, readable and editable without going through ALMA.
 
 ### Two volumes
 
