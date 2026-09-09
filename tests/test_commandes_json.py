@@ -22,6 +22,7 @@ REMPLACEMENTS = {
     "ouvre un nouvel onglet X": "ouvre un nouvel onglet YouTube",
     "ouvre X dans un nouvel onglet": "ouvre YouTube dans un nouvel onglet",
     "va sur X": "va sur YouTube",
+    "bascule sur X": "bascule sur Chrome",
     "reviens sur X": "reviens sur YouTube",
     "affiche l'onglet X": "affiche l'onglet YouTube",
     "va sur X et mets Y": "va sur Netflix et mets Interstellar",

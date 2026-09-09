@@ -595,6 +595,14 @@
       ]
     },
     {
+      "action": "Aller sur une application",
+      "phrases": [
+        "va sur Chrome",
+        "affiche Spotify",
+        "bascule sur X"
+      ]
+    },
+    {
       "action": "Fermer une application ouverte",
       "phrases": [
         "ferme Chrome",

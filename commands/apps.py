@@ -308,6 +308,72 @@ def _prefere_lapplication(config, nom: str) -> bool:
     return cible not in alias_exacts(config.get("websites", {}))
 
 
+VERBES_ALLER = (r"(?:va|vas|aller|bascule|basculer|passe|passer|affiche|afficher|"
+                r"montre|montrer|retourne|retourner|reviens|revenir)")
+
+
+def _fenetre_de_lapplication(nom: str, config):
+    """
+    Une fenetre ouverte qui corresponde a ce nom, ou None.
+
+    On regarde le PROCESSUS d abord -- « chrome » et « chrome.exe » se
+    reconnaissent sans ambiguite -- puis le titre, qui rattrape les logiciels
+    dont l executable ne porte pas leur nom : Visual Studio Code s execute
+    sous « Code.exe ».
+    """
+    from core import desktop, text_utils
+
+    cible = text_utils.normalize(nom or "").strip()
+    if not cible:
+        return None
+
+    processus_attendu = ""
+    resolu = resolve_app(config, cible)
+    if resolu is not None:
+        processus_attendu = (resolu[1].get("process") or "").lower()
+
+    par_titre = None
+    for fenetre in desktop.fenetres():
+        processus = (fenetre.processus or "").lower()
+        if processus_attendu and processus == processus_attendu:
+            return fenetre
+        if cible in text_utils.normalize(processus.rsplit(".", 1)[0]):
+            return fenetre
+        # Le titre est un repli : il change au gre de ce qui est affiche, donc
+        # on ne s en contente qu a defaut de mieux.
+        if par_titre is None and cible in text_utils.normalize(fenetre.titre or ""):
+            par_titre = fenetre
+    return par_titre
+
+
+@command(
+    name="aller_sur_application",
+    patterns=[r"^" + VERBES_ALLER + r"\s+(?:moi\s+)?(?:sur|a|vers|dans)?\s*"
+              r"(?:l\s+|le\s+|la\s+|les\s+)?(.+)$"],
+    category="Applications",
+    description="Aller sur une application",
+    examples=["va sur Chrome", "affiche Spotify"],
+    # Sous open_app et open_website : « va sur YouTube » reste un site, « va
+    # sur l ecran 2 » reste un ecran. Ne restent ici que les applications.
+    priority=58,
+    guard=_est_une_application,
+)
+def aller_sur_application(ctx: CommandContext) -> Response:
+    """Amène une application au premier plan, ou l'ouvre si elle est fermée."""
+    from core import desktop
+
+    nom, _ecran = separer_ecran(ctx.arg)
+    cible = clean_target(nom) or nom
+    fenetre = _fenetre_de_lapplication(cible, ctx.config)
+    if fenetre is None:
+        # Pas ouverte : « va sur Chrome » veut voir Chrome, ouvrir revient au
+        # meme pour qui parle.
+        return open_app(ctx)
+    if not desktop.mettre_au_premier_plan(fenetre.handle):
+        return Response.error("Je n'arrive pas à afficher " + _joli(cible) + ".")
+    return Response(text="Voilà " + _joli(cible) + ".", speak=False)
+
+
 @command(
     name="close_app",
     patterns=[r"^" + CLOSE_VERBS + r"\s+(.+)$"],

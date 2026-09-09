@@ -13,6 +13,7 @@ from __future__ import annotations
 import contextlib
 import ctypes
 import logging
+import time
 from ctypes import wintypes
 from dataclasses import dataclass
 
@@ -196,31 +197,80 @@ def fenetres_sur_ecran(index: int) -> list:
     return [f for f in fenetres() if f.ecran == index]
 
 
+VK_ALT = 0x12
+KEYEVENTF_KEYUP = 0x0002
+DELAI_PREMIER_PLAN = 0.35
+
+
+def _essayer_devant(hwnd) -> None:
+    """
+    Une tentative de passage au premier plan, file d entree rattachee.
+
+    Windows refuse SetForegroundWindow a un processus qui n a pas deja le
+    focus. La parade consiste a rattacher brievement notre file d entree a
+    celle de la fenetre QUI EST DEVANT -- c est elle qui detient le droit, pas
+    la fenetre visee. S y rattacher a la place ne donne rien, et « va sur
+    Chrome » depuis une autre application echouait a tous les coups.
+    """
+    devant = user32.GetForegroundWindow()
+    fil_devant = user32.GetWindowThreadProcessId(devant, None) if devant else 0
+    fil_courant = ctypes.windll.kernel32.GetCurrentThreadId()
+    rattache = bool(fil_devant) and fil_devant != fil_courant
+    if rattache:
+        user32.AttachThreadInput(fil_courant, fil_devant, True)
+    try:
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    finally:
+        if rattache:
+            user32.AttachThreadInput(fil_courant, fil_devant, False)
+
+
 def mettre_au_premier_plan(hwnd) -> bool:
     """
     Affiche une fenetre et lui donne le focus.
 
-    Windows refuse SetForegroundWindow a un processus qui n a pas le focus :
-    on rattache brievement notre file d entree a celle de la fenetre visee,
-    ce qui est la parade habituelle.
+    Deux tentatives, car Windows protege le premier plan : une fois la file
+    d entree rattachee, puis -- si cela n a pas suffi -- apres une pression sur
+    ALT, qui rend a notre processus le droit de changer le premier plan.
     """
     if user32 is None:
         return False
     try:
         if user32.IsIconic(hwnd):
-            user32.ShowWindow(hwnd, 9)          # SW_RESTORE
-        fil_cible = user32.GetWindowThreadProcessId(hwnd, None)
-        fil_courant = ctypes.windll.kernel32.GetCurrentThreadId()
-        user32.AttachThreadInput(fil_courant, fil_cible, True)
-        try:
-            user32.BringWindowToTop(hwnd)
-            user32.SetForegroundWindow(hwnd)
-        finally:
-            user32.AttachThreadInput(fil_courant, fil_cible, False)
-        return user32.GetForegroundWindow() == hwnd
+            user32.ShowWindow(hwnd, SW_RESTORE)
+        if user32.GetForegroundWindow() == hwnd:
+            return True
+
+        _essayer_devant(hwnd)
+        if _attendre_le_premier_plan(hwnd):
+            return True
+
+        # Le verrou du premier plan se leve pour le processus qui vient de
+        # recevoir une entree clavier. ALT seul ne declenche rien ailleurs.
+        user32.keybd_event(VK_ALT, 0, 0, 0)
+        user32.keybd_event(VK_ALT, 0, KEYEVENTF_KEYUP, 0)
+        _essayer_devant(hwnd)
+        return _attendre_le_premier_plan(hwnd)
     except Exception as exc:
         log.debug("Mise au premier plan impossible : %s", exc)
         return False
+
+
+def _attendre_le_premier_plan(hwnd, delai: float = DELAI_PREMIER_PLAN) -> bool:
+    """
+    Le changement de premier plan n est pas instantane.
+
+    Interroger GetForegroundWindow dans la foulee repond « non » alors que la
+    fenetre arrive : on laisse le temps a l affichage de suivre.
+    """
+    fin = time.time() + delai
+    while True:
+        if user32.GetForegroundWindow() == hwnd:
+            return True
+        if time.time() >= fin:
+            return False
+        time.sleep(0.03)
 
 
 SW_RESTORE = 9

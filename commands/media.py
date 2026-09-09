@@ -234,8 +234,13 @@ def media_play_pause(ctx: CommandContext) -> Response:
     name="media_next",
     patterns=[
         r"(?:chanson|morceau|musique|piste|titre|video|episode)\s+(?:d\s+apres|suivante?)",
-        r"^(?:suivant|suivante|next|passe|zappe|skip)\b",
-        r"(?:passe|change|saute)\s+(?:a\s+)?(?:la\s+|le\s+)?(?:chanson|musique|piste|titre|suite)?",
+        r"^(?:suivant|suivante|next|zappe|skip)\b",
+        # « passe » seul veut dire « morceau suivant ». Suivi de quelque chose,
+        # il veut souvent dire « va sur » -- « passe sur Spotify » demandait la
+        # piste suivante. On exige donc de savoir ce qu on passe.
+        r"^passe$",
+        r"(?:passe|change|saute)\s+(?:a\s+|au\s+)?(?:la\s+|le\s+)?"
+        r"(?:chanson|musique|piste|titre|suite|suivant|suivante)\b",
         r"(?:j\s+aime\s+pas|change)\s+(?:cette|de)\s+(?:chanson|musique)",
     ],
     keywords=[["musique", "suivante"], ["chanson", "suivante"], ["suivant"], ["skip"]],

@@ -355,6 +355,7 @@ tolerates typos (`ouvre gogle chrome` works). You can prefix any sentence with
 ```
 ouvre Chrome                  lance VS Code
 ouvre la calculatrice         démarre le bloc-notes
+va sur Chrome                 affiche Spotify
 ferme Chrome                  quelles applications connais-tu
 ```
 
