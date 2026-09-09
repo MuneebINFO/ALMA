@@ -117,11 +117,11 @@ DEFAULTS: dict = {
             "timeout_seconds": 30,
         },
         "gemini": {
-            # Aucune cle, aucun compte : la reponse de Gemini est deja sur
-            # google.com, en tete des resultats. Alma ouvre la recherche dans
-            # une fenetre qu elle reduit aussitot, la lit, et la referme.
-            # Ce delai couvre le chargement de la page ET l ecriture de
-            # l apercu, qui arrive apres le reste.
+            # Aucune cle, aucun compte : Alma pose la question au MODE IA de
+            # Google, dans une fenetre qu elle reduit aussitot, la lit, et la
+            # referme. Pas gemini.google.com : celui-la ne repond que fenetre
+            # au premier plan. Ce delai couvre le chargement de la page ET
+            # l ecriture de la reponse, qui arrive apres le reste.
             "timeout_seconds": 20,
         },
         "claude_code": {

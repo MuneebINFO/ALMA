@@ -1,25 +1,31 @@
 """
-Poser la question a l IA de Google, par le navigateur, en arriere-plan.
+Poser la question au MODE IA de Google, par le navigateur, en arriere-plan.
 
-Aucune API, aucune cle, aucun compte a configurer : la reponse de Gemini est
-deja sur google.com, en tete des resultats, sous le titre « Apercu IA ». Alma
-ouvre donc une recherche dans une fenetre qu elle REDUIT aussitot, lit la
-reponse par l API d accessibilite -- comme elle lit deja n importe quelle page
--- puis referme la fenetre. Rien ne reste a l ecran, et la reponse est dite
-comme si Alma repondait elle-meme.
+Aucune API, aucune cle, aucun compte a configurer. Alma ouvre la recherche
+dans une fenetre qu elle REDUIT aussitot, lit la reponse par l API
+d accessibilite -- comme elle lit deja n importe quelle page -- puis referme
+la fenetre. Rien ne reste a l ecran, et la reponse est dite comme si Alma
+repondait elle-meme.
+
+Pourquoi le mode IA et non gemini.google.com, qui serait plus direct : parce
+que celui-la ne repond QUE devant vous. Mesure faite sur la meme question --
+fenetre reduite, la reponse n arrive jamais ; fenetre visible mais derriere,
+non plus ; fenetre au premier plan, dix secondes. Chrome met en veille le
+rendu des fenetres masquees, et l application cesse d ecrire. Le mode IA, lui,
+est une page de resultats : elle se rend meme reduite.
 
 Trois mesures fondent ce fonctionnement, et expliquent pourquoi il tient :
 
   - une fenetre Chrome qui n est PAS au premier plan reste lisible : 1048
     elements mesures sur une fenetre d arriere-plan ;
-  - une fenetre REDUITE l est tout autant : 226 elements, ancre comprise, que
-    la fenetre soit visible, reduite ou restauree ;
+  - une fenetre REDUITE l est tout autant : 226 elements, que la fenetre soit
+    visible, reduite ou restauree ;
   - en revanche, une page qui vient d etre chargee n expose rien pendant une
     seconde ou deux : Chromium construit son arbre a retardement. D ou
     l attente active plutot qu une lecture unique.
 
-Dans la page, l « Apercu IA » annonce le bloc, et la reponse est la premiere
-phrase qui le suit.
+Dans la page, la question est rappelee avant la reponse : c est elle qui sert
+de repere, et la reponse est la premiere phrase qui la suit.
 """
 
 from __future__ import annotations
@@ -33,10 +39,11 @@ from urllib.parse import quote_plus
 
 log = logging.getLogger(__name__)
 
-RECHERCHE = "https://www.google.com/search?hl=fr&q="
-
-# L element qui annonce la reponse de l IA dans la page.
-ANCRES = ("apercu ia", "aperçu ia", "ai overview")
+# udm=50 : le MODE IA de Google. C est une page de resultats, pas une
+# application, et c est ce qui change tout -- gemini.google.com cesse
+# d ecrire sa reponse des que sa fenetre n est plus au premier plan ;
+# celle-ci se rend meme reduite.
+RECHERCHE = "https://www.google.com/search?udm=50&hl=fr&q="
 
 TYPE_DOCUMENT = 50030
 
@@ -50,11 +57,11 @@ OBJET_INCORPORE = "￼"
 SW_MINIMISER = 6
 WM_CLOSE = 0x0010
 
-# La page met une a deux secondes a exposer son contenu, et l apercu IA arrive
-# apres le reste : il s ecrit progressivement.
+# La page met une a deux secondes a exposer son contenu, et la reponse arrive
+# apres le reste : elle s ecrit progressivement.
 DELAI_PAGE = 20.0
 PAUSE_SONDAGE = 0.6
-# Une fois l ancre trouvee, on laisse la reponse finir de s ecrire.
+# Une fois la reponse reperee, on la laisse finir de s ecrire.
 STABILITE_REQUISE = 1.2
 
 # La reponse est LUE a voix haute : au-dela, on coupe proprement.
@@ -67,7 +74,7 @@ ABSENCE_DE_NAVIGATEUR = (
 
 
 class GeminiProvider:
-    """Provider qui lit l apercu IA de Google, sans rien montrer a l ecran."""
+    """Provider qui lit le mode IA de Google, sans rien montrer a l ecran."""
 
     name = "gemini"
 
@@ -95,7 +102,7 @@ class GeminiProvider:
 
     # -- appel ---------------------------------------------------------------
     def generate(self, query: str) -> str:
-        """Pose la question a Google et rend l apercu IA. Ne leve jamais."""
+        """Pose la question au mode IA et rend sa reponse. Ne leve jamais."""
         query = (query or "").strip()
         if not query:
             return "Je n'ai pas saisi la question."
@@ -109,17 +116,17 @@ class GeminiProvider:
                                            RECHERCHE + quote_plus(query))
             if fenetre is None:
                 return "Je n'ai pas réussi à ouvrir la recherche."
-            reponse = _attendre_l_apercu(fenetre, self.delai)
+            trouvee = _attendre_la_reponse(fenetre, query, self.delai)
         except Exception as exc:
-            log.debug("Lecture de l apercu Google impossible : %s", exc)
-            reponse = ""
+            log.debug("Lecture du mode IA impossible : %s", exc)
+            trouvee = ""
         finally:
             if fenetre is not None:
                 _fermer(fenetre)
 
-        if not reponse:
-            return ("Je n'ai pas trouvé de réponse à cette question.")
-        return _raccourcir(reponse)
+        if not trouvee:
+            return "Je n'ai pas trouvé de réponse à cette question."
+        return _raccourcir(trouvee)
 
 
 # --------------------------------------------------------------------------
@@ -225,44 +232,60 @@ def _est_de_la_prose(ligne: str) -> bool:
     return len(ligne) >= LONGUEUR_PROSE or ligne.endswith((".", "!", "?"))
 
 
-def apercu(fenetre) -> str:
-    """
-    La reponse de l IA telle qu elle est affichee, ou une chaine vide.
+def _sans_blancs(texte: str) -> str:
+    return " ".join((texte or "").split()).lower()
 
-    L « Apercu IA » annonce le bloc ; la reponse est la premiere phrase qui le
-    suit. Ce qui vient ensuite est un complement -- une fiche, des puces, des
-    sources : ecrit, cela se parcourt ; dit, cela se subit.
+
+def reponse(fenetre, question: str) -> str:
+    """
+    La reponse du mode IA, ou une chaine vide tant qu elle n est pas la.
+
+    La page rappelle la QUESTION, puis y repond : c est donc la question qui
+    sert de repere. S accrocher a un titre de section -- « Apercu IA » --
+    marcherait en francais et nulle part ailleurs ; la question, elle, est
+    celle qu on vient d envoyer.
+
+    On ne garde que la premiere phrase. Ce qui suit est un complement : des
+    puces, des sources, une proposition de suite. Ecrit, cela se parcourt ;
+    dit, cela se subit.
     """
     texte = _texte_de_la_page(fenetre).replace(OBJET_INCORPORE, " ")
-    bas = texte.lower()
-    depart = -1
-    for ancre in ANCRES:
-        depart = bas.find(ancre)
-        if depart >= 0:
-            depart += len(ancre)
-            break
-    if depart < 0:
+    if not texte:
         return ""
 
-    for ligne in texte[depart:].splitlines():
+    lignes = texte.splitlines()
+    cherchee = _sans_blancs(question)
+    depart = None
+    for index, ligne in enumerate(lignes):
+        if _sans_blancs(ligne) == cherchee:
+            # La PREMIERE occurrence, et elle seule : la question se retrouve
+            # plus bas dans la page, en titre de resultat. « pourquoi le ciel
+            # est bleu » y est aussi une video, et c est son descriptif qui
+            # revenait a la place de la reponse.
+            depart = index + 1
+            break
+    if depart is None:
+        return ""
+
+    for ligne in lignes[depart:]:
         if _est_de_la_prose(ligne):
             return " ".join(ligne.split())
     return ""
 
 
-def _attendre_l_apercu(fenetre, delai: float) -> str:
+def _attendre_la_reponse(fenetre, question: str, delai: float) -> str:
     """
-    Attend que l apercu apparaisse, puis qu il cesse de s ecrire.
+    Attend que la reponse apparaisse, puis qu elle cesse de s ecrire.
 
     Deux attentes en une : la page met une a deux secondes a exposer quoi que
-    ce soit, et l apercu s ecrit ensuite progressivement. On rend ce qu on a
-    des qu il ne grandit plus.
+    ce soit, et la reponse s ecrit ensuite progressivement. On rend ce qu on a
+    des qu elle ne grandit plus.
     """
     fin = time.time() + max(1.0, delai)
     dernier, stable_depuis = "", None
     while time.time() < fin:
         time.sleep(PAUSE_SONDAGE)
-        courant = apercu(fenetre)
+        courant = reponse(fenetre, question)
         if not courant:
             continue
         if courant == dernier:

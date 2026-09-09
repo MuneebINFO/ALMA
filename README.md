@@ -1142,16 +1142,18 @@ suggests `aide` — no network, no subprocess, no cost.
 ### Asking Google's AI in the background
 
 With `provider: gemini`, a question ALMA has no command for comes back as
-ALMA's own answer, read aloud. **No API and no key**: Gemini's answer is
-already on google.com, at the top of the results under « Aperçu IA ». ALMA
-opens the search in a window it **minimises immediately**, reads it through
+ALMA's own answer, read aloud. **No API and no key**: ALMA puts the question
+to Google's **AI Mode** in a window it minimises immediately, reads it through
 the accessibility API like any other page, then closes it. Nothing stays on
 screen — you asked your assistant, not a site.
 
-Three measurements hold it up: a Chrome window that is *not* in front stays
-readable (1048 elements), a **minimised** one just as much (226, anchor
-included), but a page that has just loaded exposes nothing for a second or
-two — Chromium builds its tree late, hence the active wait.
+Not `gemini.google.com`, and that was measured rather than assumed. On the same
+question: minimised, the answer never arrives; visible but behind another
+window, it never arrives either; in the foreground, ten seconds. Chrome
+suspends rendering for hidden windows and the app stops writing. AI Mode is a
+results page, not an app — it renders even minimised. Two other dead ends on
+the way: `gemini.google.com/app?q=…` does not submit the question, and writing
+the field through accessibility is accepted and ignored.
 
 Reading the page text in document order matters more than it sounds. Piecing
 elements together by their coordinates looked finer and was more fragile: a

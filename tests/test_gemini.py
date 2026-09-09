@@ -1,9 +1,8 @@
 """
-Poser la question à l'IA de Google, par le navigateur, en arrière-plan.
+Poser la question au mode IA de Google, par le navigateur, en arrière-plan.
 
-Aucune API, aucune clé : la réponse de Gemini est déjà sur google.com, sous
-« Aperçu IA ». ALMA ouvre la recherche dans une fenêtre qu'elle réduit
-aussitôt, la lit comme n'importe quelle page, puis la referme.
+Aucune API, aucune clé. ALMA ouvre la recherche dans une fenêtre qu'elle
+réduit aussitôt, la lit comme n'importe quelle page, puis la referme.
 
 Aucun de ces tests n'ouvre de navigateur : la page est remplacée par le texte
 qu'elle exposerait. Ils verrouillent l'extraction — c'est là qu'était la
@@ -26,78 +25,94 @@ def lecture(monkeypatch):
     return poser
 
 
-# Ce que la page expose vraiment, mesuré sur google.com : l'ancre, puis des
-# libellés d'interface, puis la réponse, puis les sources et une fiche.
-PAGE_REELLE = (
-    "Recherche Google",
-    "Aperçu IA",
-    "À propos de ce résultat",
-    "Le roman Les Misérables a été écrit par Victor Hugo et publié en 1862.",
-    "Wikipédia - Les Misérables - Wikipédia. Résultats associés",
-    "￼",
-    "Wikipédia",
-    "À propos de l'œuvre",
-    "• Date de parution : 1862",
-    "• Durée d'écriture : Environ 17 ans (commencé en 1845)",
-    "Les Misérables - Wikipédia. S'ouvre dans un nouvel onglet.",
-)
+QUESTION = "pourquoi le ciel est bleu"
+ATTENDU = ("Le ciel est bleu parce que la lumière du Soleil interagit avec "
+           "l'atmosphère terrestre, un phénomène appelé diffusion de Rayleigh.")
 
-REPONSE = "Le roman Les Misérables a été écrit par Victor Hugo et publié en 1862."
+# Ce que la page expose vraiment, mesuré sur le mode IA : l'en-tête, la
+# question rappelée, la réponse, puis les sources, des puces et — plus bas —
+# des résultats dont le titre reprend mot pour mot la question.
+PAGE_REELLE = (
+    "Passer directement au contenu principal",
+    "Mode IA",
+    "Tous",
+    "Images",
+    "Compte Google Machin (machin@example.com), Abonnement Google",
+    "￼",
+    QUESTION,
+    "￼",
+    ATTENDU,
+    "Météo-France (+ 1) - Pourquoi le ciel est-il bleu ? | Météo-France. Résultats associés",
+    "Voici comment cela fonctionne en trois étapes simples :",
+    "• Une lumière de toutes les couleurs : la lumière du Soleil semble blanche.",
+    "Pourquoi le ciel est bleu",
+    "Pourquoi le ciel est bleu ? questions. dis Noura pourquoi elle est bleue…",
+)
 
 
 # --------------------------------------------------------------------------
 # Lire la réponse dans la page
 # --------------------------------------------------------------------------
-def test_la_reponse_est_la_premiere_phrase_apres_l_ancre(lecture):
+def test_la_reponse_suit_la_question_rappelee(lecture):
     lecture(*PAGE_REELLE)
-    assert gemini_provider.apercu(None) == REPONSE
+    assert gemini_provider.reponse(None, QUESTION) == ATTENDU
 
 
-def test_les_libelles_d_interface_ne_sont_pas_pris_pour_la_reponse(lecture):
-    """« À propos de ce résultat » précède la réponse dans la vraie page."""
+def test_la_question_reprise_plus_bas_ne_trompe_pas(lecture):
+    """
+    Le défaut mesuré : « pourquoi le ciel est bleu » est aussi le titre d'une
+    vidéo, plus bas dans la page. En partant de la dernière occurrence, ALMA
+    lisait le descriptif de la vidéo à la place de la réponse.
+    """
     lecture(*PAGE_REELLE)
-    assert "propos de ce résultat" not in gemini_provider.apercu(None)
+    assert "Noura" not in gemini_provider.reponse(None, QUESTION)
 
 
-def test_ce_qui_precede_l_ancre_est_ignore(lecture):
-    """Sans cela, le titre de la page passerait pour une réponse."""
+def test_ce_qui_precede_la_question_est_ignore(lecture):
+    """Sans cela, le nom du compte Google passerait pour une réponse."""
     lecture(*PAGE_REELLE)
-    assert "Recherche Google" not in gemini_provider.apercu(None)
+    assert "Compte Google" not in gemini_provider.reponse(None, QUESTION)
 
 
-def test_les_sources_et_la_fiche_ne_sont_pas_lues(lecture):
+def test_les_sources_et_les_puces_ne_sont_pas_lues(lecture):
     """Écrites, elles se parcourent ; dites, elles se subissent."""
     lecture(*PAGE_REELLE)
-    reponse = gemini_provider.apercu(None)
-    assert "Wikipédia" not in reponse and "Date de parution" not in reponse
+    trouvee = gemini_provider.reponse(None, QUESTION)
+    assert "Météo-France" not in trouvee and "trois étapes" not in trouvee
 
 
 def test_les_images_ne_sont_pas_lues(lecture):
     """U+FFFC remplace les images dans le texte de l'accessibilité."""
-    lecture("Aperçu IA", "￼",
-            "Les abeilles vivent de trois à six semaines en été.")
-    assert gemini_provider.apercu(None) == (
-        "Les abeilles vivent de trois à six semaines en été."
+    lecture("combien vit une abeille", "￼",
+            "Une abeille ouvrière vit de quatre à six semaines en été.")
+    assert gemini_provider.reponse(None, "combien vit une abeille") == (
+        "Une abeille ouvrière vit de quatre à six semaines en été."
     )
 
 
 def test_une_reponse_courte_est_gardee_si_elle_se_termine(lecture):
     """« Victor Hugo. » est court, mais c'est une phrase."""
-    lecture("Aperçu IA", "À propos de ce résultat", "Victor Hugo.")
-    assert gemini_provider.apercu(None) == "Victor Hugo."
+    lecture("qui a écrit Les Misérables", "￼", "Victor Hugo.")
+    assert gemini_provider.reponse(None, "qui a écrit Les Misérables") == "Victor Hugo."
 
 
-def test_sans_apercu_on_ne_rend_rien(lecture):
-    """Google n'en propose pas toujours : mieux vaut rien qu'un titre de site."""
-    lecture("Recherche Google", "Résultats",
-            "Wikipédia — Les Misérables, roman de Victor Hugo")
-    assert gemini_provider.apercu(None) == ""
+def test_la_casse_et_les_blancs_ne_font_pas_manquer_la_question(lecture):
+    """La page peut rappeler la question autrement qu'on ne l'a dictée."""
+    lecture("Quelle est   la Capitale du Portugal", "La capitale du Portugal est Lisbonne.")
+    assert gemini_provider.reponse(None, "quelle est la capitale du portugal") == (
+        "La capitale du Portugal est Lisbonne."
+    )
 
 
-def test_l_ancre_anglaise_est_reconnue(lecture):
-    lecture("AI overview",
-            "The sky is blue because molecules scatter sunlight unevenly.")
-    assert gemini_provider.apercu(None).startswith("The sky is blue")
+def test_sans_reponse_on_ne_rend_rien(lecture):
+    """Tant que la page n'a rien écrit, mieux vaut rien qu'un bout d'interface."""
+    lecture("Mode IA", "Tous", "Images", "Chargement…")
+    assert gemini_provider.reponse(None, QUESTION) == ""
+
+
+def test_une_page_vide_ne_fait_pas_tomber(lecture):
+    lecture("")
+    assert gemini_provider.reponse(None, QUESTION) == ""
 
 
 # --------------------------------------------------------------------------
@@ -110,6 +125,15 @@ def test_aucune_cle_n_est_demandee():
     source = Path(gemini_provider.__file__).read_text(encoding="utf-8")
     for interdit in ("API_KEY", "api_key", "googleapis.com"):
         assert interdit not in source
+
+
+def test_c_est_le_mode_ia_qui_est_interroge():
+    """
+    Et non gemini.google.com : mesuré, celui-là ne répond que fenêtre au
+    premier plan — réduite ou masquée, la réponse n'arrive jamais.
+    """
+    assert "udm=50" in gemini_provider.RECHERCHE
+    assert "gemini.google.com" not in gemini_provider.RECHERCHE
 
 
 def test_sans_navigateur_il_le_dit(config, monkeypatch):
@@ -135,10 +159,10 @@ def test_la_fenetre_est_refermee_meme_en_cas_d_echec(config, monkeypatch):
     def echoue(*a, **k):
         raise RuntimeError("page illisible")
 
-    monkeypatch.setattr(gemini_provider, "_attendre_l_apercu", echoue)
-    reponse = GeminiProvider(config).generate("pourquoi le ciel est bleu")
+    monkeypatch.setattr(gemini_provider, "_attendre_la_reponse", echoue)
+    trouvee = GeminiProvider(config).generate("pourquoi le ciel est bleu")
     assert fermees == ["la-fenetre"]
-    assert "pas trouvé" in reponse
+    assert "pas trouvé" in trouvee
 
 
 def test_une_reponse_trop_longue_est_coupee_a_une_fin_de_phrase():

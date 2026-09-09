@@ -90,10 +90,11 @@ ai_fallback:
   #   tout      : toute phrase sans commande
   auto: questions
 
-  # Gemini : aucune cle, aucun compte. La reponse de Gemini est deja sur
-  # google.com, en tete des resultats (« Apercu IA »). Alma y ouvre la
-  # recherche dans une fenetre qu elle REDUIT aussitot, la lit comme elle
-  # lit n importe quelle page, puis la referme. Rien ne reste a l ecran.
+  # Gemini : aucune cle, aucun compte. Alma pose la question au MODE IA de
+  # Google (udm=50), dans une fenetre qu elle REDUIT aussitot, la lit comme
+  # elle lit n importe quelle page, puis la referme. Rien ne reste a
+  # l ecran. Ce n est pas gemini.google.com : celui-la cesse d ecrire des
+  # que sa fenetre n est plus au premier plan.
   gemini:
     timeout_seconds: 20     # chargement de la page + ecriture de l apercu
   claude_code:
