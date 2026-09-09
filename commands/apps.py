@@ -178,20 +178,19 @@ def nature_demandee(demande: str) -> str:
     return ""
 
 
-def _est_une_application(ctx: CommandContext) -> bool:
+def est_une_application(nom: str, config) -> bool:
     """
-    Guard : la phrase designe-t-elle une application ?
+    Ce nom designe-t-il une application ?
 
-    D abord ce que la phrase DIT : « ouvre l application Claude » demande le
-    logiciel, « ouvre le site Claude » la page. Sans precision, trois cas : un
-    nom qui figure tel quel dans la configuration des applications en est une ;
-    un nom qui figure tel quel dans celle des SITES n en est pas une -- « ouvre
+    D abord ce que la phrase DIT : « l application Claude » demande le
+    logiciel, « le site Claude » la page. Sans precision, trois cas : un nom
+    qui figure tel quel dans la configuration des applications en est une ; un
+    nom qui figure tel quel dans celle des SITES n en est pas une -- « ouvre
     Google » veut la page, pas le navigateur qui porte son nom ; sinon, on
     regarde ce qui est reellement installe.
     """
     from core import applications
 
-    nom, _ecran = separer_ecran(ctx.arg)
     cible = clean_target(nom)
     if not cible:
         return False
@@ -200,16 +199,22 @@ def _est_une_application(ctx: CommandContext) -> bool:
     if nature == "site":
         return False
     if nature == "app":
-        return (resolve_app(ctx.config, cible) is not None
+        return (resolve_app(config, cible) is not None
                 or applications.chercher(cible) is not None)
 
-    if cible in alias_exacts(ctx.config.get("applications", {})):
+    if cible in alias_exacts(config.get("applications", {})):
         return True
-    if cible in alias_exacts(ctx.config.get("websites", {})):
+    if cible in alias_exacts(config.get("websites", {})):
         return False
-    if resolve_app(ctx.config, nom) is not None:
+    if resolve_app(config, nom) is not None:
         return True
     return applications.chercher(cible) is not None
+
+
+def _est_une_application(ctx: CommandContext) -> bool:
+    """Guard : la phrase designe-t-elle une application ?"""
+    nom, _ecran = separer_ecran(ctx.arg)
+    return est_une_application(nom, ctx.config)
 
 
 def _placer(connues: set, index: int, processus: str = "") -> bool:
@@ -312,14 +317,37 @@ VERBES_ALLER = (r"(?:va|vas|aller|bascule|basculer|passe|passer|affiche|afficher
                 r"montre|montrer|retourne|retourner|reviens|revenir)")
 
 
-def _fenetre_de_lapplication(nom: str, config):
+def _rang_de_fenetre(fenetre, cible: str, processus_attendu: str):
+    """
+    A quel point cette fenetre correspond-elle au nom demande ? Petit = mieux.
+
+    Le PROCESSUS est le repere sur : « chrome » et « chrome.exe » se
+    reconnaissent sans ambiguite. Le titre n arrive qu ensuite -- il change au
+    gre de ce qui est affiche -- mais il rattrape les logiciels dont
+    l executable ne porte pas leur nom : Visual Studio Code s execute sous
+    « Code.exe ».
+    """
+    from core import text_utils
+
+    processus = (fenetre.processus or "").lower()
+    if processus_attendu and processus == processus_attendu:
+        return 0
+    if cible in text_utils.normalize(processus.rsplit(".", 1)[0]):
+        return 1
+    if cible in text_utils.normalize(fenetre.titre or ""):
+        return 2
+    return None
+
+
+def _fenetre_de_lapplication(nom: str, config, ecran=None):
     """
     Une fenetre ouverte qui corresponde a ce nom, ou None.
 
-    On regarde le PROCESSUS d abord -- « chrome » et « chrome.exe » se
-    reconnaissent sans ambiguite -- puis le titre, qui rattrape les logiciels
-    dont l executable ne porte pas leur nom : Visual Studio Code s execute
-    sous « Code.exe ».
+    L ECRAN DE TRAVAIL passe avant la qualite de la correspondance. Une
+    application ouverte deux fois -- un navigateur sur chaque ecran -- doit
+    s afficher la ou l on regarde : mettre devant la fenetre de l autre ecran
+    revient, vu de sa place, a ne rien faire, alors qu Alma annonce que c est
+    fait.
     """
     from core import desktop, text_utils
 
@@ -332,18 +360,17 @@ def _fenetre_de_lapplication(nom: str, config):
     if resolu is not None:
         processus_attendu = (resolu[1].get("process") or "").lower()
 
-    par_titre = None
+    candidates = []
     for fenetre in desktop.fenetres():
-        processus = (fenetre.processus or "").lower()
-        if processus_attendu and processus == processus_attendu:
-            return fenetre
-        if cible in text_utils.normalize(processus.rsplit(".", 1)[0]):
-            return fenetre
-        # Le titre est un repli : il change au gre de ce qui est affiche, donc
-        # on ne s en contente qu a defaut de mieux.
-        if par_titre is None and cible in text_utils.normalize(fenetre.titre or ""):
-            par_titre = fenetre
-    return par_titre
+        rang = _rang_de_fenetre(fenetre, cible, processus_attendu)
+        if rang is None:
+            continue
+        ailleurs = ecran is not None and fenetre.ecran != ecran
+        candidates.append((ailleurs, rang, fenetre))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    return candidates[0][2]
 
 
 @command(
@@ -362,9 +389,12 @@ def aller_sur_application(ctx: CommandContext) -> Response:
     """Amène une application au premier plan, ou l'ouvre si elle est fermée."""
     from core import desktop
 
-    nom, _ecran = separer_ecran(ctx.arg)
+    nom, ecran = separer_ecran(ctx.arg)
     cible = clean_target(nom) or nom
-    fenetre = _fenetre_de_lapplication(cible, ctx.config)
+    # L ecran nomme dans la phrase l emporte ; sinon, celui sur lequel on
+    # travaille (« va sur l ecran 1 » puis « va sur Chrome »).
+    voulu = ecran or getattr(ctx.assistant, "ecran_actif", None)
+    fenetre = _fenetre_de_lapplication(cible, ctx.config, voulu)
     if fenetre is None:
         # Pas ouverte : « va sur Chrome » veut voir Chrome, ouvrir revient au
         # meme pour qui parle.

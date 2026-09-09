@@ -4,6 +4,8 @@ Fenetres, onglets et affichage : naviguer sans toucher au clavier.
 
 from __future__ import annotations
 
+import re
+
 from core import win_utils
 from core.context import CommandContext, Response
 from core.registry import command
@@ -265,8 +267,38 @@ def capture_zone(ctx: CommandContext) -> Response:
     return Response.error("Je n'ai pas pu ouvrir l'outil de capture.")
 
 
+# Ce qui, devant « sur l ecran N », n est qu une facon de s adresser a Alma et
+# ne nomme donc rien : « va sur... », « mets-toi sur... ».
+_TOURNURE = re.compile(
+    r"^(?:va|vas|aller|passe|passer|bascule|basculer|travaille|reste|rester|"
+    r"met[s]?\s+toi|place\s+toi|concentre\s+toi|utilise|prends|affiche|montre|"
+    r"pour|sur|dans|vers)\s*(?:moi\s+)?(?:sur|a|vers|dans)?\s*"
+    r"(?:l\s+|le\s+|la\s+|les\s+)?"
+)
+
+
+def _seulement_l_ecran(ctx: CommandContext) -> bool:
+    """
+    Guard : la phrase ne demande-t-elle QUE de changer d ecran ?
+
+    « va sur Chrome sur l ecran 1 » en nomme deux. Prise pour un simple
+    changement d ecran, elle repondait « Ecran 1 » et laissait Chrome ou il
+    etait : Alma annonçait une chose et en faisait une autre. On rend donc la
+    main des qu une APPLICATION est nommee a cote de l ecran -- « va sur
+    l ecran 1 » et « passe sur le deuxieme ecran » n en nomment aucune.
+    """
+    from commands.apps import est_une_application, separer_ecran
+
+    reste, ecran = separer_ecran(ctx.norm)
+    if ecran is None:
+        return True
+    nom = _TOURNURE.sub("", reste).strip()
+    return not nom or not est_une_application(nom, ctx.config)
+
+
 @command(
     name="choisir_ecran",
+    guard=_seulement_l_ecran,
     patterns=[
         # On tolere quelques mots entre le verbe et « ecran » :
         # « passe sur le deuxieme ecran » doit marcher aussi.

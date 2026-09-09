@@ -21,6 +21,8 @@ OUVERTES = [
     fenetre(2, "Spotify Premium", "Spotify.exe"),
     fenetre(3, "alma.py - Visual Studio Code", "Code.exe"),
     fenetre(4, "Claude", "claude.exe"),
+    # Le même navigateur, ouvert deux fois, sur deux écrans.
+    fenetre(5, "Joueur du Grenier - Google Chrome", "chrome.exe", ecran=2),
 ]
 
 
@@ -97,6 +99,54 @@ def test_une_application_fermee_est_ouverte(assistant, bureau, monkeypatch):
 ])
 def test_les_voisins_gardent_leur_commande(assistant, phrase, attendu):
     assert commande(assistant, phrase) == attendu
+
+
+# --------------------------------------------------------------------------
+# L'écran de travail
+# --------------------------------------------------------------------------
+def test_la_fenetre_de_l_ecran_de_travail_est_choisie(assistant, bureau):
+    """
+    Le défaut constaté à l'usage. Chrome ouvert sur les deux écrans, l'écran 1
+    choisi : ALMA affichait la fenêtre de l'écran 2 en annonçant « Voilà
+    Chrome ». Vu de l'écran 1, elle disait une chose et en faisait une autre.
+    """
+    assistant.ecran_actif = 1
+    assert assistant.handle("va sur Chrome").ok
+    assert bureau["handle"] == 1
+
+
+def test_l_autre_ecran_amene_l_autre_fenetre(assistant, bureau):
+    assistant.ecran_actif = 2
+    assistant.handle("va sur Chrome")
+    assert bureau["handle"] == 5
+
+
+def test_l_ecran_nomme_l_emporte_sur_l_ecran_de_travail(assistant, bureau):
+    assistant.ecran_actif = 2
+    assert assistant.handle("va sur Chrome sur l'écran 1").ok
+    assert bureau["handle"] == 1
+
+
+def test_sans_fenetre_sur_l_ecran_choisi_on_prend_celle_d_ailleurs(assistant, bureau):
+    """Spotify n'est ouvert que sur l'écran 1 : mieux vaut l'afficher que rien."""
+    assistant.ecran_actif = 2
+    assistant.handle("va sur Spotify")
+    assert bureau["handle"] == 2
+
+
+@pytest.mark.parametrize("phrase", [
+    "va sur l'écran 2", "écran 1", "passe sur le deuxième écran",
+    "mets-toi sur l'écran 2", "reste sur l'écran 1", "travaille sur l'écran 2",
+    "utilise l'écran 2", "le deuxième écran", "sur l'écran 2",
+    "pour le premier écran", "va sur le premier écran",
+])
+def test_choisir_un_ecran_reste_intact(assistant, phrase):
+    """
+    Ne nommer que l'écran doit continuer de ne changer que l'écran : c'est le
+    garde-fou qui distingue « va sur l'écran 1 » de « va sur Chrome sur
+    l'écran 1 », et il ne doit pas mordre sur le premier.
+    """
+    assert commande(assistant, phrase) == "choisir_ecran"
 
 
 # --------------------------------------------------------------------------
