@@ -685,4 +685,11 @@ def chercher_cible(cibles: list, termes: str, types=None):
     for cible in cibles:
         if deduction.se_ressemblent(voulu, titre_visible(cible.nom)):
             return cible
+
+    # Vraiment en dernier : l ossature des consonnes. Un nom propre est ce
+    # que la transcription deforme le plus, et deux mots faux sur deux font
+    # echouer tout le reste -- « Rehman Muneeb » entendu « Rayman Monique ».
+    for cible in cibles:
+        if deduction.memes_consonnes(voulu, titre_visible(cible.nom)):
+            return cible
     return None

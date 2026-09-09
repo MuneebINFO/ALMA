@@ -155,14 +155,38 @@ def separer_ecran(demande: str) -> tuple:
     return demande[:fin].strip(), numero
 
 
+# Le mot qui precede le nom leve l ambiguite, et il n a donc rien d un
+# parasite : beaucoup de choses portent le meme nom des deux cotes -- Claude,
+# Spotify, Discord existent en application ET en site.
+MOTS_APPLICATION = ("application", "applications", "appli", "applis", "app",
+                    "logiciel", "programme", "software")
+MOTS_SITE = ("site", "page", "web")
+
+
+def nature_demandee(demande: str) -> str:
+    """
+    « application », « site » : ce que la phrase precise elle-meme.
+
+    Retourne "app", "site", ou "" quand rien ne tranche.
+    """
+    jetons = set(text_utils.tokenize(text_utils.normalize(demande or "")))
+    if jetons.intersection(MOTS_APPLICATION):
+        return "app"
+    if jetons.intersection(MOTS_SITE):
+        return "site"
+    return ""
+
+
 def _est_une_application(ctx: CommandContext) -> bool:
     """
     Guard : la phrase designe-t-elle une application ?
 
-    Trois cas, dans l ordre. Un nom qui figure tel quel dans la configuration
-    des applications en est une. Un nom qui figure tel quel dans celle des
-    SITES n en est pas une -- « ouvre Google » veut la page, pas le navigateur
-    qui porte son nom. Sinon, on regarde ce qui est reellement installe.
+    D abord ce que la phrase DIT : « ouvre l application Claude » demande le
+    logiciel, « ouvre le site Claude » la page. Sans precision, trois cas : un
+    nom qui figure tel quel dans la configuration des applications en est une ;
+    un nom qui figure tel quel dans celle des SITES n en est pas une -- « ouvre
+    Google » veut la page, pas le navigateur qui porte son nom ; sinon, on
+    regarde ce qui est reellement installe.
     """
     from core import applications
 
@@ -170,13 +194,21 @@ def _est_une_application(ctx: CommandContext) -> bool:
     cible = clean_target(nom)
     if not cible:
         return False
+
+    nature = nature_demandee(nom)
+    if nature == "site":
+        return False
+    if nature == "app":
+        return (resolve_app(ctx.config, cible) is not None
+                or applications.chercher(cible) is not None)
+
     if cible in alias_exacts(ctx.config.get("applications", {})):
         return True
     if cible in alias_exacts(ctx.config.get("websites", {})):
         return False
     if resolve_app(ctx.config, nom) is not None:
         return True
-    return applications.chercher(nom) is not None
+    return applications.chercher(cible) is not None
 
 
 def _placer(connues: set, index: int, processus: str = "") -> bool:
@@ -234,8 +266,12 @@ def open_app(ctx: CommandContext) -> Response:
     index = ecran or ECRAN_PAR_DEFAUT
     connues = desktop.poignees_visibles()
 
-    resolu = resolve_app(ctx.config, nom)
-    if resolu is not None and _prefere_lapplication(ctx.config, nom):
+    # Le nom, debarrasse de « l application » et autres mots de nature.
+    cible_nom = clean_target(nom) or nom
+    explicite = nature_demandee(nom) == "app"
+
+    resolu = resolve_app(ctx.config, cible_nom)
+    if resolu is not None and (explicite or _prefere_lapplication(ctx.config, nom)):
         cle, entree = resolu
         libelle = (entree.get("aliases") or [cle])[0]
         ok, detail = win_utils.launch(entree.get("paths", []) or [])
@@ -246,10 +282,10 @@ def open_app(ctx: CommandContext) -> Response:
         # ailleurs, on continue plutot que d abandonner.
         log.debug("Chemin configure inutilisable pour %s : %s", cle, detail)
 
-    trouvee = applications.chercher(nom)
+    trouvee = applications.chercher(cible_nom)
     if trouvee is None:
         return Response.error(
-            "Je ne trouve pas d'application « " + nom + " » sur cet ordinateur."
+            "Je ne trouve pas d'application « " + cible_nom + " » sur cet ordinateur."
         )
     libelle, cible = trouvee
     ok, detail = applications.lancer(cible)

@@ -65,6 +65,39 @@ def cle_phonetique(mot: str) -> str:
     return "".join(resultat)
 
 
+# Les voyelles sont ce que la reconnaissance vocale rend le plus mal sur un
+# nom propre : ce sont elles qui portent l accent, la liaison, l hesitation.
+# Les consonnes, elles, tiennent bon.
+VOYELLES = "aeiouy"
+SQUELETTE_MIN = 4          # en dessous, deux mots quelconques se ressemblent
+
+
+def squelette_consonnes(texte: str) -> str:
+    """Les consonnes d un texte, une fois sa sonorite simplifiee."""
+    cle = " ".join(cle_phonetique(mot) for mot in
+                   text_utils.tokenize(text_utils.normalize(texte or "")))
+    return "".join(c for c in cle if c.isalnum() and c not in VOYELLES)
+
+
+def memes_consonnes(a: str, b: str, seuil: float = 0.8) -> bool:
+    """
+    Deux textes ont-ils la meme ossature de consonnes ?
+
+    Dernier recours pour les noms propres, que la transcription deforme plus
+    que tout : « Rehman Muneeb » revient en « Rayman Monique ». Les deux ne
+    se ressemblent qu a 0,59 en lettres et leurs cles phonetiques different,
+    mais leurs consonnes -- rmnmnb et rmnmnk -- coincident a 0,83. Un libelle
+    etranger, lui, tombe sous 0,20.
+
+    On exige des noms assez longs : sur trois consonnes, n importe quoi se
+    ressemble.
+    """
+    sa, sb = squelette_consonnes(a), squelette_consonnes(b)
+    if len(sa) < SQUELETTE_MIN or len(sb) < SQUELETTE_MIN:
+        return False
+    return sa == sb or text_utils.similarity(sa, sb) >= seuil
+
+
 def se_ressemblent(a: str, b: str, seuil: float = 0.8) -> bool:
     """Deux mots sonnent-ils pareil ?"""
     cle_a, cle_b = cle_phonetique(a), cle_phonetique(b)
