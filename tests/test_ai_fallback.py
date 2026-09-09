@@ -96,6 +96,37 @@ def test_commande_inconnue_de_bout_en_bout_ne_lance_rien(assistant, monkeypatch)
     assert reponse.text in SUGGESTIONS
 
 
+def test_une_vraie_reponse_n_est_pas_un_echec(assistant, monkeypatch):
+    """
+    ok=False veut dire « je n ai pas compris ».
+
+    Quand un provider a REPONDU, la reponse n est pas un echec : la marquer
+    ainsi l afficherait en rouge et la compterait comme une commande ratee.
+    """
+    from core import ai_fallback
+
+    class ProviderBavard:
+        name = "essai"
+
+        def generate(self, query):
+            return "Bruxelles est la capitale de la Belgique."
+
+    monkeypatch.setitem(ai_fallback.PROVIDERS, "essai", lambda config: ProviderBavard())
+    assistant.config.set("ai_fallback.enabled", True)
+    assistant.config.set("ai_fallback.provider", "essai")
+
+    reponse = assistant.handle("xyzzy plover blorb")
+    assert reponse.ok, reponse.text
+    assert "Bruxelles" in reponse.text
+
+
+def test_sans_provider_l_incomprehension_reste_un_echec(assistant):
+    """Le fallback eteint, on ne comprend pas -- et cela doit se voir."""
+    reponse = assistant.handle("xyzzy plover blorb")
+    assert not reponse.ok
+    assert reponse.text in SUGGESTIONS
+
+
 def test_aucune_cle_api_dans_la_configuration(config):
     """Alma ne gere aucune cle : Claude Code s authentifie lui-meme."""
     assert "api_key" not in (config.get("ai_fallback") or {})

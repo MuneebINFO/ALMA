@@ -89,12 +89,14 @@ def get_provider(config) -> AIProvider:
         return NullProvider()
 
 
-def handle_with_ai(query: str, config=None) -> str:
+def handle_with_ai(query: str, config=None, provider=None) -> str:
     """
     Interface stable appelee quand aucune commande locale ne correspond.
     Par defaut : message poli, sans aucun appel exterieur.
+
+    `provider` evite de le reconstruire quand l appelant l a deja sous la main.
     """
-    provider = get_provider(config)
+    provider = provider if provider is not None else get_provider(config)
     try:
         return provider.generate(query)
     except NotImplementedError as exc:
@@ -121,7 +123,13 @@ def handle_unmatched(utterance: Utterance, assistant=None) -> Response:
         if deduit is not None:
             return deduit
 
-    return Response(text=handle_with_ai(utterance.raw, config), ok=False)
+    # ok=False signale « je n ai pas compris » : c est vrai tant qu aucun
+    # provider ne repond, faux des qu un provider a REPONDU quelque chose.
+    # Marquer une vraie reponse comme un echec la ferait afficher en rouge et
+    # comptabiliser comme une commande ratee dans l historique.
+    provider = get_provider(config)
+    reponse = handle_with_ai(utterance.raw, config, provider)
+    return Response(text=reponse, ok=not isinstance(provider, NullProvider))
 
 
 def _tenter_deduction(utterance: Utterance, assistant):

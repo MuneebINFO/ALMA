@@ -320,8 +320,13 @@ def verifier_ia(config) -> None:
             else:
                 # Le compte de l application Claude et celui du CLI sont deux
                 # connexions distinctes : l une peut etre ouverte et l autre non.
-                manque("CLI non connecté — lancez « claude auth login » "
-                       "(la connexion de l'application Claude ne compte pas pour le CLI)")
+                # Le chemin du binaire est affiche : c est ce qui permet de
+                # voir qu on s est connecte ailleurs -- dans WSL, par exemple,
+                # alors qu ALMA appelle celui de Windows.
+                manque("CLI non connecté : " + provider_cc.resolve_command())
+                note("Lancez « claude auth login » DANS UN TERMINAL WINDOWS. Ni la "
+                     "connexion de l'application Claude, ni celle d'un CLI sous WSL "
+                     "ne valent pour ce binaire.")
         if provider_cc.api_key_detected():
             note("ANTHROPIC_API_KEY est définie : facturation API au lieu de l'abonnement")
     else:
