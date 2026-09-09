@@ -91,6 +91,47 @@ def claude_demander(ctx: CommandContext) -> Response:
 
 
 @command(
+    name="claude_cowork",
+    patterns=[
+        r"^(?:demande|demander|dis|dire)\s+a\s+cowork\s+(?:de\s+)?(?P<tache>.+)$",
+        r"^(?:lance|lancer|demarre|demarrer|fais|faire)\s+(?:une\s+)?"
+        r"(?:tache\s+)?(?:en\s+|dans\s+|avec\s+|sur\s+)?cowork\s*:?\s*(?P<tache>.+)$",
+        r"^(?P<tache>.+?)\s+(?:en|dans|avec)\s+cowork$",
+    ],
+    keywords=[["cowork"]],
+    category="Recherche",
+    description="Lancer une tâche dans Cowork",
+    examples=["demande à Cowork de résumer mes notes de la semaine",
+              "lance une tâche Cowork : trier mes captures d'écran"],
+    priority=97,
+    guard=_application_ouverte,
+    contextuel=True,
+)
+def claude_cowork(ctx: CommandContext) -> Response:
+    """Ouvre une session Cowork et y dicte la tâche."""
+    tache = (ctx.group("tache") or "").strip()
+    if not tache:
+        return Response.error("Quelle tâche dois-je lancer ?")
+
+    fenetre = claude_app.fenetre()
+    if not claude_app.reveiller(fenetre):
+        return Response.error("L'application Claude ne répond pas.")
+
+    # Une session neuve, sinon la tâche part dans la conversation affichée --
+    # et le sélecteur Chat/Cowork n'existe que sur une page vierge.
+    if not claude_app.activer(fenetre, "New"):
+        return Response.error("Je n'ai pas pu ouvrir de nouvelle session Claude.")
+    if not claude_app.activer(fenetre, "Cowork"):
+        return Response.error(
+            "Je ne trouve pas le mode Cowork. Il n'apparaît que sur une page vierge."
+        )
+    if not claude_app.poser(fenetre, tache):
+        return Response.error("Je n'ai pas trouvé où écrire dans l'application Claude.")
+    # On ne lit pas la reponse : une tache Cowork dure, et l ecran la montre.
+    return Response(text="C'est parti dans Cowork.", speak=False)
+
+
+@command(
     name="claude_section",
     patterns=[
         # « ouvre Cowork », « passe sur les artifacts », « nouvelle session »

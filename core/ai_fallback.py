@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import random
 
+from core import text_utils
 from core.context import Response, Utterance
 from core.providers import AIProvider  # interface partagee par tous les providers
 
@@ -98,7 +99,9 @@ def handle_with_ai(query: str, config=None, provider=None) -> str:
     """
     provider = provider if provider is not None else get_provider(config)
     try:
-        return provider.generate(query)
+        # Une reponse de modele est ecrite en Markdown. Elle est lue a voix
+        # haute : « **1 seul fichier** » se dirait « asterisque asterisque ».
+        return text_utils.sans_balisage(provider.generate(query))
     except NotImplementedError as exc:
         return "Le mode IA est activé mais le provider n'est pas implémenté. " + str(exc)
     except Exception as exc:

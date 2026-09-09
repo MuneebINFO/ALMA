@@ -186,6 +186,21 @@ def test_un_etat_illisible_ne_ment_pas(config_active, claude_present, monkeypatc
     assert ClaudeCodeProvider(config_active).connexion() == (None, "")
 
 
+def test_la_sortie_est_lue_en_utf8(config_active, claude_present, monkeypatch):
+    """
+    Le CLI ecrit en UTF-8 ; l encodage local ne convient pas.
+
+    Sans le dire explicitement, Python decode avec cp1252 sous Windows et
+    « le systeme a ete cree » devient « le systÃ¨me a Ã©tÃ© crÃ©Ã© » --
+    qu Alma lirait tel quel a voix haute.
+    """
+    espion = RunEspion()
+    monkeypatch.setattr(subprocess, "run", espion)
+    ClaudeCodeProvider(config_active).generate("bonjour")
+    assert espion.appels[0][1].get("encoding") == "utf-8"
+    assert "text" not in espion.appels[0][1], "text=True retomberait sur l encodage local"
+
+
 def test_timeout_configurable(config, tmp_path, claude_present, monkeypatch):
     espion = RunEspion()
     monkeypatch.setattr(subprocess, "run", espion)

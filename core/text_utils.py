@@ -157,3 +157,34 @@ def best_match(query: str, candidates: Iterable[str], threshold: float = 0.75) -
             best_score = score
             best = candidate
     return best
+
+
+# --------------------------------------------------------------------------
+# Balisage Markdown
+# --------------------------------------------------------------------------
+_CLOTURE_CODE = re.compile(r"^\s*```.*$", re.MULTILINE)
+_TITRE = re.compile(r"^\s{0,3}#{1,6}\s+", re.MULTILINE)
+_PUCE = re.compile(r"^\s{0,6}[-*+]\s+", re.MULTILINE)
+_GRAS = re.compile(r"\*\*(.+?)\*\*", re.DOTALL)
+_ITALIQUE = re.compile(r"(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\*)")
+_CODE = re.compile(r"`([^`\n]+)`")
+_LIEN = re.compile(r"\[([^\]\n]+)\]\([^)\s]+\)")
+
+
+def sans_balisage(texte: str) -> str:
+    """
+    Le texte débarrassé du balisage Markdown, pour être lu à voix haute.
+
+    « **1 seul fichier** » se lirait « astérisque astérisque 1 seul fichier ».
+    On ne retire que ce qui est sans ambiguïté : gras, italique, code, titres,
+    puces et libellés de liens. Les soulignés sont laissés tels quels — ils
+    apparaissent dans les noms de fichiers bien plus souvent qu'en italique.
+    """
+    texte = _CLOTURE_CODE.sub("", texte or "")
+    texte = _LIEN.sub(r"\1", texte)
+    texte = _GRAS.sub(r"\1", texte)
+    texte = _ITALIQUE.sub(r"\1", texte)
+    texte = _CODE.sub(r"\1", texte)
+    texte = _TITRE.sub("", texte)
+    texte = _PUCE.sub("", texte)
+    return texte.strip()

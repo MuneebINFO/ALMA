@@ -386,9 +386,14 @@ subscription.
 
 ```
 demande à Claude ce qu'est un moteur de recherche
+demande à Cowork de trier mes captures d'écran
 ouvre Cowork                  va sur Claude Code
 montre les artifacts          nouvelle session Claude
 ```
+
+A Cowork task opens a fresh session, picks the Cowork mode in the composer and
+dictates the task — one sentence, start to finish. ALMA does not wait for it:
+a Cowork task runs for minutes and the screen already shows its progress.
 
 Close the application and the same sentence falls back to opening claude.ai in
 the browser, as before.

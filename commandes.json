@@ -567,6 +567,13 @@
       ]
     },
     {
+      "action": "Lancer une tâche dans Cowork",
+      "phrases": [
+        "demande à Cowork de trier mes captures d'écran",
+        "lance une tâche Cowork : résumer mes notes de la semaine"
+      ]
+    },
+    {
       "action": "Rechercher sur YouTube (raccourci)",
       "phrases": [
         "youtube lofi hip hop"

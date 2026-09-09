@@ -33,6 +33,11 @@ log = logging.getLogger(__name__)
 DEFAULT_COMMAND = "claude"
 DEFAULT_TIMEOUT = 120
 
+# Le CLI ecrit en UTF-8, sur toutes les plateformes. Sans le dire, Python
+# decode avec l encodage local -- cp1252 sous Windows -- et « le systeme a ete
+# cree » revient en « le systÃ¨me a Ã©tÃ© crÃ©Ã© », qu Alma lirait tel quel.
+ENCODAGE = "utf-8"
+
 # L etat de connexion se lit en une seconde : assez court pour le diagnostic,
 # assez long pour un disque lent.
 SONDAGE_TIMEOUT = 20
@@ -105,7 +110,7 @@ class ClaudeCodeProvider:
         try:
             resultat = subprocess.run(
                 [binaire, "auth", "status"],
-                capture_output=True, text=True, errors="replace",
+                capture_output=True, encoding=ENCODAGE, errors="replace",
                 stdin=subprocess.DEVNULL, timeout=SONDAGE_TIMEOUT,
             )
             etat = json.loads((resultat.stdout or "").strip() or "{}")
@@ -165,7 +170,7 @@ class ClaudeCodeProvider:
                 argv,
                 cwd=str(working_dir),
                 capture_output=True,
-                text=True,
+                encoding=ENCODAGE,
                 errors="replace",
                 stdin=subprocess.DEVNULL,
                 timeout=self.timeout,
