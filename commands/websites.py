@@ -238,6 +238,97 @@ VERBES_CONTENU = (
 SITES_RESERVES = {"wikipedia", "claude", "chatgpt"}
 
 
+def fenetre_du_site(ctx: CommandContext, cle: str):
+    """La fenetre qui affiche deja ce site, ou None."""
+    from core import browser_tabs, desktop
+
+    entree = (ctx.config.get("websites", {}) or {}).get(cle, {})
+    termes = termes_de_recherche(cle, entree)
+    ecran = getattr(ctx.assistant, "ecran_actif", None)
+    onglet = browser_tabs.trouver_onglet(termes, ecran=ecran)
+    if onglet is not None:
+        return onglet.fenetre
+    for terme in termes:
+        fenetre = desktop.trouver_fenetre(terme, navigateurs_seulement=True, ecran=ecran)
+        if fenetre is not None:
+            return fenetre
+    return None
+
+
+def fenetre_montre_le_site(ctx: CommandContext, cle: str, fenetre) -> bool:
+    """
+    Cette fenetre affiche-t-elle bien le site vise ?
+
+    Garde-fou indispensable : taper une requete, c est ecrire dans une page
+    et appuyer sur Entree. Se tromper de fenetre, ce serait ecrire dans la
+    recherche d un tout autre site -- ou pire, dans un formulaire. On verifie
+    donc l adresse, et a defaut le titre, avant la moindre frappe.
+    """
+    from core import browser_tabs
+
+    if fenetre is None:
+        return False
+    entree = (ctx.config.get("websites", {}) or {}).get(cle, {})
+    termes = [text_utils.normalize(t).strip()
+              for t in termes_de_recherche(cle, entree)]
+    termes = [t for t in termes if t]
+    if not termes:
+        return False
+
+    adresse = text_utils.normalize(browser_tabs.adresse_courante(fenetre))
+    if adresse:
+        return any(terme in adresse for terme in termes)
+    # Barre d adresse illisible : le titre de la fenetre reflete l onglet actif.
+    titre = text_utils.normalize(fenetre.titre or "")
+    return any(terme in titre for terme in termes)
+
+
+def chercher_sur_le_site(ctx: CommandContext, cle: str, url: str, requete: str) -> bool:
+    """
+    Cherche sur un site, par SA barre de recherche quand c est possible.
+
+    Fabriquer une adresse de recherche ne marche que sur les sites qui en ont
+    une, stable, et qui n attendent rien d autre : Disney+ n en a pas, sa page
+    de resultats ne porte pas la requete. Taper dans le champ du site marche
+    partout ou il y en a un, et rend l adresse exacte que le site aurait
+    produite lui-meme.
+
+    Deux situations, pour ne pas charger une page pour rien :
+
+      - le site est DEJA ouvert : on l amene devant et on tape dans son champ.
+        Rien n est recharge, ce qui preserve une video en cours ;
+      - il ne l est pas : l adresse de recherche va droit au but. On n ouvre
+        l accueil pour y taper que si le site n a pas d adresse de recherche.
+
+    L adresse configuree reste le repli general.
+    """
+    from urllib.parse import quote_plus
+
+    from commands.interaction import fenetre_visee
+    from core import recherche_page
+
+    ctx.assistant.memoriser("site", cle)
+    entree = (ctx.config.get("websites", {}) or {}).get(cle, {})
+    modele = entree.get("search_url") if isinstance(entree, dict) else None
+
+    deja_ouvert = fenetre_du_site(ctx, cle) is not None
+    if deja_ouvert or not modele:
+        ok, _mode = afficher_site(ctx.config, cle, url, naviguer=False,
+                                  assistant=ctx.assistant)
+        if ok:
+            fenetre = fenetre_visee(ctx)
+            if (fenetre_montre_le_site(ctx, cle, fenetre)
+                    and recherche_page.chercher(fenetre, requete)):
+                return True
+
+    if not modele:
+        return False
+    ok, _mode = afficher_site(ctx.config, cle,
+                              modele.replace("{q}", quote_plus(requete)),
+                              naviguer=True, assistant=ctx.assistant)
+    return ok
+
+
 def _site_connu(ctx: CommandContext) -> bool:
     """Guard : cible connue, et non reservee a une commande specialisee."""
     resolu = resolve_website(ctx.config, ctx.group("site"))
@@ -266,8 +357,6 @@ def site_search(ctx: CommandContext) -> Response:
     Affiche le site -- en reutilisant l onglet s il est deja ouvert -- puis y
     lance la recherche demandee.
     """
-    from urllib.parse import quote_plus
-
     resolu = resolve_website(ctx.config, ctx.group("site"))
     if resolu is None:
         return Response.error("Je ne connais pas ce site.")
@@ -275,21 +364,9 @@ def site_search(ctx: CommandContext) -> Response:
     requete = ctx.group("query").strip()
     if not requete:
         return Response.error("Que dois-je chercher sur " + cle + " ?")
-
-    entree = (ctx.config.get("websites", {}) or {}).get(cle, {})
-    modele = entree.get("search_url") if isinstance(entree, dict) else None
-    cible = modele.replace("{q}", quote_plus(requete)) if modele else url
-
-    ctx.assistant.memoriser("site", cle)
-    ok, mode = afficher_site(ctx.config, cle, cible, naviguer=True, assistant=ctx.assistant)
-    if not ok:
-        return Response.error("Je n'ai pas réussi à ouvrir " + cle + ".")
-    if not modele:
-        return Response(
-            text="J'ouvre " + cle + ", mais je ne sais pas y chercher directement."
-        )
-    prefixe = ("Je reprends l'onglet " + cle) if mode != "ouvert" else ("J'ouvre " + cle)
-    return Response(text=prefixe + " et je cherche « " + requete + " ».")
+    if chercher_sur_le_site(ctx, cle, url, requete):
+        return Response(text="Je cherche « " + requete + " » sur " + cle + ".")
+    return Response.error("Je n'ai pas réussi à chercher sur " + cle + ".")
 
 
 def _site_en_contexte(ctx: CommandContext) -> bool:
@@ -318,24 +395,15 @@ def site_search_contextuel(ctx: CommandContext) -> Response:
     Damso » sans repeter le nom du site. Le contexte expire avec la session
     d ecoute : passe ce delai, la meme phrase redevient une recherche web.
     """
-    from urllib.parse import quote_plus
-
     cle = ctx.assistant.rappeler("site")
     requete = ctx.arg.strip()
     if not cle or not requete:
         return Response.error("Que dois-je chercher ?")
-
     entree = (ctx.config.get("websites", {}) or {}).get(cle, {})
-    modele = entree.get("search_url") if isinstance(entree, dict) else None
-    if not modele:
-        return Response.error("Je ne sais pas chercher directement sur " + cle + ".")
-
-    cible = modele.replace("{q}", quote_plus(requete))
-    ctx.assistant.memoriser("site", cle)          # on reste sur ce site
-    ok, mode = afficher_site(ctx.config, cle, cible, naviguer=True, assistant=ctx.assistant)
-    if not ok:
-        return Response.error("Je n'ai pas réussi à chercher sur " + cle + ".")
-    return Response(text="Je cherche « " + requete + " » sur " + cle + ".")
+    url = entree.get("url") if isinstance(entree, dict) else str(entree)
+    if chercher_sur_le_site(ctx, cle, url or "", requete):
+        return Response(text="Je cherche « " + requete + " » sur " + cle + ".")
+    return Response.error("Je n'ai pas réussi à chercher sur " + cle + ".")
 
 
 def _site_pour_nouvel_onglet(ctx: CommandContext) -> bool:
@@ -667,8 +735,6 @@ def lancer_titre(ctx: CommandContext) -> Response:
     la fiche. On s arrete devant le bouton « Lecture » -- lancer le film est
     une decision qui revient a l utilisateur.
     """
-    from urllib.parse import quote_plus
-
     from commands.interaction import fenetre_visee
     from core import interaction
 
@@ -689,17 +755,8 @@ def lancer_titre(ctx: CommandContext) -> Response:
             + titre + " sur Netflix »."
         )
     cle, url = resolu
-    entree = (ctx.config.get("websites", {}) or {}).get(cle, {})
-    modele = entree.get("search_url") if isinstance(entree, dict) else None
-    if not modele:
-        return Response.error("Je ne sais pas chercher un titre sur " + cle + ".")
-
-    ctx.assistant.memoriser("site", cle)
-    ok, _mode = afficher_site(ctx.config, cle,
-                              modele.replace("{q}", quote_plus(titre)),
-                              naviguer=True, assistant=ctx.assistant)
-    if not ok:
-        return Response.error("Je n'ai pas réussi à ouvrir " + cle + ".")
+    if not chercher_sur_le_site(ctx, cle, url, titre):
+        return Response.error("Je n'ai pas réussi à chercher sur " + cle + ".")
 
     fenetre = fenetre_visee(ctx)
     if fenetre is None:

@@ -69,12 +69,33 @@ def cle_phonetique(mot: str) -> str:
 # nom propre : ce sont elles qui portent l accent, la liaison, l hesitation.
 # Les consonnes, elles, tiennent bon.
 VOYELLES = "aeiouy"
-SQUELETTE_MIN = 4          # en dessous, deux mots quelconques se ressemblent
+SQUELETTE_MIN = 3          # en dessous, deux mots quelconques se ressemblent
+SQUELETTE_LONG = 4         # a partir de la, on tolere l a-peu-pres
+
+
+def _sonorite(mot: str) -> str:
+    """
+    Comme `cle_phonetique`, mais SANS retirer la finale muette.
+
+    Cette suppression sert a rapprocher « scrol » de « scrolle ». Pour une
+    ossature de consonnes, elle nuit : « cloud » y perd son d et ne ressemble
+    plus a « claude », alors que les deux se prononcent presque pareil.
+    """
+    mot = text_utils.normalize(mot).strip()
+    if not mot:
+        return ""
+    for avant, apres in _SUBSTITUTIONS:
+        mot = mot.replace(avant, apres)
+    resultat = []
+    for lettre in mot:
+        if not resultat or resultat[-1] != lettre:
+            resultat.append(lettre)
+    return "".join(resultat)
 
 
 def squelette_consonnes(texte: str) -> str:
     """Les consonnes d un texte, une fois sa sonorite simplifiee."""
-    cle = " ".join(cle_phonetique(mot) for mot in
+    cle = " ".join(_sonorite(mot) for mot in
                    text_utils.tokenize(text_utils.normalize(texte or "")))
     return "".join(c for c in cle if c.isalnum() and c not in VOYELLES)
 
@@ -93,8 +114,12 @@ def memes_consonnes(a: str, b: str, seuil: float = 0.8) -> bool:
     ressemble.
     """
     sa, sb = squelette_consonnes(a), squelette_consonnes(b)
-    if len(sa) < SQUELETTE_MIN or len(sb) < SQUELETTE_MIN:
+    court = min(len(sa), len(sb))
+    if court < SQUELETTE_MIN:
         return False
+    if court < SQUELETTE_LONG:
+        # Trois consonnes, c est peu : on n accepte que l identite.
+        return sa == sb
     return sa == sb or text_utils.similarity(sa, sb) >= seuil
 
 

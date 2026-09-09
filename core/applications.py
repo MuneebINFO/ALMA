@@ -153,8 +153,15 @@ def _mots(texte: str) -> list:
 
 
 def _rang(nom: str, voulu: str, mots_voulus: set):
-    """Qualite de la correspondance, du meilleur au pire. None si aucune."""
-    from core import text_utils
+    """
+    Qualite de la correspondance, du meilleur au pire. None si aucune.
+
+    Les deux derniers recours rattrapent la reconnaissance vocale, qui rend
+    mal les noms de logiciels : « Claude » revient en « Cloud ». Les deux ne
+    se ressemblent qu a 0,73 en lettres -- sous tout seuil raisonnable --
+    mais leurs sonorites, klod et klu, coincident.
+    """
+    from core import deduction, text_utils
 
     norme = " ".join(_mots(nom))
     if not norme:
@@ -165,8 +172,13 @@ def _rang(nom: str, voulu: str, mots_voulus: set):
         return (1, len(norme))
     if mots_voulus and mots_voulus <= set(_mots(nom)):
         return (2, len(norme))
-    ecart = text_utils.similarity(voulu, norme)
-    return (3, len(norme)) if ecart >= 0.85 else None
+    if text_utils.similarity(voulu, norme) >= 0.85:
+        return (3, len(norme))
+    if deduction.se_ressemblent(voulu, norme):
+        return (4, len(norme))
+    if deduction.memes_consonnes(voulu, norme):
+        return (5, len(norme))
+    return None
 
 
 def chercher(nom_parle: str, forcer_systeme: bool = False):

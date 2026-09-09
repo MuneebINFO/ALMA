@@ -18,7 +18,8 @@ log = logging.getLogger(__name__)
 # Mots parasites fréquents devant un nom d application.
 _FILLERS = (
     "moi", "le", "la", "les", "l", "un", "une", "des", "mon", "ma", "mes",
-    "the", "my", "app", "application", "logiciel", "programme", "stp",
+    "the", "my", "app", "appli", "applis", "application", "applications",
+    "logiciel", "logiciels", "programme", "software", "stp",
     "onglet", "onglets", "page", "site", "tab", "fenetre",
     "s'il te plaît", "s il vous plait", "please",
 )

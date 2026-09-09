@@ -62,7 +62,27 @@ def test_la_requete_nest_pas_tronquee(assistant, router, sans_navigateur):
     assert "nouvelles" in url and "IA" in url
 
 
-def test_onglet_existant_reutilise(assistant, router, monkeypatch):
+@pytest.fixture
+def sans_champ_de_recherche(monkeypatch):
+    """La page n'expose aucune barre de recherche : on retombe sur l'adresse."""
+    from core import recherche_page
+
+    monkeypatch.setattr(recherche_page, "chercher", lambda fenetre, requete: False)
+
+
+@pytest.fixture
+def avec_champ_de_recherche(monkeypatch):
+    """La page a une barre de recherche : on y tape, et rien n'est rechargé."""
+    from core import recherche_page
+
+    saisies = []
+    monkeypatch.setattr(recherche_page, "chercher",
+                        lambda fenetre, requete: saisies.append(requete) or True)
+    return saisies
+
+
+def test_onglet_existant_reutilise(assistant, router, monkeypatch,
+                                   sans_champ_de_recherche):
     """
     Si le site est déjà l'onglet actif d'une fenêtre, on doit reprendre cette
     fenêtre plutôt que d'en ouvrir une nouvelle.
@@ -85,7 +105,54 @@ def test_onglet_existant_reutilise(assistant, router, monkeypatch):
     assert reponse.ok
     assert naviguees and naviguees[0][0] == 7
     assert "netflix.com/search" in naviguees[0][1]
-    assert "reprends" in reponse.text.lower()
+    assert "netflix" in reponse.text.lower()
+
+
+def test_la_barre_du_site_evite_de_recharger_la_page(assistant, router, monkeypatch,
+                                                     avec_champ_de_recherche):
+    """
+    Quand le site est déjà ouvert et qu'il a sa propre barre de recherche, on
+    y tape : rien n'est rechargé, ce qui préserve une vidéo en cours.
+    """
+    from core import browser_tabs
+
+    fenetre = desktop.Fenetre(handle=7, titre="Netflix - Google Chrome",
+                              processus="chrome.exe", ecran=1)
+    monkeypatch.setattr(browser_tabs, "trouver_onglet", lambda *a, **k: None)
+    monkeypatch.setattr(browser_tabs, "adresse_courante", lambda f: "netflix.com/browse")
+    monkeypatch.setattr(desktop, "trouver_fenetre", lambda *a, **k: fenetre)
+    monkeypatch.setattr(desktop, "mettre_au_premier_plan", lambda h: True)
+    monkeypatch.setattr(desktop, "naviguer_dans_fenetre",
+                        lambda f, url: pytest.fail("la page ne devait pas être rechargée"))
+    monkeypatch.setattr(websites, "open_url",
+                        lambda url: pytest.fail("aucun onglet ne devait être ouvert"))
+
+    reponse, _ = executer(router, assistant, "va sur Netflix et mets Fast and Furious")
+    assert reponse.ok
+    assert avec_champ_de_recherche == ["Fast and Furious"]
+
+
+def test_on_ne_tape_jamais_dans_une_fenetre_etrangere(assistant, router, monkeypatch,
+                                                      avec_champ_de_recherche):
+    """
+    Garde-fou : taper une requête, c'est écrire dans une page et valider. Si
+    la fenêtre n'affiche pas le site visé, on ne touche à rien.
+    """
+    from core import browser_tabs
+
+    etrangere = desktop.Fenetre(handle=9, titre="Muneeb Rehman | LinkedIn - Google Chrome",
+                                processus="chrome.exe", ecran=1)
+    monkeypatch.setattr(browser_tabs, "trouver_onglet", lambda *a, **k: None)
+    monkeypatch.setattr(browser_tabs, "adresse_courante", lambda f: "linkedin.com/feed")
+    monkeypatch.setattr(desktop, "trouver_fenetre", lambda *a, **k: etrangere)
+    monkeypatch.setattr(desktop, "mettre_au_premier_plan", lambda h: True)
+    naviguees = []
+    monkeypatch.setattr(desktop, "naviguer_dans_fenetre",
+                        lambda f, url: naviguees.append(url) or True)
+
+    reponse, _ = executer(router, assistant, "va sur Netflix et mets Fast and Furious")
+    assert avec_champ_de_recherche == [], "rien ne devait être tapé"
+    assert reponse.ok and naviguees, "on retombe sur l'adresse de recherche"
 
 
 def test_wikipedia_reste_traite_par_sa_commande_dediee(router, config):
@@ -170,8 +237,9 @@ def test_afficher_un_site_ne_recharge_pas_la_page(assistant, router, onglet_yout
     assert reponse.ok
 
 
-def test_recherche_active_l_onglet_puis_navigue(assistant, router, onglet_youtube, monkeypatch):
-    """Avec une requête, en revanche, il faut bien charger la recherche."""
+def test_recherche_active_l_onglet_puis_navigue(assistant, router, onglet_youtube,
+                                                monkeypatch, sans_champ_de_recherche):
+    """Sans barre de recherche dans la page, il faut bien charger l'adresse."""
     naviguees = []
     monkeypatch.setattr(desktop, "naviguer_dans_fenetre",
                         lambda f, url: naviguees.append(url) or True)

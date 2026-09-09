@@ -166,7 +166,11 @@ def test_un_clic_sans_effet_est_retente(page):
 # Sur quel service
 # --------------------------------------------------------------------------
 def test_le_service_nomme_lemporte(assistant, monkeypatch):
+    """Le service nommé dans la phrase l'emporte sur celui du contexte."""
     demandes = []
+    # Le site n'est ouvert nulle part : on va droit à l'adresse de recherche,
+    # sans charger l'accueil pour rien.
+    monkeypatch.setattr(websites, "fenetre_du_site", lambda ctx, cle: None)
     monkeypatch.setattr(websites, "afficher_site",
                         lambda *a, **k: demandes.append(a[1:3]) or (False, "ouvert"))
     assistant.handle("lance le film Interstellar sur Netflix")

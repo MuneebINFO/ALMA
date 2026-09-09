@@ -109,6 +109,10 @@ def test_les_libelles_exacts_restent_prioritaires(phrase, attendu):
     ("Rayman Monique", "rmnmnk"),
     ("Interstellar", "ntrstlr"),
     ("Accueil", "kl"),
+    # La consonne finale est gardée : sans elle, « cloud » ne ressemblerait
+    # plus à « claude ».
+    ("Cloud", "kld"),
+    ("Claude", "kld"),
 ])
 def test_le_squelette_ne_garde_que_les_consonnes(texte, attendu):
     assert deduction.squelette_consonnes(texte) == attendu
@@ -126,3 +130,65 @@ def test_le_squelette_ne_garde_que_les_consonnes(texte, attendu):
 ])
 def test_lossature_ne_parle_que_des_noms_assez_longs(a, b, attendu):
     assert deduction.memes_consonnes(a, b) is attendu
+
+
+# --------------------------------------------------------------------------
+# Le nom d une application, mal entendu
+# --------------------------------------------------------------------------
+@pytest.fixture
+def parc(monkeypatch):
+    """Un parc d'applications connu, pour ne pas dépendre de la machine."""
+    from core import applications
+
+    monkeypatch.setattr(applications, "raccourcis_du_menu", lambda: {
+        "Claude": r"C:\Menu\Claude.lnk",
+        "Discord": r"C:\Menu\Discord.lnk",
+        "Visual Studio Code": r"C:\Menu\VSCode.lnk",
+        "Word": r"C:\Menu\Word.lnk",
+    })
+    monkeypatch.setattr(applications, "applications_du_systeme",
+                        lambda forcer=False: {"Calculatrice": "Microsoft.Calc"})
+
+
+@pytest.mark.parametrize("entendu,attendu", [
+    ("Claude", "Claude"),
+    # Le cas signalé : la reconnaissance vocale écrit « Cloud ».
+    ("Cloud", "Claude"),
+    ("Clode", "Claude"),
+    ("Klaude", "Claude"),
+    ("Discord", "Discord"),
+    ("disc cord", "Discord"),
+    ("calculette", "Calculatrice"),
+    ("code", "Visual Studio Code"),
+])
+def test_un_nom_dapplication_mal_entendu_est_retrouve(parc, entendu, attendu):
+    """
+    « Claude » revient en « Cloud » : 0,73 de ressemblance en lettres, sous
+    tout seuil raisonnable, mais la même ossature de consonnes — kld.
+    """
+    from core import applications
+
+    trouve = applications.chercher(entendu)
+    assert trouve is not None, entendu
+    assert trouve[0] == attendu, entendu
+
+
+@pytest.mark.parametrize("entendu", [
+    "machin truc bidule", "Netflix", "Interstellar", "la météo de demain", "",
+])
+def test_la_sonorite_ninvente_pas_dapplication(parc, entendu):
+    from core import applications
+
+    assert applications.chercher(entendu) is None, entendu
+
+
+@pytest.mark.parametrize("phrase,attendu", [
+    # Le mot de nature est retiré du nom cherché, pas seulement repéré.
+    ("ouvre l'application Cloud", "open_app"),
+    ("lance l'appli Cloud", "open_app"),
+    ("démarre le logiciel Cloud", "open_app"),
+])
+def test_le_mot_de_nature_ne_pollue_pas_le_nom(assistant, parc, phrase, attendu):
+    resolution = assistant.router.resolve(Utterance.parse(phrase), assistant=assistant)
+    assert resolution is not None, phrase + " n'atteint aucune commande"
+    assert resolution.command.name == attendu, phrase
