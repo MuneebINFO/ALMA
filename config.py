@@ -117,10 +117,11 @@ DEFAULTS: dict = {
             "timeout_seconds": 30,
         },
         "gemini": {
-            # Modele gratuit et rapide. La cle N EST PAS ici : elle se lit
-            # dans la variable d environnement GEMINI_API_KEY, parce qu un
-            # config.yaml se copie, se partage et se pousse par megarde.
-            "modele": "gemini-2.5-flash",
+            # Aucune cle, aucun compte : la reponse de Gemini est deja sur
+            # google.com, en tete des resultats. Alma ouvre la recherche dans
+            # une fenetre qu elle reduit aussitot, la lit, et la referme.
+            # Ce delai couvre le chargement de la page ET l ecriture de
+            # l apercu, qui arrive apres le reste.
             "timeout_seconds": 20,
         },
         "claude_code": {

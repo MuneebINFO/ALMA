@@ -18,11 +18,9 @@ from core.providers.claude_code_provider import ClaudeCodeProvider
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# Domaines d IA appelables directement. Ils ne doivent apparaitre NULLE PART,
-# a une exception nommee : le provider Gemini, ajoute a la demande explicite de
-# l utilisateur pour que les questions partent en arriere-plan. L exception est
-# ecrite ici pour rester visible -- l interdit tient toujours pour tous les
-# autres, et pour tout autre fichier.
+# Domaines d IA appelables directement : ils ne doivent apparaitre nulle part.
+# Aucune exception. L acces a Gemini passe par la page google.com, lue dans le
+# navigateur comme n importe quelle autre page -- pas par une API.
 DOMAINES_INTERDITS = [
     "api.openai.com",
     "api.anthropic.com",
@@ -30,10 +28,6 @@ DOMAINES_INTERDITS = [
     "api.groq.com",
     "api.mistral.ai",
 ]
-
-EXCEPTIONS = {
-    "generativelanguage.googleapis.com": {"core/providers/gemini_provider.py"},
-}
 
 
 def config_avec(config, **surcharges):
@@ -175,11 +169,11 @@ def test_la_liste_des_providers_est_close():
     assert set(PROVIDERS) == {"none", "ollama", "gemini", "claude_code"}
 
 
-def test_seul_gemini_sort_de_la_machine(config):
+def test_aucun_provider_ne_sort_de_la_machine(config):
     """
-    Ollama tourne en local, Claude Code délègue à un binaire déjà installé :
-    ni l'un ni l'autre ne doit se mettre à parler à une API distante. Gemini,
-    lui, en est une — c'est ce qui a été demandé, et il est le seul.
+    La promesse du projet : rien de payant, rien qui parte vers une API.
+    Ollama tourne en local ; Claude Code délègue à un binaire déjà installé ;
+    Gemini se lit dans le navigateur, sur une page ouverte comme les autres.
     """
     from core.providers.ollama_provider import OllamaProvider
 
@@ -207,26 +201,24 @@ def test_aucun_appel_direct_a_une_api_ia_dans_le_code(domaine):
         + list(ROOT.glob("core/providers/*.py"))
         + list(ROOT.glob("commands/*.py"))
     )
-    tolere = EXCEPTIONS.get(domaine, set())
-    fautifs = [chemin for chemin in
-               (str(f.relative_to(ROOT)).replace("\\", "/") for f in fichiers)
-               if chemin not in tolere
-               and domaine in (ROOT / chemin).read_text(encoding="utf-8")]
+    fautifs = [str(f.relative_to(ROOT)) for f in fichiers
+               if domaine in f.read_text(encoding="utf-8")]
     assert not fautifs, "URL d API IA trouvee dans : " + ", ".join(fautifs)
 
 
-def test_le_seul_canal_direct_est_celui_qui_a_ete_demande():
+def test_aucun_provider_ne_demande_de_cle():
     """
-    Une seule API est joignable en direct, et elle est nommee.
+    Aucune cle a gerer, nulle part.
 
-    La regle du projet reste « pas de deuxieme canal cache » : l exception
-    Gemini a ete demandee explicitement, elle vit dans un fichier unique, et
-    ce test echoue si un autre fichier s en autorise autant.
+    Ollama tourne en local, Claude Code s authentifie lui-meme, et Gemini se
+    lit sur google.com dans le navigateur. Si une variable de cle apparait
+    dans un provider, c est qu une API s est glissee dans le projet.
     """
-    assert set(EXCEPTIONS) == {"generativelanguage.googleapis.com"}
-    assert EXCEPTIONS["generativelanguage.googleapis.com"] == {
-        "core/providers/gemini_provider.py"
-    }
+    fichiers = list(ROOT.glob("core/providers/*.py"))
+    fautifs = [str(f.relative_to(ROOT)) for f in fichiers
+               if "GEMINI_API_KEY" in f.read_text(encoding="utf-8")
+               or "OPENAI_API_KEY" in f.read_text(encoding="utf-8")]
+    assert not fautifs, "cle d API attendue dans : " + ", ".join(fautifs)
 
 
 def test_le_mode_voix_est_desactive_par_defaut(tmp_path):

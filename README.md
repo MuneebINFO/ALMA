@@ -1139,20 +1139,25 @@ When no rule matches, the router calls
 (`ai_fallback.enabled: false`) that function simply replies politely and
 suggests `aide` — no network, no subprocess, no cost.
 
-### Asking Gemini in the background
+### Asking Google's AI in the background
 
-With `provider: gemini`, a question ALMA has no command for goes to Google
-Gemini and comes back as ALMA's own answer, read aloud. Nothing opens on
-screen — no browser, no tab, no window: you asked your assistant, not a site.
+With `provider: gemini`, a question ALMA has no command for comes back as
+ALMA's own answer, read aloud. **No API and no key**: Gemini's answer is
+already on google.com, at the top of the results under « Aperçu IA ». ALMA
+opens the search in a window it **minimises immediately**, reads it through
+the accessibility API like any other page, then closes it. Nothing stays on
+screen — you asked your assistant, not a site.
 
-The key is free (Google AI Studio) and lives in the **environment**,
-`GEMINI_API_KEY`, never in `config.yaml` — that file gets copied, shared and
-pushed by accident. ALMA reads it, never writes it, and keeps no copy. Without
-a key it says so plainly instead of failing silently; `doctor.py` reports it.
+Three measurements hold it up: a Chrome window that is *not* in front stays
+readable (1048 elements), a **minimised** one just as much (226, anchor
+included), but a page that has just loaded exposes nothing for a second or
+two — Chromium builds its tree late, hence the active wait.
 
-This is the one place in the project that talks to an AI API directly. It was
-added on explicit request, it lives in a single file, and a test fails if any
-other file starts doing the same.
+Reading the page text in document order matters more than it sounds. Piecing
+elements together by their coordinates looked finer and was more fragile: a
+linked word is its own element, and when the sentence wraps it landed at the
+end, or vanished — « Le roman Les Misérables a été écrit par », without Victor
+Hugo.
 
 ### The Claude Code fallback (implemented, disabled by default)
 

@@ -90,14 +90,12 @@ ai_fallback:
   #   tout      : toute phrase sans commande
   auto: questions
 
-  # Gemini : la question part en arriere-plan, rien ne s ouvre a l ecran,
-  # et la reponse est dite comme si Alma repondait. La cle, gratuite, se
-  # prend sur Google AI Studio et se met dans la VARIABLE D ENVIRONNEMENT
-  # GEMINI_API_KEY (ou dans un .env) : jamais ici, car ce fichier se copie
-  # et se partage. Alma la lit, ne l ecrit jamais.
+  # Gemini : aucune cle, aucun compte. La reponse de Gemini est deja sur
+  # google.com, en tete des resultats (« Apercu IA »). Alma y ouvre la
+  # recherche dans une fenetre qu elle REDUIT aussitot, la lit comme elle
+  # lit n importe quelle page, puis la referme. Rien ne reste a l ecran.
   gemini:
-    modele: gemini-2.5-flash
-    timeout_seconds: 20
+    timeout_seconds: 20     # chargement de la page + ecriture de l apercu
   claude_code:
     command: claude          # binaire du CLI, doit etre dans le PATH
     # Dossier dans lequel Claude Code aura le droit d agir (lecture, ecriture,

@@ -307,8 +307,8 @@ def verifier_ia(config) -> None:
         if souci:
             manque(souci)
         else:
-            ok("Clé Gemini présente, modèle « " + moteur.modele + " »")
-            note("La question part en arrière-plan : rien ne s'ouvre à l'écran")
+            ok("Aperçu IA de Google, lu dans le navigateur (aucune clé)")
+            note("La fenêtre est réduite puis refermée : rien ne reste à l'écran")
     elif provider == "ollama":
         from core.providers.ollama_provider import OllamaProvider
 

@@ -1,15 +1,14 @@
 """
-Poser la question à Gemini, en arrière-plan.
+Poser la question à l'IA de Google, par le navigateur, en arrière-plan.
 
-Rien ne s'ouvre à l'écran : pas de navigateur, pas d'onglet. ALMA interroge
-l'API, reçoit du texte et le dit comme si elle répondait elle-même.
+Aucune API, aucune clé : la réponse de Gemini est déjà sur google.com, sous
+« Aperçu IA ». ALMA ouvre la recherche dans une fenêtre qu'elle réduit
+aussitôt, la lit comme n'importe quelle page, puis la referme.
 
-Aucun de ces tests n'appelle Gemini : la couche réseau est remplacée par un
-double. Ils vérifient ce qui est promis autour — la clé n'est jamais écrite,
-l'absence de clé se dit clairement, et une action ne part pas à l'IA.
+Aucun de ces tests n'ouvre de navigateur : la page est remplacée par le texte
+qu'elle exposerait. Ils verrouillent l'extraction — c'est là qu'était la
+difficulté — et le partage entre une question et une action.
 """
-
-import os
 
 import pytest
 
@@ -18,150 +17,134 @@ from core.providers import gemini_provider
 from core.providers.gemini_provider import GeminiProvider
 
 
-class Reponse:
-    """Ce que `requests.post` rend, réduit à ce que le provider en lit."""
-
-    def __init__(self, donnees=None, status_code=200):
-        self.donnees = donnees if donnees is not None else {}
-        self.status_code = status_code
-
-    def json(self):
-        return self.donnees
-
-
-def reponse_de(texte):
-    return Reponse({"candidates": [{"content": {"parts": [{"text": texte}]}}]})
-
-
-class PostEspion:
-    """Retient l'appel au lieu de le faire."""
-
-    def __init__(self, reponse=None):
-        self.reponse = reponse if reponse is not None else reponse_de("Lisbonne.")
-        self.appels = []
-
-    def __call__(self, url, **kwargs):
-        self.appels.append((url, kwargs))
-        return self.reponse
-
-
 @pytest.fixture
-def avec_cle(monkeypatch):
-    monkeypatch.setenv("GEMINI_API_KEY", "cle-de-test")
-    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+def lecture(monkeypatch):
+    """Remplace la lecture de la page par un texte donné."""
+    def poser(*lignes):
+        monkeypatch.setattr(gemini_provider, "_texte_de_la_page",
+                            lambda _f: "\n".join(lignes) + "\n")
+    return poser
 
 
-@pytest.fixture
-def sans_cle(monkeypatch):
-    for variable in gemini_provider.VARIABLES_ACCEPTEES:
-        monkeypatch.delenv(variable, raising=False)
+# Ce que la page expose vraiment, mesuré sur google.com : l'ancre, puis des
+# libellés d'interface, puis la réponse, puis les sources et une fiche.
+PAGE_REELLE = (
+    "Recherche Google",
+    "Aperçu IA",
+    "À propos de ce résultat",
+    "Le roman Les Misérables a été écrit par Victor Hugo et publié en 1862.",
+    "Wikipédia - Les Misérables - Wikipédia. Résultats associés",
+    "￼",
+    "Wikipédia",
+    "À propos de l'œuvre",
+    "• Date de parution : 1862",
+    "• Durée d'écriture : Environ 17 ans (commencé en 1845)",
+    "Les Misérables - Wikipédia. S'ouvre dans un nouvel onglet.",
+)
 
-
-def espionner(monkeypatch, reponse=None):
-    import requests
-
-    espion = PostEspion(reponse)
-    monkeypatch.setattr(requests, "post", espion)
-    return espion
-
-
-# --------------------------------------------------------------------------
-# La clé
-# --------------------------------------------------------------------------
-def test_sans_cle_il_le_dit_et_n_appelle_rien(config, sans_cle, monkeypatch):
-    espion = espionner(monkeypatch)
-    reponse = GeminiProvider(config).generate("quelle est la capitale du Portugal")
-    assert "clé" in reponse.lower() and "GEMINI_API_KEY" in reponse
-    assert espion.appels == [], "aucun appel ne doit partir sans clé"
-
-
-def test_la_cle_ne_vient_jamais_de_la_configuration(config):
-    """
-    Un config.yaml se copie, se partage et se pousse par mégarde. La clé se
-    lit dans l'environnement, et nulle part ailleurs.
-    """
-    assert "api_key" not in (config.get("ai_fallback.gemini") or {})
-    assert "cle" not in (config.get("ai_fallback.gemini") or {})
-
-
-def test_la_cle_n_est_jamais_ecrite(config, avec_cle, monkeypatch):
-    """Même discipline que pour ANTHROPIC_API_KEY : on constate, on ne touche pas."""
-    espionner(monkeypatch)
-    avant = dict(os.environ)
-    GeminiProvider(config).generate("bonjour")
-    assert dict(os.environ) == avant
-
-
-def test_l_autre_nom_de_variable_est_accepte(config, monkeypatch):
-    """Google publie ses outils sous deux noms selon les époques."""
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    monkeypatch.setenv("GOOGLE_API_KEY", "cle-de-test")
-    assert GeminiProvider(config).cle() == "cle-de-test"
-
-
-def test_la_cle_ne_passe_pas_par_l_url(config, avec_cle, monkeypatch):
-    """Une URL se retrouve dans les journaux, les historiques et les erreurs."""
-    espion = espionner(monkeypatch)
-    GeminiProvider(config).generate("bonjour")
-    url, kwargs = espion.appels[0]
-    assert "cle-de-test" not in url
-    assert kwargs["headers"]["x-goog-api-key"] == "cle-de-test"
+REPONSE = "Le roman Les Misérables a été écrit par Victor Hugo et publié en 1862."
 
 
 # --------------------------------------------------------------------------
-# La réponse
+# Lire la réponse dans la page
 # --------------------------------------------------------------------------
-def test_la_reponse_revient_telle_quelle(config, avec_cle, monkeypatch):
-    espionner(monkeypatch, reponse_de("Lisbonne est la capitale du Portugal."))
-    assert GeminiProvider(config).generate("capitale du Portugal") \
-        == "Lisbonne est la capitale du Portugal."
+def test_la_reponse_est_la_premiere_phrase_apres_l_ancre(lecture):
+    lecture(*PAGE_REELLE)
+    assert gemini_provider.apercu(None) == REPONSE
 
 
-def test_rien_ne_trahit_gemini_dans_la_reponse(config, avec_cle, monkeypatch):
-    """ALMA répond ; elle ne présente pas quelqu'un d'autre."""
-    espionner(monkeypatch, reponse_de("Lisbonne."))
-    assert "gemini" not in GeminiProvider(config).generate("capitale ?").lower()
+def test_les_libelles_d_interface_ne_sont_pas_pris_pour_la_reponse(lecture):
+    """« À propos de ce résultat » précède la réponse dans la vraie page."""
+    lecture(*PAGE_REELLE)
+    assert "propos de ce résultat" not in gemini_provider.apercu(None)
 
 
-def test_la_consigne_demande_du_texte_dicible(config, avec_cle, monkeypatch):
-    """La réponse est lue à voix haute : « **gras** » s'y entendrait."""
-    import json
-
-    espion = espionner(monkeypatch)
-    GeminiProvider(config).generate("bonjour")
-    corps = json.loads(espion.appels[0][1]["data"])
-    consigne = corps["systemInstruction"]["parts"][0]["text"].lower()
-    assert "français" in consigne
-    for interdit in ("liste", "gras", "titre"):
-        assert interdit in consigne
-    assert corps["contents"][0]["parts"][0]["text"] == "bonjour"
+def test_ce_qui_precede_l_ancre_est_ignore(lecture):
+    """Sans cela, le titre de la page passerait pour une réponse."""
+    lecture(*PAGE_REELLE)
+    assert "Recherche Google" not in gemini_provider.apercu(None)
 
 
-@pytest.mark.parametrize("code,attendu", [
-    (401, "refusée"),
-    (403, "refusée"),
-    (404, "modèle"),
-    (429, "quota"),
-])
-def test_les_erreurs_sont_dites_en_clair(config, avec_cle, monkeypatch, code, attendu):
-    espionner(monkeypatch, Reponse({"error": {"message": "détail"}}, status_code=code))
-    assert attendu in GeminiProvider(config).generate("bonjour").lower()
+def test_les_sources_et_la_fiche_ne_sont_pas_lues(lecture):
+    """Écrites, elles se parcourent ; dites, elles se subissent."""
+    lecture(*PAGE_REELLE)
+    reponse = gemini_provider.apercu(None)
+    assert "Wikipédia" not in reponse and "Date de parution" not in reponse
 
 
-def test_une_panne_de_reseau_ne_fait_pas_tomber_alma(config, avec_cle, monkeypatch):
-    import requests
+def test_les_images_ne_sont_pas_lues(lecture):
+    """U+FFFC remplace les images dans le texte de l'accessibilité."""
+    lecture("Aperçu IA", "￼",
+            "Les abeilles vivent de trois à six semaines en été.")
+    assert gemini_provider.apercu(None) == (
+        "Les abeilles vivent de trois à six semaines en été."
+    )
+
+
+def test_une_reponse_courte_est_gardee_si_elle_se_termine(lecture):
+    """« Victor Hugo. » est court, mais c'est une phrase."""
+    lecture("Aperçu IA", "À propos de ce résultat", "Victor Hugo.")
+    assert gemini_provider.apercu(None) == "Victor Hugo."
+
+
+def test_sans_apercu_on_ne_rend_rien(lecture):
+    """Google n'en propose pas toujours : mieux vaut rien qu'un titre de site."""
+    lecture("Recherche Google", "Résultats",
+            "Wikipédia — Les Misérables, roman de Victor Hugo")
+    assert gemini_provider.apercu(None) == ""
+
+
+def test_l_ancre_anglaise_est_reconnue(lecture):
+    lecture("AI overview",
+            "The sky is blue because molecules scatter sunlight unevenly.")
+    assert gemini_provider.apercu(None).startswith("The sky is blue")
+
+
+# --------------------------------------------------------------------------
+# Ce que le provider promet autour
+# --------------------------------------------------------------------------
+def test_aucune_cle_n_est_demandee():
+    """C'est tout l'intérêt : la page suffit."""
+    from pathlib import Path
+
+    source = Path(gemini_provider.__file__).read_text(encoding="utf-8")
+    for interdit in ("API_KEY", "api_key", "googleapis.com"):
+        assert interdit not in source
+
+
+def test_sans_navigateur_il_le_dit(config, monkeypatch):
+    monkeypatch.setattr(GeminiProvider, "navigateur", lambda self: "")
+    assert "Chrome" in GeminiProvider(config).generate("pourquoi le ciel est bleu")
+
+
+def test_une_question_vide_n_ouvre_rien(config, monkeypatch):
+    ouvertures = []
+    monkeypatch.setattr(gemini_provider, "_ouvrir_discretement",
+                        lambda *a: ouvertures.append(a))
+    GeminiProvider(config).generate("   ")
+    assert ouvertures == []
+
+
+def test_la_fenetre_est_refermee_meme_en_cas_d_echec(config, monkeypatch):
+    """Sinon les fenêtres s'accumulent, une par question posée."""
+    fermees = []
+    monkeypatch.setattr(GeminiProvider, "navigateur", lambda self: "chrome.exe")
+    monkeypatch.setattr(gemini_provider, "_ouvrir_discretement", lambda *a: "la-fenetre")
+    monkeypatch.setattr(gemini_provider, "_fermer", lambda f: fermees.append(f))
 
     def echoue(*a, **k):
-        raise OSError("réseau injoignable")
+        raise RuntimeError("page illisible")
 
-    monkeypatch.setattr(requests, "post", echoue)
-    reponse = GeminiProvider(config).generate("bonjour")
-    assert "joindre" in reponse.lower()
+    monkeypatch.setattr(gemini_provider, "_attendre_l_apercu", echoue)
+    reponse = GeminiProvider(config).generate("pourquoi le ciel est bleu")
+    assert fermees == ["la-fenetre"]
+    assert "pas trouvé" in reponse
 
 
-def test_une_reponse_vide_ne_passe_pas_pour_une_reponse(config, avec_cle, monkeypatch):
-    espionner(monkeypatch, Reponse({"candidates": []}))
-    assert "rien" in GeminiProvider(config).generate("bonjour").lower()
+def test_une_reponse_trop_longue_est_coupee_a_une_fin_de_phrase():
+    coupe = gemini_provider._raccourcir(("Une phrase complète. " * 60).strip())
+    assert len(coupe) <= gemini_provider.LONGUEUR_MAX
+    assert coupe.endswith(".")
 
 
 # --------------------------------------------------------------------------
