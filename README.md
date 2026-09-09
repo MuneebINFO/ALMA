@@ -376,6 +376,23 @@ cherche des images de montagne
 où est la gare centrale
 ```
 
+### The Claude desktop app
+
+When the Claude application is running, these go to the window itself rather
+than to the browser: ALMA types the question in, waits for the answer to stop
+being written, and reads it back. Nothing goes through an API — the app is
+already installed and already signed in, and the work is billed to your own
+subscription.
+
+```
+demande à Claude ce qu'est un moteur de recherche
+ouvre Cowork                  va sur Claude Code
+montre les artifacts          nouvelle session Claude
+```
+
+Close the application and the same sentence falls back to opening claude.ai in
+the browser, as before.
+
 ### Choosing a screen
 
 ```
@@ -993,6 +1010,7 @@ alma/
 │   ├── scheduler.py        reminders and timers
 │   ├── storage.py          JSON storage (atomic writes)
 │   ├── win_utils.py        Windows helpers (volume, screenshots…)
+│   ├── claude_app.py       driving the Claude desktop app (accessibility)
 │   ├── ai_fallback.py      AI fallback facade — INACTIVE by default
 │   └── providers/
 │       └── claude_code_provider.py   delegation to the Claude Code CLI
@@ -1001,6 +1019,7 @@ alma/
 │   ├── apps.py             open and close applications
 │   ├── websites.py         open websites
 │   ├── search.py           Google, YouTube, Wikipedia, Claude, translation
+│   ├── claude.py           talking to the Claude desktop app
 │   ├── system.py           volume, brightness, session, screenshots, folders
 │   ├── productivity.py     notes, reminders, timers, clipboard
 │   ├── info.py             time, date, weather
@@ -1142,9 +1161,14 @@ ai_fallback:
     timeout_seconds: 120     # the call is blocking
 ```
 
+The CLI also has to be signed in on that machine: run `claude` once in a
+terminal, then `/login`. Until then ALMA answers with exactly that instruction
+rather than a bare error.
+
 > **This is the only AI entry point in the project.** There is no second channel
-> to any API: `PROVIDERS` contains only `none` and `claude_code`, and a test
-> scans the source to forbid any hardcoded AI API URL.
+> to any API: `PROVIDERS` contains only `none`, `ollama` (a model running on
+> your own machine) and `claude_code`, and a test scans the source to forbid any
+> hardcoded AI API URL.
 
 ### Adding another provider
 

@@ -551,6 +551,22 @@
       ]
     },
     {
+      "action": "Poser une question à l'application Claude et lire sa réponse",
+      "phrases": [
+        "demande à Claude ce qu'est un moteur de recherche",
+        "pose à Claude la question X"
+      ]
+    },
+    {
+      "action": "Afficher Chat, Cowork, Code ou Artifacts dans l'application Claude",
+      "phrases": [
+        "ouvre Cowork",
+        "va sur Claude Code",
+        "montre les artifacts",
+        "nouvelle session Claude"
+      ]
+    },
+    {
       "action": "Rechercher sur YouTube (raccourci)",
       "phrases": [
         "youtube lofi hip hop"

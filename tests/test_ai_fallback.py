@@ -39,9 +39,19 @@ def config_avec(config, **surcharges):
 # --------------------------------------------------------------------------
 # Etat par defaut : aucun appel exterieur
 # --------------------------------------------------------------------------
-def test_le_fallback_est_desactive_par_defaut(config):
-    assert config.get("ai_fallback.enabled") is False
-    assert isinstance(get_provider(config), NullProvider)
+def test_le_fallback_est_desactive_par_defaut(tmp_path):
+    """
+    Ce que recoit une machine neuve, sans config.yaml.
+
+    On repart d un fichier absent plutot que de la configuration courante :
+    la machine de developpement a le droit d avoir active la delegation chez
+    elle, cela ne doit rien changer a ce qui est LIVRE.
+    """
+    from config import load_config
+
+    neuve = load_config(tmp_path / "config-absent.yaml")
+    assert neuve.get("ai_fallback.enabled") is False
+    assert isinstance(get_provider(neuve), NullProvider)
     assert isinstance(get_provider(None), NullProvider)
 
 
@@ -134,5 +144,7 @@ def test_aucun_appel_direct_a_une_api_ia_dans_le_code(domaine):
     assert not fautifs, "URL d API IA trouvee dans : " + ", ".join(fautifs)
 
 
-def test_le_mode_voix_est_desactive_par_defaut(config):
-    assert config.get("voice.enabled") is False
+def test_le_mode_voix_est_desactive_par_defaut(tmp_path):
+    from config import load_config
+
+    assert load_config(tmp_path / "config-absent.yaml").get("voice.enabled") is False

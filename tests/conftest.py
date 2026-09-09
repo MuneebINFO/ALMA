@@ -40,9 +40,35 @@ class FakeIO:
         pass
 
 
+@pytest.fixture(autouse=True)
+def application_claude_fermee(monkeypatch):
+    """
+    Par defaut, l application Claude est vue comme fermee.
+
+    Sans cela le routage dependrait de ce qui tourne sur la machine : « demande
+    a Claude ... » irait a l application ici, et au navigateur ailleurs. Les
+    tests qui veulent l application ouverte la rouvrent eux-memes.
+    """
+    monkeypatch.setattr("core.claude_app.fenetre", lambda: None)
+
+
+def config_de_test(path=None):
+    """
+    La configuration, fallback IA coupe.
+
+    La machine de developpement a le droit d activer la delegation a Claude
+    Code dans son config.yaml. Les tests, eux, ne doivent lancer aucun
+    sous-processus : ils repartent donc toujours d un fallback eteint. Les
+    tests qui veulent l inverse le rallument eux-memes.
+    """
+    config = load_config(path) if path else load_config()
+    config.set("ai_fallback.enabled", False)
+    return config
+
+
 @pytest.fixture(scope="session")
 def config():
-    return load_config()
+    return config_de_test()
 
 
 @pytest.fixture(scope="session")
@@ -59,7 +85,7 @@ def assistant(tmp_path, config):
     """
     from core.assistant import Assistant
 
-    test_config = load_config()
+    test_config = config_de_test()
     test_config.set("paths.notes", str(tmp_path / "notes.json"))
     test_config.set("paths.reminders", str(tmp_path / "reminders.json"))
     test_config.set("paths.history", str(tmp_path / "history.json"))

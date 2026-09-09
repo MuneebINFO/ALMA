@@ -45,7 +45,13 @@ REMPLACEMENTS = {
 
 # Commandes qui n'ont de sens que dans une situation précise : vérifiées
 # séparément, avec cette situation.
-CONTEXTUELLES = {"Arrêter le défilement en cours"}
+CONTEXTUELLES = {
+    "Arrêter le défilement en cours",
+    # Ces deux-là supposent l'application Claude ouverte : sans elle, la
+    # question part au navigateur. Couvertes par tests/test_claude_app.py.
+    "Poser une question à l'application Claude et lire sa réponse",
+    "Afficher Chat, Cowork, Code ou Artifacts dans l'application Claude",
+}
 
 
 def charger():

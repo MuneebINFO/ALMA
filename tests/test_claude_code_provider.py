@@ -140,6 +140,26 @@ def test_erreur_du_cli_gere_proprement(config_active, claude_present, monkeypatc
     assert "erreur" in reponse.lower() and "panne" in reponse
 
 
+def test_une_erreur_ecrite_sur_la_sortie_standard_est_rapportee(
+    config_active, claude_present, monkeypatch
+):
+    """Le CLI n'envoie pas toujours ses erreurs sur stderr : il faut lire les deux."""
+    monkeypatch.setattr(subprocess, "run",
+                        RunEspion(stdout="disque plein", returncode=1, stderr=""))
+    reponse = ClaudeCodeProvider(config_active).generate("bonjour")
+    assert "disque plein" in reponse
+    assert "aucun detail" not in reponse
+
+
+def test_pas_connecte_explique_quoi_faire(config_active, claude_present, monkeypatch):
+    """Le cas le plus frequent au premier essai : le CLI est la, mais deconnecte."""
+    monkeypatch.setattr(subprocess, "run",
+                        RunEspion(stdout="Not logged in · Please run /login",
+                                  returncode=1, stderr=""))
+    reponse = ClaudeCodeProvider(config_active).generate("bonjour")
+    assert "/login" in reponse and "claude" in reponse.lower()
+
+
 def test_timeout_configurable(config, tmp_path, claude_present, monkeypatch):
     espion = RunEspion()
     monkeypatch.setattr(subprocess, "run", espion)

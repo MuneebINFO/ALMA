@@ -303,12 +303,20 @@ def verifier_ia(config) -> None:
         else:
             ok("Modèle local prêt (" + str(config.get("ai_fallback.ollama.modele")) + ")")
     elif provider == "claude_code":
-        import shutil
+        from core.providers.claude_code_provider import ClaudeCodeProvider
 
-        if shutil.which(str(config.get("ai_fallback.claude_code.command", "claude"))):
-            ok("CLI Claude Code trouvé")
+        provider_cc = ClaudeCodeProvider(config)
+        problemes = provider_cc.check()
+        if problemes:
+            for probleme in problemes:
+                manque(probleme)
         else:
-            manque("CLI Claude Code introuvable dans le PATH")
+            ok("CLI Claude Code prêt, périmètre : " + str(provider_cc.resolve_working_dir()))
+            # La connexion ne se verifie pas sans consommer du quota : on le dit
+            # plutot que d afficher un feu vert qui pourrait etre faux.
+            note("Connexion vérifiée au premier appel ; sinon lancez « claude » puis « /login »")
+        if provider_cc.api_key_detected():
+            note("ANTHROPIC_API_KEY est définie : facturation API au lieu de l'abonnement")
     else:
         note("Provider « " + provider + " » : rien à vérifier")
 

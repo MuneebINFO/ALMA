@@ -32,6 +32,12 @@ log = logging.getLogger(__name__)
 DEFAULT_COMMAND = "claude"
 DEFAULT_TIMEOUT = 120
 
+AVERTISSEMENT_CONNEXION = (
+    "Claude Code est installe mais pas connecte sur cette machine. Ouvrez un "
+    "terminal, lancez « claude », puis « /login » : la delegation fonctionnera "
+    "ensuite sans rien changer d autre."
+)
+
 AVERTISSEMENT_CLE_API = (
     "ATTENTION : la variable ANTHROPIC_API_KEY est definie sur cette machine. "
     "Claude Code va donc facturer cet appel sur l API au lieu d utiliser le quota "
@@ -142,7 +148,12 @@ class ClaudeCodeProvider:
 
         sortie = (resultat.stdout or "").strip()
         if resultat.returncode != 0:
-            erreur = (resultat.stderr or "").strip() or "aucun detail"
+            # Le CLI n ecrit pas toujours ses erreurs sur stderr : « Not logged
+            # in » part sur la sortie standard. On regarde donc les deux, sans
+            # quoi on annoncerait une erreur sans dire laquelle.
+            erreur = (resultat.stderr or "").strip() or sortie or "aucun detail"
+            if "not logged in" in erreur.lower() or "/login" in erreur:
+                return prefixe + AVERTISSEMENT_CONNEXION
             return prefixe + "Claude Code a renvoye une erreur : " + erreur
         if not sortie:
             return prefixe + "Claude Code n'a rien renvoye."
