@@ -20,6 +20,7 @@ OUVERTES = [
     fenetre(1, "Gagner de l'argent avec l'IA - Google Chrome", "chrome.exe"),
     fenetre(2, "Spotify Premium", "Spotify.exe"),
     fenetre(3, "alma.py - Visual Studio Code", "Code.exe"),
+    fenetre(4, "Claude", "claude.exe"),
 ]
 
 
@@ -96,6 +97,28 @@ def test_une_application_fermee_est_ouverte(assistant, bureau, monkeypatch):
 ])
 def test_les_voisins_gardent_leur_commande(assistant, phrase, attendu):
     assert commande(assistant, phrase) == attendu
+
+
+# --------------------------------------------------------------------------
+# Lever l'ambiguïté entre le logiciel et le site du même nom
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("phrase,attendu", [
+    # Sans précision, un nom qui figure dans la liste des sites désigne la
+    # page : « va sur Google » veut le moteur, pas le navigateur.
+    ("va sur Claude", "open_website"),
+    ("va sur le site Claude", "open_website"),
+    # Dire « l'application » tranche.
+    ("va sur l'application Claude", "aller_sur_application"),
+    ("affiche l'application Claude", "aller_sur_application"),
+])
+def test_dire_l_application_designe_le_logiciel(assistant, phrase, attendu):
+    assert commande(assistant, phrase) == attendu
+
+
+def test_l_application_nommee_ainsi_passe_bien_devant(assistant, bureau):
+    reponse = assistant.handle("va sur l'application Claude")
+    assert reponse.ok, reponse.text
+    assert bureau["handle"] == 4
 
 
 @pytest.mark.parametrize("phrase", [
