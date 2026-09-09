@@ -81,6 +81,11 @@ notifications:
 ai_fallback:
   enabled: false             # passez a true quand vous serez pret
   provider: claude_code      # none | claude_code
+  # Ne deleguer QUE si la demande le dit (« demande a Claude Code de... »).
+  # Sinon une phrase simplement mal comprise -- un calcul dicte autrement
+  # que prevu -- partirait au CLI : du temps, du quota, et une session
+  # ouverte pour rien. false = toute phrase incomprise est rattrapee.
+  on_request_only: true
   claude_code:
     command: claude          # binaire du CLI, doit etre dans le PATH
     # Dossier dans lequel Claude Code aura le droit d agir (lecture, ecriture,

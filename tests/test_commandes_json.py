@@ -52,6 +52,7 @@ CONTEXTUELLES = {
     "Poser une question à l'application Claude et lire sa réponse",
     "Afficher Chat, Cowork, Code ou Artifacts dans l'application Claude",
     "Lancer une tâche dans Cowork",
+    "Confier une tâche au CLI Claude Code",
 }
 
 

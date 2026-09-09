@@ -126,6 +126,9 @@ def handle_unmatched(utterance: Utterance, assistant=None) -> Response:
         if deduit is not None:
             return deduit
 
+    if not delegation_automatique(config):
+        return Response(text=random.choice(SUGGESTIONS), ok=False)
+
     # ok=False signale « je n ai pas compris » : c est vrai tant qu aucun
     # provider ne repond, faux des qu un provider a REPONDU quelque chose.
     # Marquer une vraie reponse comme un echec la ferait afficher en rouge et
@@ -133,6 +136,23 @@ def handle_unmatched(utterance: Utterance, assistant=None) -> Response:
     provider = get_provider(config)
     reponse = handle_with_ai(utterance.raw, config, provider)
     return Response(text=reponse, ok=not isinstance(provider, NullProvider))
+
+
+def delegation_automatique(config) -> bool:
+    """
+    Une phrase incomprise doit-elle partir d elle-meme au provider ?
+
+    Non, par defaut. Alma s adresse a Claude quand on le lui demande, pas
+    quand elle bute : un calcul dicte autrement que prevu ouvrait une session
+    Claude Code sans raison, et sans que rien ne l ait demande. Une phrase
+    incomprise reste une phrase incomprise.
+
+    Mettre ai_fallback.on_request_only a false retablit le rattrapage
+    automatique de toute demande sans commande.
+    """
+    if not config or not config.get("ai_fallback.enabled", False):
+        return False
+    return not config.get("ai_fallback.on_request_only", True)
 
 
 def _tenter_deduction(utterance: Utterance, assistant):

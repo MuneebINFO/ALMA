@@ -61,6 +61,10 @@ PAUSE_BASCULE = 0.8          # le temps que l interface se redessine
 STABILITE_REQUISE = 2.0
 DELAI_REPONSE = 90.0
 
+# Envoyer une question ajoute DEUX messages a l echange : le notre, puis la
+# reponse. Attendre le premier seulement ferait relire la question.
+MESSAGES_ATTENDUS = 2
+
 
 def fenetre():
     """La fenetre de l application Claude, ou None."""
@@ -302,28 +306,56 @@ def poser(cible, question: str) -> bool:
     return win_utils.press_key(win_utils.VK_RETURN)
 
 
-def attendre_la_reponse(cible, avant: str, delai: float = DELAI_REPONSE) -> str:
+def etat(cible) -> tuple:
     """
-    Attend que la reponse cesse de s ecrire, puis rend ce qui a ete ajoute.
+    Instantane comparable de l echange : (nombre de messages, texte).
+
+    C est ce qu il faut relever AVANT d envoyer une question. Le texte seul ne
+    suffit pas : sur une page vierge il n y a aucun message, et `conversation`
+    retombe alors sur le document entier -- barre laterale comprise, trois
+    mille caracteres la ou l echange en fera quarante. Comparer l un a l autre
+    revient a attendre le delai complet a chaque question.
+    """
+    echange = messages(cible)
+    if echange:
+        return len(echange), "\n\n".join(echange)
+    return 0, _document_le_plus_long(cible)
+
+
+def attendre_la_reponse(cible, avant: tuple, delai: float = DELAI_REPONSE) -> str:
+    """
+    Attend que la reponse cesse de s ecrire, puis la rend.
 
     L application ne signale nulle part qu elle a fini. On guette donc la
-    STABILITE du texte : tant qu il grandit, elle parle encore.
+    STABILITE : tant que le texte grandit, elle parle encore.
+
+    Quand elle decoupe ses messages, on attend d en voir DEUX de plus qu avant
+    l envoi -- la question, puis la reponse -- et c est le dernier qui nous
+    interesse. Sans ce decoupage, on retombe sur la comparaison du texte
+    entier. Les deux mesures ne se melangent jamais entre elles.
     """
+    depart, texte_avant = avant
     fin = time.time() + max(0.0, delai)
     dernier, stable_depuis = "", None
     while time.time() < fin:
         time.sleep(PAUSE_SONDAGE)
-        courant = conversation(cible)
-        if len(courant) <= len(avant):
-            continue
+        echange = messages(cible)
+        if echange:
+            if len(echange) < depart + MESSAGES_ATTENDUS:
+                continue
+            courant = echange[-1]
+        else:
+            courant = _document_le_plus_long(cible)
+            if len(courant) <= len(texte_avant):
+                continue
         if courant == dernier:
             if stable_depuis is None:
                 stable_depuis = time.time()
             elif time.time() - stable_depuis >= STABILITE_REQUISE:
-                return _reponse(cible, avant, courant)
+                return _reponse(cible, texte_avant, courant)
         else:
             dernier, stable_depuis = courant, None
-    return _reponse(cible, avant, dernier) if dernier else ""
+    return _reponse(cible, texte_avant, dernier) if dernier else ""
 
 
 def _reponse(cible, avant: str, courant: str) -> str:

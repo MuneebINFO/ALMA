@@ -74,7 +74,19 @@ def claude_demander(ctx: CommandContext) -> Response:
         return Response.error(
             "L'application Claude ne répond pas. Ouvrez-la, puis réessayez."
         )
-    avant = claude_app.conversation(fenetre)
+
+    # La question part dans une conversation NEUVE, et on demande d'abord.
+    # Sans cela elle atterrit dans ce qui est affiché — une session Claude Code
+    # en cours de travail, par exemple — et s'y mélange à autre chose.
+    if not ctx.confirm("J'ouvre une nouvelle conversation Claude ?"):
+        return Response(text="Très bien, je n'ouvre rien.", speak=False)
+    # Le chat d'abord : « New » depuis la section Code créerait une session de
+    # code, pas une conversation.
+    claude_app.activer(fenetre, "Chat and Cowork")
+    if not claude_app.activer(fenetre, "New"):
+        return Response.error("Je n'ai pas pu ouvrir de nouvelle conversation Claude.")
+
+    avant = claude_app.etat(fenetre)
     if not claude_app.poser(fenetre, question):
         return Response.error("Je n'ai pas trouvé où écrire dans l'application Claude.")
 
@@ -88,6 +100,42 @@ def claude_demander(ctx: CommandContext) -> Response:
         coupe = reponse[:LONGUEUR_PARLEE].rsplit(" ", 1)[0]
         return Response(text=coupe + "… La suite est à l'écran.")
     return Response(text=reponse)
+
+
+def _delegation_ouverte(ctx: CommandContext) -> bool:
+    """Guard : la délégation doit avoir été activée dans config.yaml."""
+    return bool(ctx.config.get("ai_fallback.enabled", False))
+
+
+@command(
+    name="claude_code_tache",
+    patterns=[
+        r"^(?:demande|demander|dis|dire)\s+a\s+claude\s+code\s+(?:de\s+)?(?P<tache>.+)$",
+        r"^(?:lance|lancer|fais|faire)\s+(?:une\s+)?tache\s+"
+        r"(?:avec\s+|dans\s+|en\s+|sur\s+)?claude\s+code\s*:?\s*(?P<tache>.+)$",
+        r"^claude\s+code\s*,\s*(?P<tache>.+)$",
+    ],
+    keywords=[["claude", "code", "demande"]],
+    category="Recherche",
+    description="Confier une tâche au CLI Claude Code",
+    examples=["demande à Claude Code de lister les fichiers du dossier"],
+    priority=98,
+    guard=_delegation_ouverte,
+    informatif=True,
+    contextuel=True,
+)
+def claude_code_tache(ctx: CommandContext) -> Response:
+    """Transmet la demande au CLI Claude Code et rapporte sa réponse."""
+    from core.ai_fallback import handle_with_ai
+    from core.providers.claude_code_provider import ClaudeCodeProvider
+
+    tache = (ctx.group("tache") or "").strip()
+    if not tache:
+        return Response.error("Que dois-je lui demander ?")
+    # Le provider est construit ici plutôt que lu dans la configuration : la
+    # phrase dit « Claude Code », c'est donc lui qu'on veut, même si un autre
+    # provider est choisi par défaut. `enabled` reste l'interrupteur général.
+    return Response(text=handle_with_ai(tache, ctx.config, ClaudeCodeProvider(ctx.config)))
 
 
 @command(

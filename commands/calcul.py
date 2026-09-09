@@ -100,13 +100,41 @@ def formater(valeur) -> str:
     return str(valeur)
 
 
+# Les mots qui trahissent une operation. Ils suffisent a tenter le calcul --
+# le guard tranche ensuite, en verifiant que la phrase s evalue vraiment.
+MOTS_OPERATION = (r"fois|plus|moins|divise\s+par|divisee\s+par|multiplie\s+par|"
+                  r"multipliee\s+par|au\s+carre|pourcent|pour\s+cent")
+
+
+def _est_un_calcul(ctx: CommandContext) -> bool:
+    """
+    La phrase capturee est-elle reellement une operation ?
+
+    Les tournures d un calcul sont trop variees pour etre toutes ecrites en
+    expression reguliere, et trop proches d autres phrases pour etre captees
+    largement sans precaution : « va sur l ecran 2 » contient « sur », qui est
+    une division. On tente donc l evaluation, et c est elle qui decide.
+    """
+    return evaluer(en_expression(ctx.arg)) is not None
+
+
 @command(
     name="calculer",
     informatif=True,
+    guard=_est_un_calcul,
     patterns=[
         r"^(?:combien\s+(?:font|fait|ca\s+fait)|calcule|calculer|resultat\s+de)\s+(.+)$",
         r"^(?:combien\s+ca\s+fait)\s+(.+)$",
         r"^(?:quel\s+est\s+le\s+resultat\s+de)\s+(.+)$",
+        # « ça fait combien 7 fois 8 », « calcul 3 plus 3 », « fais-moi un
+        # calcul 12 fois 12 » : dites tous les jours, et jusqu ici ignores.
+        r"^ca\s+fait\s+combien\s+(.+)$",
+        r"^(?:fais|faire|donne)\s+(?:moi\s+)?(?:un\s+)?calculs?\s*(?:de\s+|:\s*)?(.+)$",
+        r"^calculs?\s+(?:de\s+)?(.+)$",
+        r"^combien\s+(?:de\s+|font\s+|ca\s+)?(.+)$",
+        # L operation dictee seule : « 15 fois 4 ». Sans verbe, il ne reste que
+        # les mots d operation pour la reconnaitre -- et le guard pour trancher.
+        r"^((?:.*\s)?(?:" + MOTS_OPERATION + r")(?:\s.*)?)$",
     ],
     category="Informations",
     description="Faire un calcul",

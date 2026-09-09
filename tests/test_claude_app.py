@@ -24,19 +24,21 @@ class FausseFenetre:
 
 
 @pytest.fixture
-def application(monkeypatch):
+def application(monkeypatch, assistant):
     """
-    L'application Claude, ouverte et docile.
+    L'application Claude, ouverte et docile, et l'utilisateur qui dit oui.
 
-    Chaque étape est remplaçable : les tests qui veulent un échec précis
-    réécrivent l'étape concernée.
+    Chaque étape est remplaçable : les tests qui veulent un échec précis, ou
+    un refus, réécrivent l'étape concernée.
     """
+    assistant.io.answers = ["oui"] * 10
     fenetre = FausseFenetre()
     journal = {"questions": [], "clics": []}
 
     monkeypatch.setattr(claude_app, "fenetre", lambda: fenetre)
     monkeypatch.setattr(claude_app, "reveiller", lambda *a, **k: True)
     monkeypatch.setattr(claude_app, "conversation", lambda *a: "")
+    monkeypatch.setattr(claude_app, "etat", lambda *a: (0, ""))
     monkeypatch.setattr(claude_app, "poser",
                         lambda _f, question: journal["questions"].append(question) or True)
     monkeypatch.setattr(claude_app, "attendre_la_reponse",
@@ -94,9 +96,16 @@ def test_un_champ_introuvable_ne_fait_pas_semblant(assistant, application, monke
     assert not reponse.ok
 
 
-def test_seule_la_nouveaute_est_rapportee(assistant, application, monkeypatch):
-    """La conversation contient tout l'historique ; la réponse, c'est l'ajout."""
-    monkeypatch.setattr(claude_app, "conversation", lambda *a: "échange précédent\n")
+def test_l_etat_d_avant_est_transmis_a_l_attente(assistant, application, monkeypatch):
+    """
+    Ce qu'on relève avant l'envoi doit être COMPARABLE à ce qu'on lira après.
+
+    Le piège mesuré : sur une page vierge il n'y a aucun message, et le texte
+    entier vaut alors trois mille caractères de barre latérale, que l'échange
+    de quarante caractères ne dépassera jamais. Un nombre de messages et un
+    texte, relevés ensemble, évitent de comparer l'un à l'autre.
+    """
+    monkeypatch.setattr(claude_app, "etat", lambda *a: (2, "échange précédent"))
     vu = {}
 
     def attendre(_fenetre, avant, **_kw):
@@ -105,7 +114,31 @@ def test_seule_la_nouveaute_est_rapportee(assistant, application, monkeypatch):
 
     monkeypatch.setattr(claude_app, "attendre_la_reponse", attendre)
     assistant.handle("demande à Claude ce qu'est un moteur de recherche")
-    assert vu["avant"] == "échange précédent\n"
+    assert vu["avant"] == (2, "échange précédent")
+
+
+def test_la_question_ouvre_une_conversation_neuve(assistant, application):
+    """
+    Sinon elle atterrit dans ce qui est affiché — une session Claude Code au
+    travail, par exemple — et s'y mélange à autre chose. Le chat d'abord :
+    « New » depuis la section Code créerait une session de code.
+    """
+    assistant.handle("demande à Claude ce qu'est un moteur de recherche")
+    assert application["clics"] == ["Chat and Cowork", "New"]
+
+
+def test_la_permission_est_demandee_avant_d_ouvrir(assistant, application):
+    assistant.handle("demande à Claude ce qu'est un moteur de recherche")
+    demandes = [texte for texte in assistant.io.written if "?" in texte]
+    assert any("nouvelle conversation" in texte.lower() for texte in demandes), demandes
+
+
+def test_un_refus_n_ecrit_rien(assistant, application):
+    assistant.io.answers = ["non"]
+    reponse = assistant.handle("demande à Claude ce qu'est un moteur de recherche")
+    assert application["questions"] == []
+    assert application["clics"] == []
+    assert reponse.speak is False
 
 
 # --------------------------------------------------------------------------
@@ -274,6 +307,35 @@ def test_la_barre_laterale_n_est_pas_la_conversation(monkeypatch):
     """
     arbre(monkeypatch, ECHANGE)
     assert "certification" not in claude_app.conversation(None)
+
+
+def test_l_etat_compte_les_messages_et_garde_le_texte(monkeypatch):
+    arbre(monkeypatch, ECHANGE)
+    nombre, texte = claude_app.etat(None)
+    assert nombre == 2
+    assert "Rayleigh" in texte
+
+
+def test_l_attente_ne_confond_pas_les_deux_mesures(monkeypatch):
+    """
+    Sans découpage, on compare des textes ; avec, des messages. Mélanger les
+    deux faisait attendre le délai complet — 95 secondes pour « Lisbonne ».
+    """
+    arbre(monkeypatch, ECHANGE)
+    monkeypatch.setattr(claude_app, "STABILITE_REQUISE", 0)
+    monkeypatch.setattr(claude_app, "PAUSE_SONDAGE", 0)
+    # Page vierge avant l'envoi : aucun message, et un texte long sans rapport.
+    depart = (0, "x" * 3000)
+    assert claude_app.attendre_la_reponse(None, depart, delai=2)         == "À cause de la diffusion de Rayleigh."
+
+
+def test_l_attente_ne_relit_pas_la_question(monkeypatch):
+    """Envoyer ajoute deux messages : le nôtre, puis la réponse."""
+    arbre(monkeypatch, ECHANGE)
+    monkeypatch.setattr(claude_app, "STABILITE_REQUISE", 0)
+    monkeypatch.setattr(claude_app, "PAUSE_SONDAGE", 0)
+    # Un seul message de plus qu'au départ : c'est la question, pas la réponse.
+    assert claude_app.attendre_la_reponse(None, (1, ""), delai=0.5) == ""
 
 
 def test_la_reponse_est_le_dernier_message(monkeypatch):

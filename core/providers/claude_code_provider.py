@@ -38,6 +38,11 @@ DEFAULT_TIMEOUT = 120
 # cree » revient en « le systÃ¨me a Ã©tÃ© crÃ©Ã© », qu Alma lirait tel quel.
 ENCODAGE = "utf-8"
 
+# Sous Windows, lancer un programme console depuis Alma -- qui tourne sans
+# console -- en ouvre une, noire, au premier plan. Elle a fait croire que
+# l assistant « ouvrait Claude » alors qu il ne faisait que l interroger.
+SANS_FENETRE = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 # L etat de connexion se lit en une seconde : assez court pour le diagnostic,
 # assez long pour un disque lent.
 SONDAGE_TIMEOUT = 20
@@ -112,6 +117,7 @@ class ClaudeCodeProvider:
                 [binaire, "auth", "status"],
                 capture_output=True, encoding=ENCODAGE, errors="replace",
                 stdin=subprocess.DEVNULL, timeout=SONDAGE_TIMEOUT,
+                creationflags=SANS_FENETRE,
             )
             etat = json.loads((resultat.stdout or "").strip() or "{}")
         except Exception as exc:
@@ -174,6 +180,7 @@ class ClaudeCodeProvider:
                 errors="replace",
                 stdin=subprocess.DEVNULL,
                 timeout=self.timeout,
+                creationflags=SANS_FENETRE,
             )
         except subprocess.TimeoutExpired:
             return (

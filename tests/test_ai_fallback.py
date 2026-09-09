@@ -114,10 +114,38 @@ def test_une_vraie_reponse_n_est_pas_un_echec(assistant, monkeypatch):
     monkeypatch.setitem(ai_fallback.PROVIDERS, "essai", lambda config: ProviderBavard())
     assistant.config.set("ai_fallback.enabled", True)
     assistant.config.set("ai_fallback.provider", "essai")
+    assistant.config.set("ai_fallback.on_request_only", False)
 
     reponse = assistant.handle("xyzzy plover blorb")
     assert reponse.ok, reponse.text
     assert "Bruxelles" in reponse.text
+
+
+def test_une_phrase_incomprise_ne_part_pas_d_elle_meme_a_l_ia(assistant, monkeypatch):
+    """
+    Le défaut constaté à l'usage : un calcul dicté autrement que prévu ouvrait
+    une session Claude Code, sans que rien ne l'ait demandé. Alma s'adresse à
+    Claude quand on le lui demande, pas quand elle bute.
+    """
+    from core import ai_fallback
+
+    appele = []
+
+    class ProviderBavard:
+        name = "essai"
+
+        def generate(self, query):
+            appele.append(query)
+            return "une réponse"
+
+    monkeypatch.setitem(ai_fallback.PROVIDERS, "essai", lambda config: ProviderBavard())
+    assistant.config.set("ai_fallback.enabled", True)
+    assistant.config.set("ai_fallback.provider", "essai")
+
+    reponse = assistant.handle("xyzzy plover blorb")
+    assert appele == [], "le provider ne devait pas être appelé"
+    assert reponse.text in SUGGESTIONS
+    assert not reponse.ok
 
 
 def test_sans_provider_l_incomprehension_reste_un_echec(assistant):

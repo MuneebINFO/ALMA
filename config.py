@@ -93,6 +93,12 @@ DEFAULTS: dict = {
     # declenche : les demandes non reconnues recoivent un message poli.
     "ai_fallback": {
         "enabled": False,
+        # Ne deleguer QUE si la demande le dit ( « demande a Claude Code
+        # de... » ). Sinon une phrase simplement mal formulee -- un calcul
+        # dicte autrement que prevu -- partirait au CLI, ce qui coute du temps,
+        # du quota, et ouvre une session pour rien. Passez a false pour que
+        # toute phrase incomprise soit rattrapee par le provider.
+        "on_request_only": True,
         # « ollama » : un modele de langage LOCAL, sans compte ni cle, qui ne
         # fait que REPONDRE aux questions restees sans commande. « claude_code »
         # delegue au CLI installe sur la machine.

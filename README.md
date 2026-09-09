@@ -387,6 +387,7 @@ subscription.
 ```
 demande à Claude ce qu'est un moteur de recherche
 demande à Cowork de trier mes captures d'écran
+demande à Claude Code de lister les fichiers du dossier
 ouvre Cowork                  va sur Claude Code
 montre les artifacts          nouvelle session Claude
 ```
@@ -394,6 +395,10 @@ montre les artifacts          nouvelle session Claude
 A Cowork task opens a fresh session, picks the Cowork mode in the composer and
 dictates the task — one sentence, start to finish. ALMA does not wait for it:
 a Cowork task runs for minutes and the screen already shows its progress.
+
+A question always goes to a **new** conversation, and ALMA asks before opening
+one. Otherwise it lands in whatever is on screen — a Claude Code session at
+work, say — and mixes into it.
 
 Close the application and the same sentence falls back to opening claude.ai in
 the browser, as before.
@@ -1171,6 +1176,12 @@ signed in to the **Claude desktop application is not enough** — the app and th
 CLI hold two separate logins. `doctor.py` reads the CLI's state with
 `claude auth status`, which costs no quota, and until it is signed in ALMA
 answers with that instruction rather than a bare error.
+
+Delegation does not fire on its own. ALMA speaks to Claude when you ask it to —
+`demande à Claude Code de …` — not when it is stuck. A calculation phrased in a
+way the rules did not expect used to open a Claude Code session for nothing;
+now an unrecognised sentence stays an unrecognised sentence. Set
+`ai_fallback.on_request_only: false` to have every one of them delegated.
 
 > **This is the only AI entry point in the project.** There is no second channel
 > to any API: `PROVIDERS` contains only `none`, `ollama` (a model running on

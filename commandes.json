@@ -574,6 +574,13 @@
       ]
     },
     {
+      "action": "Confier une tâche au CLI Claude Code",
+      "phrases": [
+        "demande à Claude Code de lister les fichiers du dossier",
+        "lance une tâche Claude Code : compter les lignes"
+      ]
+    },
+    {
       "action": "Rechercher sur YouTube (raccourci)",
       "phrases": [
         "youtube lofi hip hop"
