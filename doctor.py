@@ -294,7 +294,22 @@ def verifier_ia(config) -> None:
     if not actif:
         ok("Désactivée : aucun appel, aucun coût (provider prêt : " + provider + ")")
         return
-    if provider == "ollama":
+    auto = str(config.get("ai_fallback.auto", "questions") or "questions")
+    ok({"questions": "Seules les questions partent d'elles-mêmes",
+        "jamais": "Rien ne part sans qu'on le demande",
+        "tout": "Toute phrase sans commande part au provider"}.get(
+            auto, "Réglage « " + auto + " » inconnu : rien ne partira"))
+    if provider == "gemini":
+        from core.providers.gemini_provider import GeminiProvider
+
+        moteur = GeminiProvider(config)
+        souci = moteur.diagnostic()
+        if souci:
+            manque(souci)
+        else:
+            ok("Clé Gemini présente, modèle « " + moteur.modele + " »")
+            note("La question part en arrière-plan : rien ne s'ouvre à l'écran")
+    elif provider == "ollama":
         from core.providers.ollama_provider import OllamaProvider
 
         souci = OllamaProvider(config).diagnostic()

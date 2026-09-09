@@ -1139,6 +1139,21 @@ When no rule matches, the router calls
 (`ai_fallback.enabled: false`) that function simply replies politely and
 suggests `aide` — no network, no subprocess, no cost.
 
+### Asking Gemini in the background
+
+With `provider: gemini`, a question ALMA has no command for goes to Google
+Gemini and comes back as ALMA's own answer, read aloud. Nothing opens on
+screen — no browser, no tab, no window: you asked your assistant, not a site.
+
+The key is free (Google AI Studio) and lives in the **environment**,
+`GEMINI_API_KEY`, never in `config.yaml` — that file gets copied, shared and
+pushed by accident. ALMA reads it, never writes it, and keeps no copy. Without
+a key it says so plainly instead of failing silently; `doctor.py` reports it.
+
+This is the one place in the project that talks to an AI API directly. It was
+added on explicit request, it lives in a single file, and a test fails if any
+other file starts doing the same.
+
 ### The Claude Code fallback (implemented, disabled by default)
 
 The only real provider is `ClaudeCodeProvider`
@@ -1179,11 +1194,12 @@ CLI hold two separate logins. `doctor.py` reads the CLI's state with
 `claude auth status`, which costs no quota, and until it is signed in ALMA
 answers with that instruction rather than a bare error.
 
-Delegation does not fire on its own. ALMA speaks to Claude when you ask it to —
-`demande à Claude Code de …` — not when it is stuck. A calculation phrased in a
-way the rules did not expect used to open a Claude Code session for nothing;
-now an unrecognised sentence stays an unrecognised sentence. Set
-`ai_fallback.on_request_only: false` to have every one of them delegated.
+What leaves on its own is set by `ai_fallback.auto`. The default, `questions`,
+sends only what expects an *answer*: an action ALMA could not carry out stays
+an action, and handing it to a model would not carry it out either — that is
+how a calculation phrased unexpectedly used to open a session for nothing.
+`jamais` sends nothing without being asked (`demande à Claude Code de …`),
+`tout` sends every unmatched sentence.
 
 > **This is the only AI entry point in the project.** There is no second channel
 > to any API: `PROVIDERS` contains only `none`, `ollama` (a model running on

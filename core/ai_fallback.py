@@ -11,6 +11,9 @@ IA n existe dans le projet :
   - ollama : un modele de langage qui tourne SUR LA MACHINE. Aucun compte,
     aucune cle, rien qui sorte de l ordinateur. Il REPOND seulement -- il
     n execute aucune action, le corps d Alma reste le moteur de regles ;
+  - gemini : la question part a Google Gemini, en arriere-plan, et la reponse
+    est dite comme si Alma repondait. Rien ne s ouvre a l ecran. Demande une
+    cle gratuite, lue dans l environnement et jamais ecrite ;
   - claude_code : delegation au CLI Claude Code deja installe.
 
 Pour l activer, dans config.yaml :
@@ -62,11 +65,19 @@ def _claude_code_factory(config):
     return ClaudeCodeProvider(config)
 
 
+def _gemini_factory(config):
+    """Import paresseux : le module n est charge que si le provider est demande."""
+    from core.providers.gemini_provider import GeminiProvider
+
+    return GeminiProvider(config)
+
+
 # Registre des providers. Pour en ajouter un : creer un module dans
 # core/providers/ puis ajouter une entree ici. Rien d autre ne change.
 PROVIDERS = {
     "none": lambda config: NullProvider(),
     "ollama": _ollama_factory,
+    "gemini": _gemini_factory,
     "claude_code": _claude_code_factory,
 }
 
@@ -126,7 +137,7 @@ def handle_unmatched(utterance: Utterance, assistant=None) -> Response:
         if deduit is not None:
             return deduit
 
-    if not delegation_automatique(config):
+    if not delegation_automatique(config, utterance.raw):
         return Response(text=random.choice(SUGGESTIONS), ok=False)
 
     # ok=False signale « je n ai pas compris » : c est vrai tant qu aucun
@@ -138,21 +149,38 @@ def handle_unmatched(utterance: Utterance, assistant=None) -> Response:
     return Response(text=reponse, ok=not isinstance(provider, NullProvider))
 
 
-def delegation_automatique(config) -> bool:
+AUTO_JAMAIS = "jamais"
+AUTO_QUESTIONS = "questions"
+AUTO_TOUT = "tout"
+AUTO_PAR_DEFAUT = AUTO_QUESTIONS
+
+
+def delegation_automatique(config, texte: str = "") -> bool:
     """
-    Une phrase incomprise doit-elle partir d elle-meme au provider ?
+    Cette phrase incomprise doit-elle partir d elle-meme au provider ?
 
-    Non, par defaut. Alma s adresse a Claude quand on le lui demande, pas
-    quand elle bute : un calcul dicte autrement que prevu ouvrait une session
-    Claude Code sans raison, et sans que rien ne l ait demande. Une phrase
-    incomprise reste une phrase incomprise.
+    Trois reglages, par ai_fallback.auto :
 
-    Mettre ai_fallback.on_request_only a false retablit le rattrapage
-    automatique de toute demande sans commande.
+      - « questions » (defaut) : seules les demandes qui attendent une REPONSE
+        sont transmises. C est le partage naturel -- une action qu Alma n a pas
+        su executer reste une action, et la confier a un modele ne l executerait
+        pas davantage : cela ferait attendre pour rien, et c est ainsi qu un
+        calcul mal formule ouvrait une session pour rien ;
+      - « jamais » : plus rien ne part tout seul, il faut le demander
+        (« demande a Claude Code de... ») ;
+      - « tout » : toute phrase sans commande est rattrapee.
     """
     if not config or not config.get("ai_fallback.enabled", False):
         return False
-    return not config.get("ai_fallback.on_request_only", True)
+    reglage = str(config.get("ai_fallback.auto", AUTO_PAR_DEFAUT)
+                  or AUTO_PAR_DEFAUT).strip().lower()
+    if reglage == AUTO_TOUT:
+        return True
+    if reglage == AUTO_QUESTIONS:
+        from core import deduction
+
+        return deduction.est_une_question(texte)
+    return False
 
 
 def _tenter_deduction(utterance: Utterance, assistant):

@@ -93,12 +93,16 @@ DEFAULTS: dict = {
     # declenche : les demandes non reconnues recoivent un message poli.
     "ai_fallback": {
         "enabled": False,
-        # Ne deleguer QUE si la demande le dit ( « demande a Claude Code
-        # de... » ). Sinon une phrase simplement mal formulee -- un calcul
-        # dicte autrement que prevu -- partirait au CLI, ce qui coute du temps,
-        # du quota, et ouvre une session pour rien. Passez a false pour que
-        # toute phrase incomprise soit rattrapee par le provider.
-        "on_request_only": True,
+        # Ce qui part tout seul au provider, faute de commande locale :
+        #   « questions » : seulement ce qui attend une reponse. Une action
+        #                   qu Alma n a pas su executer reste une action --
+        #                   la confier a un modele ne l executerait pas
+        #                   davantage, et un calcul mal formule ouvrirait une
+        #                   session pour rien ;
+        #   « jamais »    : rien, il faut le demander (« demande a Claude
+        #                   Code de... ») ;
+        #   « tout »      : toute phrase sans commande.
+        "auto": "questions",
         # « ollama » : un modele de langage LOCAL, sans compte ni cle, qui ne
         # fait que REPONDRE aux questions restees sans commande. « claude_code »
         # delegue au CLI installe sur la machine.
@@ -111,6 +115,13 @@ DEFAULTS: dict = {
             # repond vite. Telechargez-le par « ollama pull qwen2.5:3b ».
             "modele": "qwen2.5:3b",
             "timeout_seconds": 30,
+        },
+        "gemini": {
+            # Modele gratuit et rapide. La cle N EST PAS ici : elle se lit
+            # dans la variable d environnement GEMINI_API_KEY, parce qu un
+            # config.yaml se copie, se partage et se pousse par megarde.
+            "modele": "gemini-2.5-flash",
+            "timeout_seconds": 20,
         },
         "claude_code": {
             # Binaire du CLI Claude Code (doit etre dans le PATH).

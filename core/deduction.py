@@ -358,3 +358,56 @@ def deduire(texte: str, resout) -> str | None:
         if regle.correspond(norme) and resout(regle.commande):
             return regle.commande
     return None
+
+
+# --------------------------------------------------------------------------
+# Question ou action ?
+# --------------------------------------------------------------------------
+# Ce qui ouvre une question, ou ce qui demande une explication. Les seconds
+# sont des imperatifs, mais ils appellent une reponse et non un geste :
+# « explique-moi la photosynthese » attend des mots, pas un clic.
+DEBUTS_INTERROGATIFS = (
+    "qui", "que", "quoi", "quel", "quelle", "quels", "quelles", "comment",
+    "pourquoi", "quand", "ou", "combien", "lequel", "laquelle", "lesquels",
+    "lesquelles", "est ce que", "est ce qu", "qu est ce que", "qu est ce qu",
+    "c est quoi", "ca veut dire quoi", "y a t il", "peux tu me dire",
+    "sais tu", "connais tu", "dis moi", "explique", "expliques", "explique moi",
+    "raconte", "racontes", "raconte moi", "parle moi", "resume", "resumes",
+    "definis", "definition", "traduis moi",
+)
+
+# Les memes mots existent au milieu d une phrase sans en faire une question :
+# « mets la ou tu veux ». On n accepte donc l interrogatif qu au DEBUT, sauf
+# pour ces tournures, qui ne se disent pas autrement.
+TOURNURES_INTERROGATIVES = (
+    "est ce que", "est ce qu", "qu est ce que", "qu est ce qu", "c est quoi",
+    "ca veut dire quoi", "veut dire quoi", "ca sert a quoi",
+)
+
+
+def est_une_question(texte: str) -> bool:
+    """
+    La phrase attend-elle une reponse, plutot qu un geste ?
+
+    Sert a decider ce qui merite d etre transmis a une IA. Une action que l on
+    n a pas su executer reste une action : la confier a un modele ne
+    l executerait pas davantage, et ferait attendre pour rien. Une question,
+    elle, n a rien a executer -- il n y a que la reponse.
+
+    On reconnait le point d interrogation, les tournures qui ne servent qu a
+    interroger, et les mots qui OUVRENT la phrase. La position compte : « ou »
+    commence une question, mais « mets la ou tu veux » n en est pas une.
+    """
+    brut = (texte or "").strip()
+    if not brut:
+        return False
+    if brut.endswith("?"):
+        return True
+
+    norme = " ".join(text_utils.tokenize(text_utils.normalize(brut)))
+    if not norme:
+        return False
+    if any(tournure in norme for tournure in TOURNURES_INTERROGATIVES):
+        return True
+    return any(norme == debut or norme.startswith(debut + " ")
+               for debut in DEBUTS_INTERROGATIFS)

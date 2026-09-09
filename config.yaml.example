@@ -80,12 +80,24 @@ notifications:
 # ---------------------------------------------------------------------------
 ai_fallback:
   enabled: false             # passez a true quand vous serez pret
-  provider: claude_code      # none | claude_code
-  # Ne deleguer QUE si la demande le dit (« demande a Claude Code de... »).
-  # Sinon une phrase simplement mal comprise -- un calcul dicte autrement
-  # que prevu -- partirait au CLI : du temps, du quota, et une session
-  # ouverte pour rien. false = toute phrase incomprise est rattrapee.
-  on_request_only: true
+  provider: gemini           # none | gemini | ollama | claude_code
+
+  # Ce qui part tout seul, faute de commande locale :
+  #   questions : seulement ce qui attend une reponse (defaut). Une
+  #               ACTION incomprise reste une action -- la confier a un
+  #               modele ne l executerait pas davantage.
+  #   jamais    : rien, il faut le demander (« demande a Claude Code de »)
+  #   tout      : toute phrase sans commande
+  auto: questions
+
+  # Gemini : la question part en arriere-plan, rien ne s ouvre a l ecran,
+  # et la reponse est dite comme si Alma repondait. La cle, gratuite, se
+  # prend sur Google AI Studio et se met dans la VARIABLE D ENVIRONNEMENT
+  # GEMINI_API_KEY (ou dans un .env) : jamais ici, car ce fichier se copie
+  # et se partage. Alma la lit, ne l ecrit jamais.
+  gemini:
+    modele: gemini-2.5-flash
+    timeout_seconds: 20
   claude_code:
     command: claude          # binaire du CLI, doit etre dans le PATH
     # Dossier dans lequel Claude Code aura le droit d agir (lecture, ecriture,

@@ -18,8 +18,11 @@ from core.providers.claude_code_provider import ClaudeCodeProvider
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# Domaines d IA appelables directement : ils ne doivent apparaitre nulle part.
-# Tout doit passer par le CLI Claude Code, jamais par une API en direct.
+# Domaines d IA appelables directement. Ils ne doivent apparaitre NULLE PART,
+# a une exception nommee : le provider Gemini, ajoute a la demande explicite de
+# l utilisateur pour que les questions partent en arriere-plan. L exception est
+# ecrite ici pour rester visible -- l interdit tient toujours pour tous les
+# autres, et pour tout autre fichier.
 DOMAINES_INTERDITS = [
     "api.openai.com",
     "api.anthropic.com",
@@ -27,6 +30,10 @@ DOMAINES_INTERDITS = [
     "api.groq.com",
     "api.mistral.ai",
 ]
+
+EXCEPTIONS = {
+    "generativelanguage.googleapis.com": {"core/providers/gemini_provider.py"},
+}
 
 
 def config_avec(config, **surcharges):
@@ -114,7 +121,7 @@ def test_une_vraie_reponse_n_est_pas_un_echec(assistant, monkeypatch):
     monkeypatch.setitem(ai_fallback.PROVIDERS, "essai", lambda config: ProviderBavard())
     assistant.config.set("ai_fallback.enabled", True)
     assistant.config.set("ai_fallback.provider", "essai")
-    assistant.config.set("ai_fallback.on_request_only", False)
+    assistant.config.set("ai_fallback.auto", "tout")
 
     reponse = assistant.handle("xyzzy plover blorb")
     assert reponse.ok, reponse.text
@@ -165,13 +172,14 @@ def test_la_liste_des_providers_est_close():
     Aucun canal IA ne doit apparaître sans être déclaré ici. La liste est
     volontairement courte, et chacun de ses membres est vérifié ci-dessous.
     """
-    assert set(PROVIDERS) == {"none", "ollama", "claude_code"}
+    assert set(PROVIDERS) == {"none", "ollama", "gemini", "claude_code"}
 
 
-def test_aucun_provider_ne_sort_de_la_machine(config):
+def test_seul_gemini_sort_de_la_machine(config):
     """
-    La promesse du projet : rien de payant, rien qui parte vers une API.
-    Ollama tourne en local ; Claude Code délègue à un binaire déjà installé.
+    Ollama tourne en local, Claude Code délègue à un binaire déjà installé :
+    ni l'un ni l'autre ne doit se mettre à parler à une API distante. Gemini,
+    lui, en est une — c'est ce qui a été demandé, et il est le seul.
     """
     from core.providers.ollama_provider import OllamaProvider
 
@@ -199,8 +207,26 @@ def test_aucun_appel_direct_a_une_api_ia_dans_le_code(domaine):
         + list(ROOT.glob("core/providers/*.py"))
         + list(ROOT.glob("commands/*.py"))
     )
-    fautifs = [str(f.relative_to(ROOT)) for f in fichiers if domaine in f.read_text(encoding="utf-8")]
+    tolere = EXCEPTIONS.get(domaine, set())
+    fautifs = [chemin for chemin in
+               (str(f.relative_to(ROOT)).replace("\\", "/") for f in fichiers)
+               if chemin not in tolere
+               and domaine in (ROOT / chemin).read_text(encoding="utf-8")]
     assert not fautifs, "URL d API IA trouvee dans : " + ", ".join(fautifs)
+
+
+def test_le_seul_canal_direct_est_celui_qui_a_ete_demande():
+    """
+    Une seule API est joignable en direct, et elle est nommee.
+
+    La regle du projet reste « pas de deuxieme canal cache » : l exception
+    Gemini a ete demandee explicitement, elle vit dans un fichier unique, et
+    ce test echoue si un autre fichier s en autorise autant.
+    """
+    assert set(EXCEPTIONS) == {"generativelanguage.googleapis.com"}
+    assert EXCEPTIONS["generativelanguage.googleapis.com"] == {
+        "core/providers/gemini_provider.py"
+    }
 
 
 def test_le_mode_voix_est_desactive_par_defaut(tmp_path):
