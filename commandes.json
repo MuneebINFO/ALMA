@@ -346,6 +346,14 @@
       ]
     },
     {
+      "action": "Fermer un onglet par son numéro (le plus à gauche est le 1)",
+      "phrases": [
+        "ferme l'onglet 3",
+        "ferme le deuxième onglet",
+        "ferme le dernier onglet"
+      ]
+    },
+    {
       "action": "Réduire la fenêtre active",
       "phrases": [
         "minimise la fenêtre",

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 
-from core import win_utils
+from core import desktop, win_utils
 from core.context import CommandContext, Response
 from core.registry import command
 
@@ -15,6 +15,150 @@ def _raccourci(libelle: str, *touches) -> Response:
     if win_utils.raccourci(*touches):
         return Response(text=libelle, speak=False)
     return Response.error("Je n'ai pas pu envoyer ce raccourci.")
+
+
+# --------------------------------------------------------------------------
+# Fermer un onglet par son numéro d'ordre
+# --------------------------------------------------------------------------
+TYPE_BOUTON = 50000
+MOTS_FERMER = ("ferm", "clos")
+
+
+def _navigateur_vise(ctx: CommandContext, ecran_demande: int | None = None):
+    """
+    La fenêtre de navigateur à viser.
+
+    L'ÉCRAN DE TRAVAIL passe avant le reste -- « ferme l'onglet 3 » vise le
+    navigateur de l'écran où l'on travaille, comme tout le reste dans Alma,
+    même s'il est minimisé et même si une autre fenêtre est devant. À défaut
+    de navigateur sur cet écran, celui au premier plan, puis n'importe lequel.
+    """
+    navigateurs = [f for f in desktop.fenetres() if f.est_navigateur]
+    if not navigateurs:
+        return None
+
+    try:
+        import ctypes
+
+        devant = ctypes.windll.user32.GetForegroundWindow()
+    except Exception:
+        devant = 0
+
+    ecran = (ecran_demande if ecran_demande is not None
+             else getattr(ctx.assistant, "ecran_actif", None))
+    if ecran is not None:
+        sur_ecran = [f for f in navigateurs if f.ecran == ecran]
+        if sur_ecran:
+            devant_ici = [f for f in sur_ecran if f.handle == devant]
+            return (devant_ici or sur_ecran)[0]
+
+    devant_partout = [f for f in navigateurs if f.handle == devant]
+    return (devant_partout or navigateurs)[0]
+
+
+def _onglets_gauche_a_droite(fenetre) -> list:
+    """
+    Les onglets, du plus à gauche (numéro 1) au plus à droite.
+
+    On trie sur la position X plutôt que de se fier à l'ordre de l'arbre
+    d'accessibilité : celui-ci suit d'ordinaire l'affichage, mais un tri
+    explicite couvre les cas tordus (onglets épinglés, groupes).
+    """
+    from core import browser_tabs
+
+    def gauche(onglet):
+        try:
+            return onglet.element.CurrentBoundingRectangle.left
+        except Exception:
+            return 10 ** 9
+
+    return sorted(browser_tabs.onglets(fenetre), key=gauche)
+
+
+def _fermer_onglet(onglet) -> bool:
+    """
+    Ferme cet onglet, sans le mettre au premier plan si possible.
+
+    Chaque onglet expose un bouton « Fermer » : l'invoquer marche même
+    fenêtre minimisée, et ne dérange pas l'onglet courant. Le repli --
+    activer l'onglet puis Ctrl+W -- exige le premier plan.
+    """
+    from core import browser_tabs
+
+    uia, module = browser_tabs._client()
+    if module is not None:
+        try:
+            condition = uia.CreatePropertyCondition(
+                module.UIA_ControlTypePropertyId, TYPE_BOUTON)
+            boutons = onglet.element.FindAll(module.TreeScope_Descendants, condition)
+            for index in range(boutons.Length):
+                bouton = boutons.GetElement(index)
+                if any(m in (bouton.CurrentName or "").lower() for m in MOTS_FERMER):
+                    motif = bouton.GetCurrentPattern(module.UIA_InvokePatternId)
+                    motif.QueryInterface(module.IUIAutomationInvokePattern).Invoke()
+                    return True
+        except Exception:
+            pass
+
+    if onglet.activer():
+        desktop.mettre_au_premier_plan(onglet.fenetre.handle)
+        return win_utils.raccourci("ctrl", "w")
+    return False
+
+
+@command(
+    name="fermer_onglet_numero",
+    patterns=[
+        # « ferme l'onglet 3 », « ferme l'onglet numéro trois », « ferme onglet 2 »,
+        # « ferme l'onglet 3 sur l'écran 2 »
+        r"^(?:ferme|fermer|supprime|enleve|vire|degage)\s+(?:moi\s+)?"
+        r"(?:l\s+|le\s+|la\s+)?onglet\s+(?:numero\s+|num\s+|no\s+|n\s+)?(?P<n>\S+?)"
+        r"(?:\s+(?:sur\s+)?(?:l\s+)?ecran\s+(?P<ecran>\d+))?\s*$",
+        # « ferme le troisième onglet », « ferme le 3e onglet »
+        r"^(?:ferme|fermer|supprime|enleve|vire|degage)\s+(?:moi\s+)?"
+        r"(?:l\s+|le\s+|la\s+)?(?P<n>\d+\s*e?|premier|premiere|deuxieme|second|seconde|"
+        r"troisieme|quatrieme|cinquieme|sixieme|septieme|huitieme|neuvieme|dixieme|"
+        r"dernier|derniere)\s+onglet"
+        r"(?:\s+(?:sur\s+)?(?:l\s+)?ecran\s+(?P<ecran>\d+))?\s*$",
+    ],
+    category="Fenêtres",
+    description="Fermer un onglet par son numéro (le plus à gauche est le 1)",
+    examples=["ferme l'onglet 3", "ferme le deuxième onglet"],
+    # Pas de guard « un navigateur existe » : une demande NUMÉROTÉE n'a pas de
+    # meilleur destinataire, et sans navigateur on préfère le dire clairement
+    # plutôt que fermer l'onglet courant de la fenêtre au hasard.
+    priority=95,
+)
+def fermer_onglet_numero(ctx: CommandContext) -> Response:
+    """Ferme l'onglet dont on donne le rang, en comptant depuis la gauche."""
+    from core import deduction, text_utils
+
+    ecran = ctx.match.groupdict().get("ecran") if ctx.match else None
+    fenetre = _navigateur_vise(ctx, int(ecran) if ecran else None)
+    if fenetre is None:
+        return Response.error("Je ne vois aucun navigateur ouvert.")
+    onglets = _onglets_gauche_a_droite(fenetre)
+    if not onglets:
+        return Response.error("Je ne vois aucun onglet dans ce navigateur.")
+
+    brut = text_utils.normalize(ctx.group("n") or "").strip()
+    if brut in ("dernier", "derniere"):
+        numero = len(onglets)
+    else:
+        brut = re.sub(r"^(\d+)\s*e$", r"\1", brut)      # « 3e » -> « 3 »
+        numero = deduction.nombre_entendu(brut, maximum=max(9, len(onglets)))
+    if numero is None:
+        return Response.error("Quel onglet dois-je fermer ? Donnez son numéro.")
+    if not 1 <= numero <= len(onglets):
+        pluriel = "s" if len(onglets) > 1 else ""
+        return Response.error(
+            "Il n'y a que " + str(len(onglets)) + " onglet" + pluriel
+            + " : pas d'onglet " + str(numero) + "."
+        )
+
+    if _fermer_onglet(onglets[numero - 1]):
+        return Response(text="Onglet " + str(numero) + " fermé.", speak=False)
+    return Response.error("Je n'ai pas réussi à fermer cet onglet.")
 
 
 @command(

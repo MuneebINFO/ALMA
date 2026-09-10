@@ -856,6 +856,7 @@ valide                        échap
 ### Windows and tabs
 ```
 ouvre un nouvel onglet        ferme cet onglet
+ferme l'onglet 3              ferme le dernier onglet
 rouvre l'onglet fermé         onglet suivant / précédent
 actualise la page             page précédente / suivante
 zoom avant / arrière / normal plein écran
@@ -863,6 +864,13 @@ minimise / agrandis la fenêtre
 change de fenêtre             affiche le bureau
 capture une zone
 ```
+
+**Closing a tab by its number.** `ferme l'onglet 3` — tabs count from the
+left, so tab 1 is the leftmost. Word forms (`ferme le deuxième onglet`,
+`ferme le dernier onglet`) work too. It targets the browser on the **working
+screen**, even if that window is minimised and another is in front, and closes
+the tab through its own close button — no need to bring the window forward or
+disturb the current tab. Add `sur l'écran 2` to aim elsewhere.
 
 ### Machine
 ```
