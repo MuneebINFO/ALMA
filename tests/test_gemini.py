@@ -146,6 +146,55 @@ def test_aucune_cle_n_est_demandee():
         assert interdit not in source
 
 
+def test_la_consigne_de_concision_est_ajoutee_a_la_question():
+    """
+    Sans que l'utilisateur ait à le demander : une réponse courte et directe
+    est plus sûre à extraire de la page qu'un dossier à puces.
+    """
+    demande = gemini_provider._avec_consigne("pourquoi le ciel est bleu")
+    assert demande.startswith("pourquoi le ciel est bleu (")
+    assert "une ou deux phrases" in demande
+
+
+@pytest.mark.parametrize("deja", [
+    "résume en une phrase la Révolution française",
+    "explique-moi ça en bref",
+])
+def test_la_consigne_n_est_pas_ajoutee_deux_fois(deja):
+    assert gemini_provider._avec_consigne(deja) == deja
+
+
+def test_la_consigne_part_dans_l_url(config, monkeypatch):
+    urls = []
+    monkeypatch.setattr(GeminiProvider, "navigateur", lambda self: "chrome.exe")
+    monkeypatch.setattr(gemini_provider, "_ouvrir_discretement",
+                        lambda binaire, url: urls.append(url))
+    monkeypatch.setattr(gemini_provider, "_attendre_la_reponse", lambda *a: "")
+    monkeypatch.setattr(gemini_provider, "_fermer", lambda f: None)
+    GeminiProvider(config).generate("pourquoi le ciel est bleu")
+    assert urls and "une+ou+deux+phrases" in urls[0]
+
+
+def test_la_question_rappelee_avec_la_consigne_reste_l_ancre(lecture):
+    """La page rappelle la question TELLE QU'ENVOYÉE, consigne comprise."""
+    lecture(
+        gemini_provider._avec_consigne(QUESTION),
+        ATTENDU,
+        "Résultats de recherche",
+    )
+    assert gemini_provider.reponse(None, QUESTION) == ATTENDU
+
+
+def test_un_bout_de_consigne_seul_sur_sa_ligne_n_est_pas_lu(lecture):
+    """Quand l'écho de la question déborde sur deux lignes."""
+    lecture(
+        QUESTION + " (réponds en une ou",
+        "deux phrases, sans détour)",
+        ATTENDU,
+    )
+    assert gemini_provider.reponse(None, QUESTION) == ATTENDU
+
+
 def test_c_est_le_mode_ia_qui_est_interroge():
     """
     Et non gemini.google.com : mesuré, celui-là ne répond que fenêtre au

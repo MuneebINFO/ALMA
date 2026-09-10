@@ -1209,6 +1209,14 @@ results page, not an app — it renders even minimised. Two other dead ends on
 the way: `gemini.google.com/app?q=…` does not submit the question, and writing
 the field through accessibility is accepted and ignored.
 
+Every question is sent with a fixed instruction appended in parentheses —
+*« réponds en une ou deux phrases, sans détour »* — even though you never say
+it. AI Mode otherwise answers with a whole file of paragraphs, bullet lists and
+sources, and ALMA only reads the first fragment it recognises, which is not
+always the right one. A short, direct answer is both easier to pick out of the
+page and less of a chore to hear. If your own wording already asks for brevity,
+the instruction is not added twice.
+
 Reading the page text in document order matters more than it sounds. Piecing
 elements together by their coordinates looked finer and was more fragile: a
 linked word is its own element, and when the sentence wraps it landed at the

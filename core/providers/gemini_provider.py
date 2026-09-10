@@ -46,6 +46,23 @@ log = logging.getLogger(__name__)
 # celle-ci se rend meme reduite.
 RECHERCHE = "https://www.google.com/search?udm=50&hl=fr&q="
 
+# Consigne ajoutee a CHAQUE question. Le mode IA repond volontiers par un
+# dossier -- paragraphes, listes, sources -- dont Alma ne lit que le premier
+# fragment, et pas toujours le bon. Une reponse courte et directe est plus
+# sure a extraire et plus supportable a l oreille. Elle est glissee entre
+# parentheses, sur la meme ligne que la question, pour rester un simple
+# complement et non une deuxieme demande.
+CONSIGNE = "réponds en une ou deux phrases, sans détour"
+
+
+def _avec_consigne(question: str) -> str:
+    """La question, suivie de la consigne de concision -- sauf si l utilisateur
+    a deja demande quelque chose de ce genre."""
+    question = (question or "").strip()
+    if "phrase" in question.lower() or "bref" in question.lower():
+        return question
+    return question + " (" + CONSIGNE + ")"
+
 TYPE_DOCUMENT = 50030
 
 # En deca, une ligne qui ne se termine pas est un libelle d interface, pas une
@@ -127,7 +144,7 @@ class GeminiProvider:
         fenetre = None
         try:
             fenetre = _ouvrir_discretement(self.navigateur(),
-                                           RECHERCHE + quote_plus(query))
+                                           RECHERCHE + quote_plus(_avec_consigne(query)))
             if fenetre is None:
                 return "Je n'ai pas réussi à ouvrir la recherche."
             trouvee = _attendre_la_reponse(fenetre, query, self.delai)
@@ -284,20 +301,28 @@ def reponse(fenetre, question: str) -> str:
     cherchee = _sans_blancs(question)
     depart = None
     for index, ligne in enumerate(lignes):
-        if _sans_blancs(ligne) == cherchee:
-            # La PREMIERE occurrence, et elle seule : la question se retrouve
-            # plus bas dans la page, en titre de resultat. « pourquoi le ciel
-            # est bleu » y est aussi une video, et c est son descriptif qui
-            # revenait a la place de la reponse.
+        nette = _sans_blancs(ligne)
+        # La question est rappelee telle qu elle a ete envoyee -- la consigne
+        # de concision ajoutee entre parentheses comprise. On accroche donc
+        # sur son DEBUT, pas sur une egalite stricte. Et la PREMIERE
+        # occurrence seule : plus bas, la question est un titre de resultat
+        # (« pourquoi le ciel est bleu » y est aussi une video, dont le
+        # descriptif revenait a la place de la reponse).
+        if nette == cherchee or nette.startswith(cherchee + " "):
             depart = index + 1
             break
     if depart is None:
         return ""
 
+    echo = _sans_blancs(_avec_consigne(question))
     morceaux = []
     for ligne in lignes[depart:]:
         nette = " ".join(ligne.split())
         if not nette:
+            continue
+        if _sans_blancs(nette) and _sans_blancs(nette) in echo:
+            # Reste de la question ou de la consigne, encore en echo sur
+            # plusieurs lignes : ce n est pas la reponse.
             continue
         if any(marque in nette for marque in FINS_DE_REPONSE):
             break
