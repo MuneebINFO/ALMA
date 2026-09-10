@@ -37,23 +37,19 @@ def _navigateur_vise(ctx: CommandContext, ecran_demande: int | None = None):
     if not navigateurs:
         return None
 
-    try:
-        import ctypes
-
-        devant = ctypes.windll.user32.GetForegroundWindow()
-    except Exception:
-        devant = 0
+    courante = ctx.assistant.fenetre_courante()
+    poignee = courante.handle if courante is not None else 0
 
     ecran = (ecran_demande if ecran_demande is not None
              else getattr(ctx.assistant, "ecran_actif", None))
     if ecran is not None:
         sur_ecran = [f for f in navigateurs if f.ecran == ecran]
         if sur_ecran:
-            devant_ici = [f for f in sur_ecran if f.handle == devant]
-            return (devant_ici or sur_ecran)[0]
+            ici = [f for f in sur_ecran if f.handle == poignee]
+            return (ici or sur_ecran)[0]
 
-    devant_partout = [f for f in navigateurs if f.handle == devant]
-    return (devant_partout or navigateurs)[0]
+    partout = [f for f in navigateurs if f.handle == poignee]
+    return (partout or navigateurs)[0]
 
 
 def _onglets_gauche_a_droite(fenetre) -> list:

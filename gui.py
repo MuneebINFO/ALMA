@@ -744,8 +744,28 @@ class AlmaApp:
                     return
         except queue.Empty:
             pass
+        self._suivre_fenetre_utilisateur()
         self._rafraichir_compte_a_rebours()
         self.root.after(40, self._traiter_evenements)
+
+    def _suivre_fenetre_utilisateur(self) -> None:
+        """
+        Retient la fenêtre non-Alma que l'utilisateur a devant lui.
+
+        Quand Alma passe au premier plan -- on lui a parlé, elle est plein
+        écran -- les commandes ne sauraient plus « où j'étais ». Cette mémoire,
+        rafraîchie 25 fois par seconde, le leur redonne.
+        """
+        try:
+            import ctypes
+
+            user32 = ctypes.windll.user32
+            if not self.assistant.poignee_alma:
+                brut = self.root.winfo_id()
+                self.assistant.poignee_alma = user32.GetAncestor(brut, 2) or brut
+            self.assistant.noter_fenetre_utilisateur(user32.GetForegroundWindow())
+        except Exception:
+            pass
 
     def signaler_ecran(self, index: int) -> None:
         """Illumine brievement le contour de l ecran choisi."""

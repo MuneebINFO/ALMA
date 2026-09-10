@@ -47,6 +47,13 @@ class Assistant:
         self.ecran_actif = 1
         # Branche par l interface pour signaler visuellement un changement.
         self.signal_ecran = None
+        # Poignee de la DERNIERE fenetre non-Alma que l utilisateur a eue
+        # devant lui, et poignee de la fenetre d Alma elle-meme. L interface
+        # les tient a jour (voir gui.py) : quand Alma est au premier plan --
+        # mode vocal, plein ecran -- c est ce qui permet de savoir « la
+        # fenetre ou j etais ».
+        self.fenetre_utilisateur = 0
+        self.poignee_alma = 0
         # Instant du dernier arret d action, pour savoir si « arrete » visait
         # cette action ou la session d ecoute.
         self._arret_a = -1e9
@@ -166,6 +173,30 @@ class Assistant:
             except Exception as exc:
                 log.debug("Signal d écran impossible : %s", exc)
         return change
+
+    def fenetre_courante(self):
+        """
+        La fenêtre sur laquelle l'utilisateur travaille, ou None.
+
+        Celle au premier plan si ce n'est pas Alma ; sinon la dernière fenêtre
+        non-Alma qu'il a eue devant lui, que l'interface garde en mémoire.
+        C'est le repère de « cette fenêtre-ci » quand rien d'autre ne le dit.
+        """
+        from core import desktop
+
+        devant = desktop.fenetre_au_premier_plan()
+        if devant is not None and devant.handle != self.poignee_alma:
+            return devant
+        return desktop.fenetre_par_poignee(self.fenetre_utilisateur)
+
+    def noter_fenetre_utilisateur(self, hwnd) -> None:
+        """
+        Appelé souvent par l'interface : retient la dernière fenêtre au
+        premier plan qui n'était pas Alma. Volontairement sans coût -- une
+        simple comparaison, pas d'énumération des fenêtres.
+        """
+        if hwnd and hwnd != self.poignee_alma:
+            self.fenetre_utilisateur = hwnd
 
     def oublier_contexte(self) -> None:
         """Vide la memoire de court terme (fin de session)."""

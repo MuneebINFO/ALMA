@@ -444,12 +444,21 @@ sur quel écran es-tu
 ```
 
 The chosen screen **sticks**. Unlike the site context, it does not expire with
-the session — it changes only when you ask. Scrolling, clicking, pausing and
-opening sites all target it, and a bare "mets pause" pauses whatever plays
-there.
+the session — it changes only when you ask. Scrolling, clicking, pausing,
+closing an app and opening sites all target it, and a bare "mets pause" pauses
+whatever plays there.
 
 It is a preference, not a cage: if a site is only open on the other screen,
 ALMA finds it there rather than claiming it is not open.
+
+**One window, not all of them.** `ferme Chrome` closes the Chrome window on the
+working screen — never the one on the other screen, and never every Chrome
+process at once. If two Chrome windows sit on the same screen, it closes the
+one you are on: whatever is in front, or — when ALMA itself is in front,
+full-screen — the last window you were looking at, which the app keeps track
+of. It closes the window through `WM_CLOSE`, the same as the X button, so the
+app can still prompt to save. `ferme tout Chrome`, `ferme complètement Chrome`
+and `tue Chrome` do close everything.
 
 When the screen changes, its **border lights up for half a second** so you can
 see where ALMA went. The frame is click-through and disappears on its own. It is

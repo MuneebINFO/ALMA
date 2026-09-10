@@ -285,6 +285,46 @@ def poignees_visibles() -> set:
     return {f.handle for f in fenetres()}
 
 
+WM_CLOSE = 0x0010
+
+
+def fermer_fenetre(hwnd) -> bool:
+    """
+    Ferme UNE fenetre proprement (WM_CLOSE), sans toucher aux autres.
+
+    C est ce que fait le bouton X ou Alt+F4 : l application peut demander a
+    enregistrer, et ses autres fenetres restent ouvertes. A l inverse de
+    « tuer le processus », qui emporte tout.
+    """
+    if user32 is None:
+        return False
+    try:
+        return bool(user32.PostMessageW(hwnd, WM_CLOSE, 0, 0))
+    except Exception as exc:
+        log.debug("Fermeture de la fenetre impossible : %s", exc)
+        return False
+
+
+def fenetre_par_poignee(hwnd) -> Fenetre | None:
+    """La Fenetre correspondant a cette poignee, ou None si elle n est plus la."""
+    if not hwnd:
+        return None
+    for fenetre in fenetres():
+        if fenetre.handle == hwnd:
+            return fenetre
+    return None
+
+
+def fenetre_au_premier_plan() -> Fenetre | None:
+    """La fenetre actuellement au premier plan, ou None."""
+    if user32 is None:
+        return None
+    try:
+        return fenetre_par_poignee(user32.GetForegroundWindow())
+    except Exception:
+        return None
+
+
 # Fenetres de passage : beaucoup de lanceurs sont des scripts, et la console
 # qui les execute apparait avant l application. La deplacer a la place de
 # l application serait la seule chose visible du travail demande.

@@ -179,11 +179,15 @@ def test_le_navigateur_de_l_ecran_actif_bat_celui_du_premier_plan(monkeypatch):
     ecran1 = FenetreFactice(handle=101, ecran=1)
     ecran2 = FenetreFactice(handle=202, ecran=2)
     monkeypatch.setattr(desktop, "fenetres", lambda *a, **k: [ecran2, ecran1])
-    monkeypatch.setattr(
-        "ctypes.windll.user32.GetForegroundWindow", lambda: 202, raising=False)
 
     class Ctx:
         class assistant:
             ecran_actif = 1
 
+            # L'écran 2 est bien au premier plan...
+            @staticmethod
+            def fenetre_courante():
+                return ecran2
+
+    # ... mais « sur l'écran 1 » vise le 1.
     assert fenetres._navigateur_vise(Ctx()).handle == 101

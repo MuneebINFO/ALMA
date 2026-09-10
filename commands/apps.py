@@ -21,6 +21,10 @@ _FILLERS = (
     "the", "my", "app", "appli", "applis", "application", "applications",
     "logiciel", "logiciels", "programme", "software", "stp",
     "onglet", "onglets", "page", "site", "tab", "fenetre",
+    # « ferme tout Chrome », « ferme complètement Spotify » : ces mots disent
+    # « toutes les fenêtres », pas le nom de l'application.
+    "tout", "toute", "toutes", "tous", "completement", "entierement",
+    "definitivement", "partout",
     "s'il te plaît", "s il vous plait", "please",
 )
 
@@ -83,9 +87,10 @@ def _is_known_app(ctx: CommandContext) -> bool:
     Google, pas le navigateur qui porte son nom -- alors que « ouvre Chrome »,
     lui, nomme bien l application.
     """
-    if resolve_app(ctx.config, ctx.arg) is None:
+    nom, _ecran = separer_ecran(ctx.arg)
+    if resolve_app(ctx.config, nom) is None:
         return False
-    cible = clean_target(ctx.arg)
+    cible = clean_target(nom)
     if cible in alias_exacts(ctx.config.get("applications", {})):
         return True
     return cible not in alias_exacts(ctx.config.get("websites", {}))
@@ -404,6 +409,53 @@ def aller_sur_application(ctx: CommandContext) -> Response:
     return Response(text="Voilà " + _joli(cible) + ".", speak=False)
 
 
+# « ferme tout Chrome », « ferme complètement Spotify », « tue Chrome » :
+# là, on veut bien fermer TOUTES les fenêtres, quitte à tuer le processus.
+_MOTS_TOUT = ("tout", "toute", "toutes", "tous", "completement", "entierement",
+              "partout", "definitivement")
+_VERBES_TUER = ("tue", "tuer", "kill")
+
+
+def _fenetre_a_fermer(ctx: CommandContext, cible: str, processus: str,
+                      ecran: int | None):
+    """
+    LA fenêtre de cette application à fermer. Jamais toutes.
+
+    L'ÉCRAN DE TRAVAIL prime : « ferme Chrome » quand on travaille sur
+    l'écran 1 ne doit pas emporter le Chrome de l'écran 2, même si c'est lui
+    qu'on regardait il y a un instant. Sur cet écran, s'il y a plusieurs
+    fenêtres de l'application, on prend celle où l'on est -- au premier plan,
+    ou la dernière vue avant qu'Alma ne passe devant.
+
+    À défaut de fenêtre sur l'écran de travail, celle qu'on a devant soi ;
+    à défaut encore, la première venue.
+    """
+    from core import desktop
+
+    correspond = [
+        f for f in desktop.fenetres()
+        if _rang_de_fenetre(f, cible, processus) is not None
+    ]
+    if not correspond:
+        return None
+
+    courante = ctx.assistant.fenetre_courante()
+    poignee_courante = courante.handle if courante is not None else 0
+
+    voulu = ecran or getattr(ctx.assistant, "ecran_actif", None)
+    sur_ecran = [f for f in correspond if voulu is None or f.ecran == voulu]
+    if sur_ecran:
+        for f in sur_ecran:
+            if f.handle == poignee_courante:
+                return f
+        return sur_ecran[0]
+
+    for f in correspond:
+        if f.handle == poignee_courante:
+            return f
+    return correspond[0]
+
+
 @command(
     name="close_app",
     patterns=[r"^" + CLOSE_VERBS + r"\s+(.+)$"],
@@ -414,22 +466,50 @@ def aller_sur_application(ctx: CommandContext) -> Response:
     guard=_is_known_app,
 )
 def close_app(ctx: CommandContext) -> Response:
-    """Ferme une application via son nom de processus."""
-    resolved = resolve_app(ctx.config, ctx.arg)
+    """
+    Ferme UNE fenêtre de l'application -- celle où l'on est.
+
+    « ferme Chrome » ne doit pas emporter le Chrome de l'autre écran, ni les
+    autres fenêtres Chrome de cet écran : une commande d'application ne vise
+    que ce qu'on a devant soi. Pour tout fermer : « ferme tout Chrome », «
+    ferme complètement Chrome », « tue Chrome ».
+    """
+    from core import desktop
+
+    # « tue Chrome » / « kill Chrome » : le verbe, lui, est dans la phrase
+    # entière -- ctx.arg ne contient que ce qui le suit.
+    premier = ctx.norm.split()[:1]
+    tuer = bool(premier) and premier[0] in _VERBES_TUER
+    demande = text_utils.normalize(ctx.arg)
+    tout = tuer or any(mot in demande.split() for mot in _MOTS_TOUT)
+
+    nom, ecran = separer_ecran(ctx.arg)
+    resolved = resolve_app(ctx.config, nom)
     if resolved is None:
         return Response.error("Je ne connais pas cette application.")
     key, entry = resolved
     label = (entry.get("aliases") or [key])[0]
-    process = entry.get("process", "")
-    if not process:
-        return Response.error(
-            "Aucun processus n est configure pour " + label
-            + " (applications." + key + ".process dans config.yaml)."
-        )
-    ok, detail = win_utils.kill_process(process)
-    if ok:
-        return Response(text="J'ai fermé " + label + ".")
-    return Response.error(label + " ne semble pas ouvert. (" + detail + ")")
+    process = (entry.get("process", "") or "").lower()
+    cible = clean_target(nom) or nom
+
+    fenetre = _fenetre_a_fermer(ctx, cible, process, ecran)
+
+    # Fermer TOUT, ou pas de fenêtre visible (processus d'arrière-plan) :
+    # on tue le processus, seul moyen dans ces cas.
+    if tout or fenetre is None:
+        if not process:
+            return Response.error(
+                "Aucun processus n'est configuré pour " + label
+                + " (applications." + key + ".process dans config.yaml)."
+            )
+        ok, detail = win_utils.kill_process(process)
+        if ok:
+            return Response(text="J'ai fermé " + label + ".", speak=False)
+        return Response.error(label + " ne semble pas ouvert. (" + detail + ")")
+
+    if desktop.fermer_fenetre(fenetre.handle):
+        return Response(text="J'ai fermé " + label + ".", speak=False)
+    return Response.error("Je n'ai pas réussi à fermer " + label + ".")
 
 
 @command(

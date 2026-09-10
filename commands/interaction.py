@@ -100,24 +100,17 @@ def fenetre_au_premier_plan(ctx):
     La fenetre que l utilisateur regarde, si elle est sur l ecran de travail.
 
     C est la reponse la plus juste a « clique sur X » : on clique dans ce
-    qu on a sous les yeux. Restait a ne pas viser Alma elle-meme.
+    qu on a sous les yeux. Quand Alma est elle-meme devant -- mode vocal,
+    plein ecran -- on prend la DERNIERE fenetre non-Alma qu on a vue, que
+    l interface garde en memoire.
     """
-    try:
-        import ctypes
-
-        poignee = ctypes.windll.user32.GetForegroundWindow()
-    except Exception:
+    fenetre = ctx.assistant.fenetre_courante()
+    if fenetre is None or _est_alma(fenetre, ctx):
         return None
     ecran = getattr(ctx.assistant, "ecran_actif", None)
-    for fenetre in desktop.fenetres():
-        if fenetre.handle != poignee:
-            continue
-        if _est_alma(fenetre, ctx):
-            return None
-        if ecran is not None and fenetre.ecran != ecran:
-            return None
-        return fenetre
-    return None
+    if ecran is not None and fenetre.ecran != ecran:
+        return None
+    return fenetre
 
 
 def fenetre_visee(ctx: CommandContext):
