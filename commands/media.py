@@ -105,6 +105,30 @@ def ecran_cible(ctx: CommandContext) -> int:
     return numero_ecran(ctx) or getattr(ctx.assistant, "ecran_actif", 1) or 1
 
 
+# Alma est au premier plan des qu on lui parle : sa propre fenetre ne compte pas.
+_PROCESSUS_ALMA = ("pythonw.exe", "python.exe", "alma.exe")
+
+
+def fenetre_regardee(ctx: CommandContext, index_ecran: int):
+    """
+    La fenetre que l utilisateur a sous les yeux, si elle est sur l ecran de
+    travail. « pause » / « lance la video » doivent viser CE lecteur-la, et
+    surtout pas un autre laisse en pause dans un onglet d arriere-plan.
+
+    None quand on ne sait pas (mode texte sans interface, Alma au premier
+    plan sans fenetre memorisee, autre ecran) : on retombe alors sur le
+    raisonnement par ecran.
+    """
+    fenetre = ctx.assistant.fenetre_courante()
+    if fenetre is None or fenetre.ecran != index_ecran:
+        return None
+    nom_alma = str(ctx.config.get("general.assistant_name", "Alma") or "Alma").lower()
+    if (fenetre.processus.lower() in _PROCESSUS_ALMA
+            and nom_alma in (fenetre.titre or "").lower()):
+        return None
+    return fenetre
+
+
 @command(
     name="media_pause_ecran",
     patterns=[
@@ -224,7 +248,8 @@ def media_what_is_playing(ctx: CommandContext) -> Response:
 def media_play_pause(ctx: CommandContext) -> Response:
     """Bascule lecture/pause sur le lecteur actif."""
     index = ecran_cible(ctx)
-    ok, detail = media_control.agir_sur_ecran(index, "bascule")
+    ok, detail = media_control.agir_sur_ecran(
+        index, "bascule", fenetre_active=fenetre_regardee(ctx, index))
     if ok:
         return Response(text="C'est fait.", speak=False)
     return Response.error("Rien à piloter sur l'écran " + str(index) + " (" + detail + ").")
@@ -252,7 +277,8 @@ def media_play_pause(ctx: CommandContext) -> Response:
 def media_next(ctx: CommandContext) -> Response:
     """Morceau suivant."""
     index = ecran_cible(ctx)
-    ok, detail = media_control.agir_sur_ecran(index, "suivant")
+    ok, detail = media_control.agir_sur_ecran(
+        index, "suivant", fenetre_active=fenetre_regardee(ctx, index))
     if ok:
         return Response(text="Morceau suivant.", speak=False)
     return Response.error("Rien à faire défiler sur l'écran " + str(index) + " (" + detail + ").")
@@ -277,7 +303,8 @@ def media_next(ctx: CommandContext) -> Response:
 def media_previous(ctx: CommandContext) -> Response:
     """Morceau précédent."""
     index = ecran_cible(ctx)
-    ok, detail = media_control.agir_sur_ecran(index, "precedent")
+    ok, detail = media_control.agir_sur_ecran(
+        index, "precedent", fenetre_active=fenetre_regardee(ctx, index))
     if ok:
         return Response(text="Morceau précédent.", speak=False)
     return Response.error("Rien à faire défiler sur l'écran " + str(index) + " (" + detail + ").")
@@ -352,7 +379,8 @@ OBJET_LECTURE = r"(?:video|videos|film|musique|chanson|lecture|serie|episode|pod
 def media_lecture(ctx: CommandContext) -> Response:
     """Relance ce qui est en pause, sans basculer si ça joue déjà."""
     index = ecran_cible(ctx)
-    ok, detail = media_control.agir_sur_ecran(index, "play")
+    ok, detail = media_control.agir_sur_ecran(
+        index, "play", fenetre_active=fenetre_regardee(ctx, index))
     if ok:
         return Response(text="Lecture : " + detail + ".", speak=False)
     return Response.error("Rien à relancer sur l'écran " + str(index) + " (" + detail + ").")
@@ -379,7 +407,8 @@ def media_lecture(ctx: CommandContext) -> Response:
 def media_mettre_en_pause(ctx: CommandContext) -> Response:
     """Met en pause sans relancer si c'était déjà arrêté."""
     index = ecran_cible(ctx)
-    ok, detail = media_control.agir_sur_ecran(index, "pause")
+    ok, detail = media_control.agir_sur_ecran(
+        index, "pause", fenetre_active=fenetre_regardee(ctx, index))
     if ok:
         return Response(text="En pause : " + detail + ".", speak=False)
     return Response.error("Rien à mettre en pause sur l'écran " + str(index) + " (" + detail + ").")

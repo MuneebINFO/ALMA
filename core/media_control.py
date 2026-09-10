@@ -291,9 +291,47 @@ def fenetres_de_lecture_sur_ecran(index_ecran: int) -> list:
     return [f for f in ici if f.est_lecteur or _titre_de_media(f)]
 
 
-def agir_sur_ecran(index_ecran: int, action: str = "pause") -> tuple:
+def _est_un_lecteur(fenetre) -> bool:
+    """La fenetre ressemble-t-elle a un lecteur (appli dediee ou page web) ?"""
+    return bool(fenetre) and (fenetre.est_lecteur or _titre_de_media(fenetre))
+
+
+def _restreindre_a_la_fenetre(fenetre_active, sessions_ecran):
+    """
+    Ne garder que le lecteur de la fenetre que l utilisateur regarde.
+
+    Retourne (sessions_a_traiter, fenetre_pour_le_clavier). Quand on dit
+    « lance la video » en regardant un lecteur tout juste ouvert, il ne faut
+    surtout pas relancer une video laissee en pause dans un autre onglet.
+
+    - une session dont le TITRE recoupe celui de la fenetre : c est la sienne ;
+    - sinon, pour un lecteur DEDIE (Spotify, VLC...), sa session lui appartient
+      meme si le titre de la fenetre ne dit pas ce qui joue ;
+    - sinon, si la fenetre ressemble a une page de lecture, sa session est dans
+      un autre onglet (ou elle n en a pas) : on agira au clavier sur elle seule ;
+    - sinon on ne sait pas mieux qu en raisonnant par ecran : on ne restreint pas.
+    """
+    memes = [s for s in sessions_ecran
+             if correspond(fenetre_active.processus, s.application)]
+    accordent = [s for s in memes
+                 if _titres_se_recoupent(s.titre, fenetre_active.titre)]
+    if accordent:
+        return accordent, fenetre_active
+    if memes and not fenetre_active.est_navigateur:
+        return memes, fenetre_active
+    if _est_un_lecteur(fenetre_active):
+        return [], fenetre_active
+    return sessions_ecran, None
+
+
+def agir_sur_ecran(index_ecran: int, action: str = "pause",
+                   fenetre_active=None) -> tuple:
     """
     Applique une action de lecture a ce qui joue sur un ecran donne.
+
+    Si `fenetre_active` est fournie -- la fenetre que l utilisateur a sous les
+    yeux --, l action ne vise QUE le lecteur de cette fenetre, jamais un
+    lecteur d arriere-plan.
 
     Retourne (succes, description). Rien sur cet ecran signifie qu il n y a
     rien a faire : on ne touche jamais a un lecteur affiche ailleurs.
@@ -302,11 +340,20 @@ def agir_sur_ecran(index_ecran: int, action: str = "pause") -> tuple:
     if not fenetres:
         return False, "aucune fenêtre sur cet écran"
 
+    sessions_ecran = sessions_sur_ecran(index_ecran)
+    cible_clavier = None
+    if fenetre_active is not None:
+        sessions_ecran, cible_clavier = _restreindre_a_la_fenetre(
+            fenetre_active, sessions_ecran)
+
     touchees = []
-    for session in sessions_sur_ecran(index_ecran):
+    deja_bon = False
+    for session in sessions_ecran:
         if action == "pause" and not session.joue:
+            deja_bon = True
             continue
         if action == "play" and session.joue:
+            deja_bon = True
             continue
         if _agir_sur_session(session.application, action):
             titre = session.titre or session.application
@@ -314,17 +361,22 @@ def agir_sur_ecran(index_ecran: int, action: str = "pause") -> tuple:
 
     if touchees:
         return True, ", ".join(touchees)
+    if deja_bon:
+        # Le bon lecteur etait deja dans l etat demande : ne rien faire est
+        # le comportement juste, pas un echec.
+        return True, "déjà en pause" if action == "pause" else "déjà en lecture"
 
     # Repli clavier, uniquement pour ce qui ressemble vraiment a un lecteur :
     # envoyer « espace » a une fenetre au hasard ferait defiler une page.
     if action not in ("pause", "play", "bascule"):
         return False, "aucun lecteur sur cet écran"
-    # Seules les fenetres qui ressemblent vraiment a un lecteur sont eligibles.
-    # Envoyer « espace » a un navigateur au hasard ferait defiler la page que
-    # l utilisateur est en train de lire ; s il n y a rien a mettre en pause
-    # sur cet ecran, il n y a rien a faire. Les fenetres arrivent dans l ordre
-    # d empilement : la premiere est celle que l utilisateur regarde.
-    candidates = [f for f in fenetres if f.est_lecteur or _titre_de_media(f)]
+    # Avec une fenetre visee, c est elle et elle seule ; sinon la premiere
+    # fenetre de l ecran qui ressemble a un lecteur (les fenetres arrivent
+    # dans l ordre d empilement, la premiere est celle qu on regarde).
+    if cible_clavier is not None:
+        candidates = [cible_clavier] if _est_un_lecteur(cible_clavier) else []
+    else:
+        candidates = [f for f in fenetres if _est_un_lecteur(f)]
     if not candidates:
         return False, "rien qui ressemble à une lecture sur cet écran"
     if _pause_par_le_clavier(candidates[0]):

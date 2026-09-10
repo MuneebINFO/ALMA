@@ -503,6 +503,14 @@ the one that gets paused. A player with no visible window at all (Spotify
 minimised to the notification area) belongs to no screen and stays controllable
 from wherever you are.
 
+**"pause" and "lance la vidéo" follow the window you are looking at.** Pause a
+YouTube video, go to Prime Video, say "lance la vidéo": it starts the Prime Video
+one, not the YouTube tab you left in the background. When the window in front of
+you is a player, playback commands target *its* session; if that tab has no
+session of its own, ALMA brings the window forward and presses the play key on
+it, rather than resuming whatever else was paused on the screen. Name a screen
+("mets pause sur l'écran 2") to go back to the whole-screen behaviour.
+
 ### Opening a site, or going back to it
 
 "ouvre YouTube" and "va sur YouTube" no longer mean the same thing, because they
