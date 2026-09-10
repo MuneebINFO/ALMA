@@ -8,15 +8,19 @@ mais reste passif jusqu a ce qu on prononce son nom.
   - « Alma » seul                  -> il repond « Oui ? » et attend la suite
   - toute autre phrase               -> ignoree
 
-La fenetre occupe TOUT l ecran sur lequel elle se trouve, et ne montre qu une
-chose : l orbe, grand et centre, sous le sigle A.L.M.A. C est le retour visuel
-qui montre que la voix est captee -- anneau d onde deforme par le niveau du
-micro, couronne de barres, arcs en rotation, poussiere en orbite et halo.
+La fenetre occupe TOUT l ecran sur lequel elle se trouve, sur un fond presque
+noir, et ne montre qu une chose : l orbe, grand et centre, sous le sigle
+A.L.M.A. C est le retour visuel qui montre que la voix est captee -- anneau
+d onde deforme par le niveau du micro, couronne de barres, arcs en rotation,
+poussiere en orbite, halo, et un noyau fait d un amas d etoiles. Au lancement,
+la fenetre apparait en fondu et l orbe pousse un bref sursaut.
 
 L historique des echanges existe mais ne s affiche pas : un bouton le fait
-paraitre, et il indique au passage combien de messages ont ete manques.
+GLISSER depuis la droite, et l orbe retrecit en consequence pendant le
+mouvement. Le bouton indique au passage combien de messages ont ete manques.
 
-Echap rend la fenetre ordinaire, F11 la remet en plein ecran.
+Raccourcis : Echap rend la fenetre ordinaire, F11 la remet en plein ecran,
+M coupe ou rallume le micro, F1 montre l aide.
 """
 
 from __future__ import annotations
@@ -29,11 +33,12 @@ import threading
 import tkinter as tk
 from tkinter import font as tkfont
 
-FOND = "#070b12"
-FOND_CARTE = "#101724"
+# Ambiance assombrie : un fond presque noir plutot que le bleu nuit d avant.
+FOND = "#03050a"
+FOND_CARTE = "#0a101a"
 TEXTE = "#e6edf7"
 TEXTE_DOUX = "#6b7d99"
-BORDURE = "#1b2536"
+BORDURE = "#141c2b"
 
 # Largeur du panneau d historique, en pixels. Assez pour une phrase complete
 # sans amputer l orbe.
@@ -42,6 +47,20 @@ LARGEUR_HISTORIQUE = 520
 # Part du demi-cote qu occupe l orbe. Le reste est la marge qui empeche les
 # graduations exterieures de sortir du cadre.
 MARGE_ORBE = 0.94
+
+# Animation d entree (fondu de la fenetre) et de glissement de l historique :
+# nombre d images et intervalle entre chacune.
+PAS_ENTREE = 20
+PERIODE_ENTREE_MS = 16      # ~ 320 ms au total
+
+PAS_HISTORIQUE = 16
+PERIODE_HISTORIQUE_MS = 14  # ~ 220 ms au total
+
+
+def _assouplir(progres: float) -> float:
+    """Ease-out cubique : depart rapide, arrivee en douceur. Sert aux deux glissements."""
+    return 1 - (1 - progres) ** 3
+
 
 # Une couleur et un libelle par etat.
 ETATS = {
@@ -89,10 +108,15 @@ class Orbe(tk.Canvas):
       4. une contre-onde, plus fine, tournant à l'envers ;
       5. une couronne de barres radiales, un spectre qui bat avec la voix ;
       6. des arcs en rotation, gradués, à vitesses et sens différents ;
-      7. un noyau lumineux, ses anneaux internes et un reflet.
+      7. le NOYAU : non pas un disque plein, mais un amas d'étoiles -- la
+         boule elle-même est faite d'étoiles, plus denses vers le centre,
+         chacune scintillant à son rythme, avec un point brillant au milieu
+         pour que la couleur d'état reste lisible même de loin.
 
     Le niveau et la couleur sont lissés à chaque image : aucun changement
-    brusque, ce qui donne un rendu fluide.
+    brusque, ce qui donne un rendu fluide. Au lancement, une brève poussée
+    d'amplitude fait flamber puis retomber l'orbe entier -- l'animation
+    d'entrée, cousue directement dans ce que le niveau sonore fait déjà.
     """
 
     # 180 points SANS lissage : mesure faite, le lissage de Tk coute 9,7 ms
@@ -101,8 +125,19 @@ class Orbe(tk.Canvas):
     # degres. Huit millisecondes gagnees sur un budget de vingt-cinq.
     POINTS = 180         # résolution de l'anneau d'onde
     HISTORIQUE = 64      # mémoire des niveaux, répartie autour du cercle
-    BARRES = 44          # couronne de spectre
-    ETOILES = 32
+    # Couronne et poussiere exterieure allegees : l amas du noyau apporte
+    # desormais l essentiel de la densite, la ou le regard se pose.
+    BARRES = 38          # couronne de spectre
+    ETOILES = 22         # poussiere en orbite, autour de l orbe
+    # Amas du noyau. Mesure faite a plein ecran : une image coute une
+    # douzaine de millisecondes autour de ce nombre, sur un budget de 33.
+    ETOILES_COEUR = 80
+
+    # Poussee d amplitude au demarrage, qui retombe d elle-meme : c est
+    # l animation d entree. DECROISSANCE proche de 1 = extinction lente.
+    INTRO_DEPART = 1.0
+    INTRO_DECROISSANCE = 0.91
+    INTRO_SEUIL = 0.01
     # 30 images par seconde : mesure faite, une image coute une douzaine de
     # millisecondes a cette taille. A 40 images par seconde, l orbe mangeait
     # les trois quarts d un coeur en permanence -- sur une machine qui doit
@@ -129,6 +164,17 @@ class Orbe(tk.Canvas):
              random.uniform(0.35, 1.0))             # éclat
             for _ in range(self.ETOILES)
         ]
+        # Meme principe pour l amas du noyau, mais la distance est elevee a
+        # une puissance : cela concentre les points pres du centre, ce qui
+        # donne l illusion d un volume plutot que d un nuage plat.
+        self.etoiles_coeur = [
+            (random.uniform(0, 2 * math.pi),
+             random.uniform(0.0, 1.0) ** 2.2,       # serre l amas vers le centre
+             random.uniform(0.10, 0.42),            # deriver lentement, sans tournoyer
+             random.uniform(0.4, 1.0))
+            for _ in range(self.ETOILES_COEUR)
+        ]
+        self.intro = self.INTRO_DEPART
         self._tache = None
         self.bind("<Configure>", self._redimensionner)
         self._animer()
@@ -191,8 +237,29 @@ class Orbe(tk.Canvas):
             self._barres(centre_x, centre_y, rayon, amplitude)
             self._arcs(centre_x, centre_y, rayon, amplitude)
             self._coeur(centre_x, centre_y, rayon, amplitude)
+            self._flash_entree(centre_x, centre_y, rayon)
 
         self._tache = self.after(self.PERIODE_MS, self._animer)
+
+    def _flash_entree(self, cx: float, cy: float, rayon: float) -> None:
+        """
+        Le sursaut au lancement : un anneau qui s'étend puis s'efface.
+
+        Volontairement ISOLÉ de `amplitude` : la mélanger aux formules qui
+        dépendent du niveau sonore aurait faussé leur mesure au tout premier
+        appel, avant même que le vrai niveau n'ait été lu -- l'orbe « calme »
+        d'un test aurait alors paru plus gonflé que l'orbe « fort ».
+        """
+        if self.intro <= 0:
+            return
+        progres = 1.0 - self.intro
+        r = rayon * (0.30 + progres * 0.68)
+        self.create_oval(
+            cx - r, cy - r, cx + r, cy + r,
+            outline=melanger(FOND, self.couleur_courante, self.intro * 0.9),
+            fill="", width=max(1, round(3 * self.intro)), tags="entree",
+        )
+        self.intro = self.intro * self.INTRO_DECROISSANCE if self.intro > self.INTRO_SEUIL else 0.0
 
     def _halo(self, cx: float, cy: float, rayon: float, amplitude: float) -> None:
         """Dégradé radial simulé par des cercles de plus en plus sombres."""
@@ -314,22 +381,44 @@ class Orbe(tk.Canvas):
             )
 
     def _coeur(self, cx: float, cy: float, rayon: float, amplitude: float) -> None:
-        """Noyau lumineux, ses anneaux internes et un reflet décentré."""
+        """
+        Le noyau : un amas d'étoiles, pas un disque plein.
+
+        Une lueur très atténuée sert d'ancre -- sans elle, la couleur d'état
+        se lirait mal de loin, diluée par le vide entre les points -- et
+        l'amas porte tout le mouvement : chaque étoile dérive et scintille à
+        son propre rythme, plus grosse et plus vive près du centre pour
+        donner l'illusion d'un volume plutôt que d'un nuage plat.
+        """
         r = rayon * (0.28 + amplitude * 0.085)
+
         self.create_oval(cx - r, cy - r, cx + r, cy + r,
-                         fill=self.couleur_courante, outline="", tags="coeur")
-        for part, melange in ((0.66, 0.18), (0.36, 0.40)):
-            interne = r * part
-            self.create_oval(cx - interne, cy - interne, cx + interne, cy + interne,
-                             fill=melanger(self.couleur_courante, "#ffffff", melange),
-                             outline="", tags="coeur")
-        # Le reflet se déplace doucement : le noyau paraît alors sphérique.
-        decalage = r * 0.26
-        reflet = r * 0.20
-        rx = cx + decalage * math.cos(self.phase * 0.35)
-        ry = cy - decalage * 0.7
-        self.create_oval(rx - reflet, ry - reflet, rx + reflet, ry + reflet,
-                         fill=melanger(self.couleur_courante, "#ffffff", 0.72),
+                         fill=melanger(FOND, self.couleur_courante, 0.30),
+                         outline="", tags="coeur")
+
+        for angle0, distance, vitesse, eclat in self.etoiles_coeur:
+            angle = angle0 + self.phase * vitesse
+            # Bornées à l'intérieur de la lueur : l'amas se tient DANS le
+            # noyau, il n'en déborde pas -- et la mesure du noyau reste
+            # celle de la lueur seule, sans bruit d'étoiles.
+            d = distance * r * 0.9
+            x = cx + d * math.cos(angle)
+            y = cy + d * math.sin(angle)
+            scintillement = 0.5 + 0.5 * math.sin(self.phase * 2.6 + angle0 * 7)
+            proximite = 1.0 - distance
+            taille = rayon * (0.006 + 0.020 * proximite) * (0.6 + eclat)
+            melange = min(0.92, 0.35 + 0.55 * eclat * scintillement + 0.25 * proximite)
+            self.create_oval(
+                x - taille, y - taille, x + taille, y + taille,
+                fill=melanger(self.couleur_courante, "#ffffff", melange),
+                outline="", tags="coeur",
+            )
+
+        # Un point net au centre : le seul repère fixe, pour que l'œil
+        # retrouve toujours l'orbe même quand l'amas scintille fort.
+        centre = r * 0.16 * (0.8 + 0.2 * math.sin(self.phase * 1.7))
+        self.create_oval(cx - centre, cy - centre, cx + centre, cy + centre,
+                         fill=melanger(self.couleur_courante, "#ffffff", 0.85),
                          outline="", tags="coeur")
 
 
@@ -355,6 +444,17 @@ class AlmaApp:
         root.minsize(620, 480)
         self.historique_visible = False
         self.non_lus = 0
+        self._largeur_panneau = 0
+        self._animation_historique = None
+
+        # Invisible avant meme le premier affichage : sans quoi la fenetre
+        # apparaitrait un instant a pleine opacite avant que le fondu ne
+        # commence. `-alpha` est gere par le compositeur Windows, pas par ce
+        # qui est dessine -- aucun cout pour l orbe.
+        try:
+            root.attributes("-alpha", 0.0)
+        except Exception:
+            pass
 
         self._construire()
         self._plein_ecran(True)
@@ -362,12 +462,18 @@ class AlmaApp:
         # prise sur la fenetre.
         root.bind("<Escape>", lambda _e: self._plein_ecran(False))
         root.bind("<F11>", lambda _e: self._plein_ecran(not self.plein_ecran))
+        # Le clavier remplace les boutons retires : aucun champ de saisie
+        # n existe dans cette fenetre, rien d autre ne capte ces touches.
+        root.bind("<Key>", self._sur_touche)
         self._brancher_sorties()
         # Le changement d ecran est signale par un cadre lumineux. Tkinter
         # n etant pilotable que depuis son thread principal, on passe par
         # root.after() : les commandes, elles, tournent dans un thread.
         assistant.signal_ecran = self.signaler_ecran
         self.root.after(40, self._traiter_evenements)
+        # Un court delai pour laisser le gestionnaire de fenetres placer le
+        # plein ecran pendant qu on ne le voit pas encore, puis le fondu.
+        self.root.after(120, self._animer_entree)
 
     # -- construction ---------------------------------------------------------
     def _construire(self) -> None:
@@ -412,18 +518,18 @@ class AlmaApp:
                                           bg=FOND, fg=TEXTE, wraplength=900, height=2)
         self.etiquette_entendu.pack(pady=(6, 4))
 
+        # Micro et aide n'ont plus de bouton : l'un se demande a la voix
+        # (« Alma, que sais-tu faire »), l'autre passe par le clavier -- voir
+        # _sur_touche. Il ne reste ici que ce qui n'a pas d'autre chemin.
         boutons = tk.Frame(self.root, bg=FOND)
         boutons.pack(pady=(0, 20))
         self.bouton_historique = self._bouton(boutons, "Historique", self.basculer_historique)
         self.bouton_historique.pack(side="left", padx=5)
-        self.bouton_micro = self._bouton(boutons, "Couper le micro", self.basculer_micro)
-        self.bouton_micro.pack(side="left", padx=5)
-        self._bouton(boutons, "Que sais-tu faire ?", self.montrer_aide).pack(side="left", padx=5)
         self._bouton(boutons, "Quitter", self.quitter).pack(side="left", padx=5)
 
         # L historique existe des le depart -- il se remplit meme cache -- mais
         # il n est pas POSE tant qu on ne le demande pas.
-        self.panneau = tk.Frame(self.corps, bg=BORDURE, width=LARGEUR_HISTORIQUE)
+        self.panneau = tk.Frame(self.corps, bg=BORDURE, width=0)
         # Sans cela le cadre se retrecirait sur son contenu et la largeur
         # demandee ne servirait a rien.
         self.panneau.pack_propagate(False)
@@ -448,17 +554,56 @@ class AlmaApp:
         self.journal.tag_configure("corps", foreground=TEXTE)
 
     def basculer_historique(self) -> None:
-        """Montre ou cache l'historique, qui n'est pas affiché par défaut."""
+        """
+        Montre ou cache l'historique, en le faisant GLISSER plutôt que surgir.
+
+        La colonne centrale — et l'orbe avec elle — se redimensionne à
+        chaque image de l'animation : c'est ce qui fait bouger la boule en
+        conséquence, sans rien lui dire de spécial, puisqu'elle écoute déjà
+        son `<Configure>` pour suivre la taille qu'on lui laisse.
+        """
         self.historique_visible = not self.historique_visible
         if self.historique_visible:
             # `before` compte : sans lui, la colonne centrale, qui s'étend,
             # prendrait toute la place et le panneau n'aurait plus rien.
+            self.panneau.configure(width=max(1, self._largeur_panneau))
             self.panneau.pack(side="right", fill="y", before=self.colonne)
             self.journal.see("end")
             self.non_lus = 0
-        else:
-            self.panneau.pack_forget()
         self._rafraichir_bouton_historique()
+        self._glisser_historique(self._largeur_panneau,
+                                 LARGEUR_HISTORIQUE if self.historique_visible else 0)
+
+    def _largeur_historique_au_pas(self, depart: int, cible: int, pas: int) -> int:
+        """La largeur du panneau à cette image de l'animation. Pure : sans effet de bord."""
+        progres = _assouplir(min(1.0, (pas + 1) / PAS_HISTORIQUE))
+        return round(depart + (cible - depart) * progres)
+
+    def _glisser_historique(self, depart: int, cible: int, pas: int = 0) -> None:
+        """
+        Anime la largeur du panneau, une image à la fois.
+
+        Repart TOUJOURS d'où l'animation précédente en était (`depart` vient
+        de `self._largeur_panneau`, mis à jour à chaque image) : interrompre
+        une ouverture par un clic pour refermer ne fait donc pas sauter le
+        panneau à sa largeur maximale avant de revenir en arrière.
+        """
+        if pas == 0 and self._animation_historique is not None:
+            self.root.after_cancel(self._animation_historique)
+            self._animation_historique = None
+
+        self._largeur_panneau = self._largeur_historique_au_pas(depart, cible, pas)
+        self.panneau.configure(width=max(1, self._largeur_panneau))
+
+        if pas + 1 < PAS_HISTORIQUE:
+            self._animation_historique = self.root.after(
+                PERIODE_HISTORIQUE_MS,
+                lambda: self._glisser_historique(depart, cible, pas + 1),
+            )
+        else:
+            self._animation_historique = None
+            if cible == 0:
+                self.panneau.pack_forget()
 
     def _rafraichir_bouton_historique(self) -> None:
         """
@@ -474,6 +619,16 @@ class AlmaApp:
         else:
             libelle = "Historique"
         self.bouton_historique.configure(text=libelle)
+
+    def _animer_entree(self, pas: int = 0) -> None:
+        """Fait apparaître la fenêtre en fondu, plutôt que d'un bloc."""
+        progres = _assouplir(min(1.0, (pas + 1) / PAS_ENTREE))
+        try:
+            self.root.attributes("-alpha", progres)
+        except Exception:
+            return  # transparence indisponible : la fenetre restera opaque
+        if pas + 1 < PAS_ENTREE:
+            self.root.after(PERIODE_ENTREE_MS, lambda: self._animer_entree(pas + 1))
 
     def _plein_ecran(self, actif: bool) -> None:
         """
@@ -499,6 +654,13 @@ class AlmaApp:
 
     def montrer_aide(self) -> None:
         threading.Thread(target=self._executer, args=("aide", "text"), daemon=True).start()
+
+    def _sur_touche(self, evenement) -> None:
+        """M coupe ou reessaie le micro, F1 montre l'aide."""
+        if evenement.keysym == "F1":
+            self.montrer_aide()
+        elif (evenement.char or "").lower() == "m":
+            self.basculer_micro()
 
     # -- pont assistant / interface -------------------------------------------
     def _brancher_sorties(self) -> None:
@@ -656,15 +818,14 @@ class AlmaApp:
             self.evenements.put((
                 "erreur",
                 "Micro indisponible : " + (self.stt.error or "aucun périphérique détecté")
-                + " Lancez « python diagnostic_micro.py » pour en savoir plus.",
+                + " Lancez « python diagnostic_micro.py » pour en savoir plus, "
+                  "ou appuyez sur M pour réessayer.",
             ))
             self.evenements.put(("statut", ("erreur", "Micro indisponible")))
             self.evenements.put(("voyant", (ETATS["erreur"][0], "micro absent")))
-            self.bouton_micro.configure(text="Réessayer le micro")
             return
 
         self.ecoute_active.set()
-        self.bouton_micro.configure(text="Couper le micro")
         if self.thread_audio is None or not self.thread_audio.is_alive():
             self.thread_audio = threading.Thread(target=self._boucle_micro, daemon=True)
             self.thread_audio.start()
@@ -673,10 +834,9 @@ class AlmaApp:
         if self.ecoute_active.is_set():
             self.ecoute_active.clear()
             self.moteur.desarmer()
-            self.bouton_micro.configure(text="Activer le micro")
             self.definir_statut("arret")
             self.etiquette_entendu.configure(text="")
-            self.voyant.configure(text="●  micro coupé", fg=TEXTE_DOUX)
+            self.voyant.configure(text="●  micro coupé (M pour le rallumer)", fg=TEXTE_DOUX)
         else:
             self.demarrer_ecoute()
 
@@ -880,7 +1040,6 @@ def main(argv=None) -> int:
             app.demarrer_ecoute()
         else:
             app.definir_statut("arret")
-            app.bouton_micro.configure(text="Activer le micro")
 
     # L ecoute demarre automatiquement : l application est vocale par nature.
     root.after(300, demarrer)

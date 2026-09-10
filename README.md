@@ -236,29 +236,38 @@ are simply dropped.
 
 ### The orb
 
-The window fills **the whole screen it is on**, and shows one thing: the orb,
-large and centred, under the A.L.M.A monogram. Nothing is drawn in fixed
-pixels — every layer is a fraction of the available radius, so the orb grows
-with the window instead of floating in the middle of a large empty screen.
-Escape gives you an ordinary window back, F11 returns to full screen.
+The window fills **the whole screen it is on**, on a near-black ground, and
+shows one thing: the orb, large and centred, under the A.L.M.A monogram.
+Nothing is drawn in fixed pixels — every layer is a fraction of the available
+radius, so the orb grows with the window instead of floating in the middle of
+a large empty screen. On launch the window fades in and the orb gives a short
+flare that settles by itself.
+
+Keyboard: Escape gives you an ordinary window back, F11 returns to full
+screen, **M** cuts or restores the microphone, **F1** shows the help. There is
+no button for the last two — the help is also reachable by voice.
 
 Seven layers, back to front: a diffuse halo; orbiting dust that gives depth;
 a wave ring deformed by the **history** of microphone levels, so the wave
 travels round the circle instead of pulsing as one block; a thinner
 counter-wave; a crown of radial bars — the spectrum of what you have just
-said; graduated arcs rotating at different speeds; and a luminous core with
-its inner rings and a drifting highlight.
+said; graduated arcs rotating at different speeds; and a **core made of a
+cluster of stars** — denser toward the centre, each one twinkling on its own,
+with a bright point in the middle so the state colour still reads from across
+the room.
 
 Two measurements shaped it. Tk's polygon smoothing costs 9.7 ms per frame for
 132 points against 1.2 ms for 180 points without it — and at this radius the
-difference is invisible, the segments spanning two degrees. And a frame costs
-about 9 ms full screen, so the animation runs at 30 images per second rather
-than 40: at 40 the orb was eating three quarters of a core, on a machine that
-also has to listen and transcribe.
+difference is invisible, the segments spanning two degrees. A frame costs
+around a dozen milliseconds full screen with the star cluster, so the
+animation runs at 30 images per second rather than 40: at 40 the orb was
+eating three quarters of a core, on a machine that also has to listen and
+transcribe.
 
-The conversation history is **not shown by default** — a button brings it in,
-and says how many messages you missed while it was hidden. It pushes the
-column aside rather than covering it.
+The conversation history is **not shown by default** — a button **slides** it
+in from the right, the orb shrinking as it comes, and says how many messages
+you missed while it was hidden. It pushes the column aside rather than
+covering it.
 
 | Colour | State |
 |---|---|

@@ -110,3 +110,27 @@ def assistant(tmp_path, config):
             pass
 
     return Assistant(config=test_config, io=FakeIO(), tts=SilentTTS())
+
+
+@pytest.fixture(scope="session")
+def tk_root():
+    """
+    Une UNIQUE racine Tk, invisible, pour toute la session de test.
+
+    Tcl supporte mal qu'on crée puis détruise plusieurs interpréteurs dans le
+    même processus : deux modules qui faisaient chacun leur `tk.Tk()`
+    finissaient par « Can't find a usable tk.tcl ». Une seule racine partagée,
+    jamais détruite avant la fin, contourne le problème.
+    """
+    import tkinter as tk
+
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:                       # pas d'affichage disponible
+        pytest.skip("Tk indisponible : " + str(exc))
+    root.withdraw()
+    yield root
+    try:
+        root.destroy()
+    except Exception:
+        pass

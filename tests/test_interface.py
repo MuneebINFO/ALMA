@@ -16,19 +16,10 @@ import gui
 RACINE = Path(__file__).resolve().parent.parent
 
 
-@pytest.fixture(scope="module")
-def racine():
-    """
-    Une seule racine Tk, invisible, pour tout le module.
-
-    Une par test paraissait plus propre : en creer et en detruire a repetition
-    dans le meme processus echoue par intermittence, Tcl n aimant pas qu on
-    reparte de zero. Les tests ne doivent rien afficher, d ou le retrait.
-    """
-    root = tk.Tk()
-    root.withdraw()
-    yield root
-    root.destroy()
+@pytest.fixture
+def racine(tk_root):
+    """La racine Tk partagée (voir conftest) : une seule pour toute la session."""
+    return tk_root
 
 
 def orbe_de(racine, largeur, hauteur):
