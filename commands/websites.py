@@ -50,6 +50,64 @@ def open_url(url: str) -> bool:
         return False
 
 
+def _chemin_chrome(config) -> str:
+    """
+    Le chemin de Chrome, ou une chaine vide.
+
+    C est le seul navigateur qu on sait lancer depuis zero avec une adresse
+    ET forcer dans une fenetre neuve (--new-window) -- c est deja ce que fait
+    le mode IA de Google (core/providers/gemini_provider.py).
+    """
+    import os
+    import shutil
+
+    for candidat in list(config.get("applications.chrome.paths", []) or []) + ["chrome.exe"]:
+        chemin = os.path.expandvars(str(candidat))
+        if os.path.isfile(chemin):
+            return chemin
+    return shutil.which("chrome.exe") or ""
+
+
+def _ouvrir_normalement(config, url: str, ecran) -> bool:
+    """
+    Ouvre l URL pour de bon : rien de ce qu on cherchait n etait deja affiche
+    la ou l on travaille.
+
+    Le navigateur PAR DEFAUT (`open_url`) ne garantit rien sur l ecran : s il
+    tourne deja ailleurs, c est LUI qui decide dans quelle fenetre atterrir
+    l adresse -- typiquement la derniere regardee, sur un autre ecran. C est
+    exactement ce qui s est vu a l usage : « ouvre Google », dit depuis un
+    ecran sans Chrome, ouvrait l onglet dans le Chrome de l autre ecran, sans
+    rien montrer la ou on regardait.
+
+    On force donc une fenetre Chrome TOUTE NEUVE (--new-window) et on l amene
+    sur l ecran de travail, comme pour une application (voir
+    apps.py:_placer). Le navigateur par defaut ne reste un repli que si
+    Chrome est introuvable, ou que l ecran est inconnu.
+    """
+    import subprocess
+
+    from core import desktop
+
+    chemin = _chemin_chrome(config)
+    if not chemin or ecran is None:
+        return open_url(url)
+
+    connues = desktop.poignees_visibles()
+    try:
+        subprocess.Popen(
+            [chemin, "--new-window", url],
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except Exception:
+        return open_url(url)
+
+    fenetre = desktop.attendre_nouvelle_fenetre(connues, processus="chrome.exe")
+    if fenetre is not None and fenetre.ecran != ecran:
+        desktop.deplacer_vers_ecran(fenetre.handle, ecran)
+    return True
+
+
 def termes_de_recherche(cle: str, entree) -> list:
     """Mots permettant de reconnaitre ce site dans un titre de fenetre."""
     termes = [cle]
@@ -105,8 +163,8 @@ def afficher_site(config, cle: str, url: str, naviguer: bool = False,
         desktop.mettre_au_premier_plan(fenetre.handle)
         break
 
-    # 3) Rien d ouvert : ouverture classique.
-    return open_url(url), "ouvert"
+    # 3) Rien d ouvert sur l ecran de travail : ouverture toute neuve, la.
+    return _ouvrir_normalement(config, url, ecran), "ouvert"
 
 
 def ouvrir_ou_reutiliser(config, cle: str, url: str) -> tuple:
@@ -129,20 +187,18 @@ def _demande_une_ouverture(ctx: CommandContext) -> bool:
 
 
 def _nouvel_onglet(ctx: CommandContext, url: str) -> bool:
-    """Un onglet de plus, dans le navigateur deja ouvert si possible."""
-    import webbrowser
-
+    """
+    Un onglet de plus, sur l ECRAN DE TRAVAIL : dans le navigateur qui y est
+    deja si possible, sinon dans une fenetre toute neuve -- jamais dans une
+    fenetre d un autre ecran, meme si Chrome n y tourne qu une fois.
+    """
     from core import desktop
 
     ecran = getattr(ctx.assistant, "ecran_actif", None)
-    for candidat in (desktop.trouver_fenetre("", navigateurs_seulement=True, ecran=ecran),
-                     desktop.trouver_fenetre("", navigateurs_seulement=True)):
-        if candidat is not None and desktop.ouvrir_onglet(candidat, url):
-            return True
-    try:
-        return bool(webbrowser.open_new_tab(url))
-    except Exception:
-        return False
+    fenetre = desktop.trouver_fenetre("", navigateurs_seulement=True, ecran=ecran)
+    if fenetre is not None and desktop.ouvrir_onglet(fenetre, url):
+        return True
+    return _ouvrir_normalement(ctx.config, url, ecran)
 
 
 @command(
@@ -429,20 +485,17 @@ def ouvrir_site_nouvel_onglet(ctx: CommandContext) -> Response:
     Force un NOUVEL onglet, meme si le site est deja ouvert ailleurs.
 
     C est la difference avec « ouvre X » et « va sur X », qui reprennent
-    l onglet existant plutot que d en empiler un de plus.
+    l onglet existant plutot que d en empiler un de plus. Meme regle d ecran
+    que les autres ouvertures : dans le navigateur de l ecran de travail, ou
+    une fenetre neuve la -- jamais dans celui d un autre ecran (voir
+    `_nouvel_onglet`, qui a la charge de cela).
     """
-    import webbrowser
-
     resolu = resolve_website(ctx.config, ctx.arg)
     if resolu is None:
         return Response.error("Je ne connais pas ce site.")
     cle, url = resolu
     ctx.assistant.memoriser("site", cle)
-    try:
-        ouvert = webbrowser.open_new_tab(url)
-    except Exception:
-        ouvert = False
-    if ouvert:
+    if _nouvel_onglet(ctx, url):
         return Response(text="Nouvel onglet sur " + cle + ".", speak=False)
     return Response.error("Je n'ai pas réussi à ouvrir " + cle + ".")
 

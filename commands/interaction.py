@@ -115,7 +115,9 @@ def fenetre_au_premier_plan(ctx):
 
 def fenetre_visee(ctx: CommandContext):
     """
-    Fenetre sur laquelle agir.
+    Fenetre sur laquelle agir -- toujours sur l ECRAN DE TRAVAIL, jamais sur
+    un autre : une action sans effet visible la ou on la regarde vaut moins
+    que de dire qu il n y a rien a faire.
 
     Dans l ordre : le site dont on vient de parler -- une intention explicite
     prime sur tout --, puis la fenetre AU PREMIER PLAN, puis les navigateurs
@@ -142,9 +144,7 @@ def fenetre_visee(ctx: CommandContext):
 
     navigateurs = [f for f in desktop.fenetres() if f.est_navigateur]
     if ecran is not None:
-        sur_ecran = [f for f in navigateurs if f.ecran == ecran]
-        if sur_ecran:
-            return sur_ecran[0]
+        navigateurs = [f for f in navigateurs if f.ecran == ecran]
     return navigateurs[0] if navigateurs else None
 
 

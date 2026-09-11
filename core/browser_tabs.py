@@ -175,8 +175,13 @@ def _nettoyer(nom: str) -> str:
 
 def trouver_onglet(termes, fenetres=None, ecran: int | None = None):
     """
-    Cherche, dans toutes les fenetres de navigateur, un onglet dont le nom
-    contient l un des termes. Retourne l Onglet ou None.
+    Cherche, dans les fenetres de navigateur, un onglet dont le nom contient
+    l un des termes. Retourne l Onglet ou None.
+
+    `ecran`, quand il est precise, est une FRONTIERE, pas une preference :
+    seuls les onglets de cet ecran comptent. Reprendre un onglet d un autre
+    ecran serait invisible pour l utilisateur, qui ne regarde pas cet
+    ecran-la.
     """
     from core import desktop, text_utils
 
@@ -189,10 +194,7 @@ def trouver_onglet(termes, fenetres=None, ecran: int | None = None):
     if fenetres is None:
         fenetres = [f for f in desktop.fenetres() if f.est_navigateur]
     if ecran is not None:
-        # On regarde d abord les fenetres de l ecran de travail, sans s y
-        # limiter : mieux vaut trouver l onglet ailleurs que pas du tout.
-        fenetres = ([f for f in fenetres if f.ecran == ecran]
-                    + [f for f in fenetres if f.ecran != ecran])
+        fenetres = [f for f in fenetres if f.ecran == ecran]
 
     for fenetre in fenetres:
         for onglet in onglets(fenetre):

@@ -156,8 +156,19 @@ def lancement(monkeypatch):
     return etat
 
 
-def test_sans_precision_lapplication_va_sur_lecran_un(assistant, inventaire, lancement):
-    assistant.definir_ecran(2)          # même en travaillant sur l'écran 2
+def test_sans_precision_lapplication_va_sur_lecran_de_travail(assistant, inventaire, lancement):
+    """
+    Sans écran nommé, l'application s'ouvre là où l'on travaille -- pas
+    toujours sur l'écran 1. L'ouvrir ailleurs reviendrait à ne rien montrer
+    à l'utilisateur, qui ne regarde pas cet écran-là.
+    """
+    assistant.definir_ecran(2)
+    reponse = assistant.handle("ouvre Discord")
+    assert reponse.ok, reponse.text
+    assert lancement["place"] == [2]
+
+
+def test_sans_ecran_de_travail_choisi_cest_le_premier(assistant, inventaire, lancement):
     reponse = assistant.handle("ouvre Discord")
     assert reponse.ok, reponse.text
     assert lancement["place"] == [1]

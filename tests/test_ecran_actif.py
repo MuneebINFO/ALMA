@@ -138,13 +138,24 @@ def test_les_fenetres_visees_sont_celles_de_l_ecran_choisi(assistant, deux_ecran
     assert fenetre_visee(ctx).handle == 20
 
 
-def test_une_fenetre_hors_ecran_reste_trouvable(assistant, deux_ecrans, monkeypatch):
+def test_une_fenetre_hors_ecran_nest_pas_trouvee(assistant, deux_ecrans, monkeypatch):
     """
-    L'écran est une préférence, pas une prison : si le site n'est ouvert que
-    sur l'autre écran, mieux vaut l'y trouver que de répondre qu'il n'existe pas.
+    L'écran est une FRONTIÈRE, pas une préférence : si le site n'est ouvert
+    que sur l'autre écran, le reprendre serait invisible pour l'utilisateur,
+    qui ne regarde pas cet écran-là. Mieux vaut ouvrir une fenêtre neuve là où
+    il travaille (voir commands/websites.py:_ouvrir_normalement) que de
+    l'amener, à son insu, devant un écran qu'il ne regarde pas.
     """
     monkeypatch.setattr(desktop, "fenetres", lambda *a, **k: [
         fenetre("Netflix - Chrome", ecran=1, handle=10),
     ])
     assistant.definir_ecran(2)
-    assert desktop.trouver_fenetre("netflix", ecran=2).handle == 10
+    assert desktop.trouver_fenetre("netflix", ecran=2) is None
+
+
+def test_sans_ecran_precise_la_recherche_reste_globale(assistant, deux_ecrans, monkeypatch):
+    """Omettre `ecran` cherche toujours sur toute la machine, comme avant."""
+    monkeypatch.setattr(desktop, "fenetres", lambda *a, **k: [
+        fenetre("Netflix - Chrome", ecran=1, handle=10),
+    ])
+    assert desktop.trouver_fenetre("netflix").handle == 10

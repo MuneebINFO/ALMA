@@ -457,29 +457,29 @@ def trouver_fenetre(termes, navigateurs_seulement: bool = False, ecran: int | No
     navigateur reflete son onglet ACTIF, donc un titre qui mentionne Netflix
     signifie que l onglet Netflix est bien celui affiche.
 
-    `ecran` privilegie les fenetres affichees sur cet ecran, sans s y
-    enfermer : si le site n y est pas, on le cherche ailleurs plutot que de
-    repondre qu il n existe pas.
+    `ecran`, quand il est precise, est une FRONTIERE : seules les fenetres de
+    cet ecran comptent. Reprendre une fenetre d un autre ecran serait
+    invisible pour l utilisateur, qui ne regarde pas cet ecran-la -- « ouvre
+    Google » a longtemps atterri dans l onglet du Chrome de l ecran 2 pendant
+    que l utilisateur, sur l ecran 1, ne voyait rien se passer. Sans `ecran`,
+    la recherche porte sur la machine entiere, comme avant.
+
+    Des termes vides (`""` ou `[]`) ne filtrent pas le titre : ils servent a
+    chercher « une fenetre de navigateur, n importe laquelle ».
     """
     from core import text_utils
 
     if isinstance(termes, str):
         termes = [termes]
     termes = [text_utils.normalize(t).strip() for t in termes if t]
-    if not termes:
-        return None
 
     candidates = []
     for fenetre in fenetres():
         if navigateurs_seulement and not fenetre.est_navigateur:
             continue
+        if ecran is not None and fenetre.ecran != ecran:
+            continue
         titre = text_utils.normalize(fenetre.titre)
-        if all(terme in titre for terme in termes):
+        if not termes or all(terme in titre for terme in termes):
             candidates.append(fenetre)
-    if not candidates:
-        return None
-    if ecran is not None:
-        for fenetre in candidates:
-            if fenetre.ecran == ecran:
-                return fenetre
-    return candidates[0]
+    return candidates[0] if candidates else None

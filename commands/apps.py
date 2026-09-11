@@ -96,8 +96,9 @@ def _is_known_app(ctx: CommandContext) -> bool:
     return cible not in alias_exacts(ctx.config.get("websites", {}))
 
 
-# Une application ouverte sans precision va sur l ecran principal : c est la
-# ou l on travaille, l autre servant souvent a autre chose.
+# Une application ouverte sans precision va sur l ECRAN DE TRAVAIL. Ce repli
+# ne sert que si l assistant n en a vraiment aucun (jamais en pratique : il en
+# vaut toujours un, voir Assistant.ecran_actif).
 ECRAN_PAR_DEFAUT = 1
 
 
@@ -262,7 +263,8 @@ def open_app(ctx: CommandContext) -> Response:
 
     La configuration reste prioritaire -- elle donne les chemins exacts --
     puis on cherche dans ce qui est installe sur la machine. La fenetre est
-    amenee sur l ecran demande, ou sur l ecran principal par defaut.
+    amenee sur l ecran demande, ou sur l ecran de travail par defaut : c est
+    la qu on regarde, l ouvrir ailleurs reviendrait a ne rien montrer.
     """
     from core import applications, desktop
 
@@ -274,7 +276,7 @@ def open_app(ctx: CommandContext) -> Response:
         return Response.error(
             "Je ne vois que " + str(len(ecrans)) + " écran(s), pas d'écran " + str(ecran) + "."
         )
-    index = ecran or ECRAN_PAR_DEFAUT
+    index = ecran or getattr(ctx.assistant, "ecran_actif", None) or ECRAN_PAR_DEFAUT
     connues = desktop.poignees_visibles()
 
     # Le nom, debarrasse de « l application » et autres mots de nature.
@@ -348,11 +350,13 @@ def _fenetre_de_lapplication(nom: str, config, ecran=None):
     """
     Une fenetre ouverte qui corresponde a ce nom, ou None.
 
-    L ECRAN DE TRAVAIL passe avant la qualite de la correspondance. Une
-    application ouverte deux fois -- un navigateur sur chaque ecran -- doit
-    s afficher la ou l on regarde : mettre devant la fenetre de l autre ecran
-    revient, vu de sa place, a ne rien faire, alors qu Alma annonce que c est
-    fait.
+    `ecran`, quand il est precise, est une FRONTIERE : seule une fenetre de
+    cet ecran compte. Une application ouverte deux fois -- un navigateur sur
+    chaque ecran -- doit s afficher la ou l on regarde ; mettre devant la
+    fenetre de l autre ecran revient, vu de sa place, a ne rien faire, alors
+    qu Alma annonce que c est fait. Chercher SANS ecran (`ecran=None`) sert a
+    savoir si l application tourne ne serait-ce qu ailleurs, pour l amener
+    plutot que d en ouvrir une deuxieme (voir `aller_sur_application`).
     """
     from core import desktop, text_utils
 
@@ -368,14 +372,13 @@ def _fenetre_de_lapplication(nom: str, config, ecran=None):
     candidates = []
     for fenetre in desktop.fenetres():
         rang = _rang_de_fenetre(fenetre, cible, processus_attendu)
-        if rang is None:
+        if rang is None or (ecran is not None and fenetre.ecran != ecran):
             continue
-        ailleurs = ecran is not None and fenetre.ecran != ecran
-        candidates.append((ailleurs, rang, fenetre))
+        candidates.append((rang, fenetre))
     if not candidates:
         return None
-    candidates.sort(key=lambda item: (item[0], item[1]))
-    return candidates[0][2]
+    candidates.sort(key=lambda item: item[0])
+    return candidates[0][1]
 
 
 @command(
@@ -399,14 +402,25 @@ def aller_sur_application(ctx: CommandContext) -> Response:
     # L ecran nomme dans la phrase l emporte ; sinon, celui sur lequel on
     # travaille (« va sur l ecran 1 » puis « va sur Chrome »).
     voulu = ecran or getattr(ctx.assistant, "ecran_actif", None)
-    fenetre = _fenetre_de_lapplication(cible, ctx.config, voulu)
-    if fenetre is None:
-        # Pas ouverte : « va sur Chrome » veut voir Chrome, ouvrir revient au
-        # meme pour qui parle.
-        return open_app(ctx)
-    if not desktop.mettre_au_premier_plan(fenetre.handle):
-        return Response.error("Je n'arrive pas à afficher " + _joli(cible) + ".")
-    return Response(text="Voilà " + _joli(cible) + ".", speak=False)
+    ici = _fenetre_de_lapplication(cible, ctx.config, voulu)
+    if ici is not None:
+        if not desktop.mettre_au_premier_plan(ici.handle):
+            return Response.error("Je n'arrive pas à afficher " + _joli(cible) + ".")
+        return Response(text="Voilà " + _joli(cible) + ".", speak=False)
+
+    # Pas ouverte ICI. Avant d en ouvrir une deuxieme, on regarde si elle
+    # tourne ne serait-ce qu ailleurs : mieux vaut l amener sur l ecran de
+    # travail qu en faire une copie -- et bien mieux que de dire « Voilà »
+    # devant un ecran ou rien n a changé.
+    ailleurs = _fenetre_de_lapplication(cible, ctx.config, None) if voulu is not None else None
+    if ailleurs is not None:
+        amenee = desktop.deplacer_vers_ecran(ailleurs.handle, voulu)
+        if amenee and desktop.mettre_au_premier_plan(ailleurs.handle):
+            return Response(text="Voilà " + _joli(cible) + ".", speak=False)
+
+    # Pas ouverte du tout : « va sur Chrome » veut voir Chrome, ouvrir revient
+    # au meme pour qui parle.
+    return open_app(ctx)
 
 
 # « ferme tout Chrome », « ferme complètement Spotify », « tue Chrome » :

@@ -127,10 +127,20 @@ def test_l_ecran_nomme_l_emporte_sur_l_ecran_de_travail(assistant, bureau):
     assert bureau["handle"] == 1
 
 
-def test_sans_fenetre_sur_l_ecran_choisi_on_prend_celle_d_ailleurs(assistant, bureau):
-    """Spotify n'est ouvert que sur l'écran 1 : mieux vaut l'afficher que rien."""
+def test_sans_fenetre_sur_l_ecran_choisi_on_lamene(assistant, bureau, monkeypatch):
+    """
+    Spotify n'est ouvert que sur l'écran 1, on travaille sur l'écran 2 :
+    mettre sa fenêtre devant, en place, ne montrerait rien ici. On l'amène
+    plutôt sur l'écran 2 -- pas question non plus d'en ouvrir une seconde,
+    ce que la plupart des applications de ce genre refusent de toute façon.
+    """
+    deplacements = []
+    monkeypatch.setattr(desktop, "deplacer_vers_ecran",
+                        lambda handle, index: deplacements.append((handle, index)) or True)
     assistant.ecran_actif = 2
-    assistant.handle("va sur Spotify")
+    reponse = assistant.handle("va sur Spotify")
+    assert reponse.ok, reponse.text
+    assert deplacements == [(2, 2)]
     assert bureau["handle"] == 2
 
 

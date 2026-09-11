@@ -154,8 +154,15 @@ def test_aucune_action_nexplique_a_lutilisateur_quoi_dire():
 @pytest.mark.parametrize("phrase", ["fais défiler vers le bas", "défile vers le haut"])
 def test_le_defilement_ne_se_commente_pas(assistant, phrase, monkeypatch):
     """Le cas signalé : « scroll vers le bas » ne doit pas être expliqué."""
-    from core import interaction
+    from core import desktop, interaction
 
+    # Une fenêtre de navigateur sur l'écran de travail : sans elle, le test
+    # dépendrait de ce qui tourne réellement sur la machine, et de l'écran où
+    # ça tourne -- ce qui n'a rien à voir avec ce que ce test vérifie.
+    monkeypatch.setattr(desktop, "fenetres", lambda *a, **k: [
+        desktop.Fenetre(handle=1, titre="Une page - Google Chrome",
+                        processus="chrome.exe", ecran=1),
+    ])
     monkeypatch.setattr(interaction.Defilement, "demarrer", lambda self, **k: True)
     reponse = assistant.handle(phrase)
     assert reponse.ok, reponse.text

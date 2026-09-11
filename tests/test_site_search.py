@@ -30,7 +30,8 @@ def sans_navigateur(monkeypatch):
     monkeypatch.setattr(browser_tabs, "trouver_onglet", lambda *a, **k: None)
     monkeypatch.setattr(desktop, "trouver_fenetre", lambda *a, **k: None)
     ouvertes = []
-    monkeypatch.setattr(websites, "open_url", lambda url: ouvertes.append(url) or True)
+    monkeypatch.setattr(websites, "_ouvrir_normalement",
+                        lambda config, url, ecran: ouvertes.append(url) or True)
     return ouvertes
 
 
@@ -258,7 +259,8 @@ def test_sans_onglet_existant_on_ouvre(assistant, router, monkeypatch):
     monkeypatch.setattr(browser_tabs, "trouver_onglet", lambda *a, **k: None)
     monkeypatch.setattr(desktop, "trouver_fenetre", lambda *a, **k: None)
     ouvertes = []
-    monkeypatch.setattr(websites, "open_url", lambda url: ouvertes.append(url) or True)
+    monkeypatch.setattr(websites, "_ouvrir_normalement",
+                        lambda config, url, ecran: ouvertes.append(url) or True)
     reponse, _ = executer(router, assistant, "va sur Netflix")
     assert reponse.ok
     assert ouvertes and "netflix.com" in ouvertes[0]
@@ -297,7 +299,8 @@ def test_enchainement_sans_repeter_le_site(assistant, router, monkeypatch):
     monkeypatch.setattr(browser_tabs, "trouver_onglet", lambda *a, **k: None)
     monkeypatch.setattr(desktop, "trouver_fenetre", lambda *a, **k: None)
     ouvertes = []
-    monkeypatch.setattr(websites, "open_url", lambda url: ouvertes.append(url) or True)
+    monkeypatch.setattr(websites, "_ouvrir_normalement",
+                        lambda config, url, ecran: ouvertes.append(url) or True)
 
     executer(router, assistant, "va sur YouTube")
     assert assistant.rappeler("site") == "youtube"
@@ -316,7 +319,8 @@ def test_le_contexte_suit_le_dernier_site(assistant, router, monkeypatch):
     monkeypatch.setattr(browser_tabs, "trouver_onglet", lambda *a, **k: None)
     monkeypatch.setattr(desktop, "trouver_fenetre", lambda *a, **k: None)
     ouvertes = []
-    monkeypatch.setattr(websites, "open_url", lambda url: ouvertes.append(url) or True)
+    monkeypatch.setattr(websites, "_ouvrir_normalement",
+                        lambda config, url, ecran: ouvertes.append(url) or True)
 
     executer(router, assistant, "va sur YouTube")
     executer(router, assistant, "va sur Netflix")

@@ -448,8 +448,23 @@ the session — it changes only when you ask. Scrolling, clicking, pausing,
 closing an app and opening sites all target it, and a bare "mets pause" pauses
 whatever plays there.
 
-It is a preference, not a cage: if a site is only open on the other screen,
-ALMA finds it there rather than claiming it is not open.
+It is a **hard boundary, not a preference**: if a site or an app is only open on
+the other screen, ALMA does not reach over there to fetch it. Reusing a window
+you cannot see would be invisible to you — you would ask, ALMA would say it's
+done, and nothing on your screen would change. Concretely:
+
+- **opening a site** ("ouvre Google", "va sur YouTube") only ever looks at tabs
+  and windows on the working screen. Nothing there → a brand-new browser window
+  opens, pinned to that screen, instead of a tab landing in whatever Chrome
+  window happens to be running on the other one — which is exactly the bug
+  this replaced: asking for Google from a screen with no browser used to open
+  the tab in the other screen's Chrome, out of sight;
+- **going to an app** ("va sur Chrome", "va sur Spotify") only looks at windows
+  on the working screen too. Running only elsewhere → ALMA **moves that window
+  to you** rather than opening a second copy or focusing it in place (where you
+  would not see it either);
+- **not open anywhere** → ALMA opens it fresh, on the working screen, same as
+  always.
 
 **One window, not all of them.** `ferme Chrome` closes the Chrome window on the
 working screen — never the one on the other screen, and never every Chrome
@@ -515,9 +530,11 @@ it, rather than resuming whatever else was paused on the screen. Name a screen
 
 "ouvre YouTube" and "va sur YouTube" no longer mean the same thing, because they
 never did. **Opening puts you on the site**, in a new tab of the browser already
-running — Ctrl+T, the address, Enter, exactly as you would. **Going there brings
-back the tab you were on**, without reloading it, which is what keeps a playing
-video alive.
+running on the working screen — Ctrl+T, the address, Enter, exactly as you
+would — or a brand-new window there if none is. **Going there brings back the
+tab you were on**, without reloading it, which is what keeps a playing video
+alive — and only ever a tab on the working screen; see
+[Choosing a screen](#choosing-a-screen) for why.
 
 The distinction was forced by a real failure: a tab called *Tik Tok - Recherche
 Google* carries the name of Google without being Google, so "ouvre Google"
