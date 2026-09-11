@@ -203,7 +203,8 @@ def defiler(ctx: CommandContext) -> Response:
     """Lance un défilement continu, jusqu'à ce qu'on l'arrête."""
     fenetre = fenetre_visee(ctx)
     if fenetre is None:
-        return Response.error("Je ne vois aucune fenêtre de navigateur à faire défiler.")
+        return ctx.erreur("Je ne vois aucune fenêtre de navigateur à faire défiler.",
+                          "I don't see a browser window to scroll.")
 
     direction = direction_demandee(ctx)
     vitesse = ctx.config.get("interaction.scroll_crans", 2)
@@ -211,10 +212,14 @@ def defiler(ctx: CommandContext) -> Response:
     if not ctx.assistant.defilement.demarrer(
         fenetre=fenetre, direction=direction, crans=int(vitesse), intervalle=float(intervalle)
     ):
-        return Response.error("Je n'ai pas pu lancer le défilement.")
-    sens = "vers le haut" if direction == interaction.HAUT else "vers le bas"
+        return ctx.erreur("Je n'ai pas pu lancer le défilement.",
+                          "I couldn't start scrolling.")
+    vers_le_haut = direction == interaction.HAUT
     # Pas de mode d emploi : le defilement se voit, et « arrete » l arrete.
-    return Response(text="Je fais défiler " + sens + ".")
+    return ctx.reponse(
+        "Je fais défiler " + ("vers le haut" if vers_le_haut else "vers le bas") + ".",
+        "Scrolling " + ("up" if vers_le_haut else "down") + ".",
+    )
 
 
 @command(
@@ -231,8 +236,8 @@ def defiler(ctx: CommandContext) -> Response:
 def arreter_defilement(ctx: CommandContext) -> Response:
     """Interrompt le défilement."""
     if ctx.assistant.defilement.arreter():
-        return Response(text="J'arrête.", speak=False)
-    return Response(text="Rien ne défilait.", speak=False)
+        return ctx.reponse("J'arrête.", "Stopping.", speak=False)
+    return ctx.reponse("Rien ne défilait.", "Nothing was scrolling.", speak=False)
 
 
 def _ordinal_demande(ctx: CommandContext):
@@ -270,7 +275,8 @@ def cliquer_ordinal(ctx: CommandContext) -> Response:
     """
     fenetre = fenetre_visee(ctx)
     if fenetre is None:
-        return Response.error("Je ne vois aucune fenêtre où cliquer.")
+        return ctx.erreur("Je ne vois aucune fenêtre où cliquer.",
+                          "I don't see a window to click in.")
 
     rang = _ordinal_demande(ctx) or 1
     # Dans la PAGE seulement : « le premier lien » designe le premier resultat,
@@ -281,7 +287,8 @@ def cliquer_ordinal(ctx: CommandContext) -> Response:
         visibles = [c for c in interaction.elements_cliquables(fenetre)
                     if len(c.nom) >= 12]
     if not visibles:
-        return Response.error("Je ne trouve rien de cliquable à l'écran.")
+        return ctx.erreur("Je ne trouve rien de cliquable à l'écran.",
+                          "I can't find anything clickable on screen.")
 
     # La nature dite compte : « le premier LIEN » ne doit pas designer un
     # bouton de la barre de recherche, qui vient pourtant avant dans la page.
@@ -294,13 +301,16 @@ def cliquer_ordinal(ctx: CommandContext) -> Response:
     elif rang <= len(cibles):
         cible = cibles[rang - 1]
     else:
-        return Response.error(
-            "Je ne vois que " + str(len(cibles)) + " éléments à l'écran."
+        return ctx.erreur(
+            "Je ne vois que " + str(len(cibles)) + " éléments à l'écran.",
+            "I only see " + str(len(cibles)) + " elements on screen.",
         )
 
     if interaction.cliquer(cible):
-        return Response(text="J'ouvre « " + interaction.titre_affiche(cible.nom)[:60] + " ».")
-    return Response.error("Je n'ai pas réussi à cliquer sur « " + cible.nom[:40] + " ».")
+        nom = interaction.titre_affiche(cible.nom)[:60]
+        return ctx.reponse("J'ouvre « " + nom + " ».", "Opening \"" + nom + "\".")
+    return ctx.erreur("Je n'ai pas réussi à cliquer sur « " + cible.nom[:40] + " ».",
+                      "I couldn't click \"" + cible.nom[:40] + "\".")
 
 
 @command(
@@ -342,11 +352,12 @@ def cliquer_sur(ctx: CommandContext) -> Response:
     libelle = ctx.group("label").strip()
     mot_type = text_utils.normalize(ctx.group("type")).strip()
     if not libelle:
-        return Response.error("Sur quoi dois-je cliquer ?")
+        return ctx.erreur("Sur quoi dois-je cliquer ?", "What should I click on?")
 
     fenetre = fenetre_visee(ctx)
     if fenetre is None:
-        return Response.error("Je ne vois aucune fenêtre où cliquer.")
+        return ctx.erreur("Je ne vois aucune fenêtre où cliquer.",
+                          "I don't see a window to click in.")
 
     types = TYPES_PAR_MOT.get(mot_type)
     variantes = variantes_libelle(libelle)
@@ -378,7 +389,7 @@ def cliquer_sur(ctx: CommandContext) -> Response:
         cible = chercher(page_seulement=False)
 
     if cible is not None:
-        return _cliquer(cible)
+        return _cliquer(ctx, cible)
 
     # Dernier recours : reveiller la barre de controle d un lecteur video.
     # Fermee, elle n est pas seulement invisible -- elle a disparu de l arbre
@@ -388,13 +399,19 @@ def cliquer_sur(ctx: CommandContext) -> Response:
         if reveille:
             cible = chercher()
             if cible is not None:
-                return _cliquer(cible)
+                return _cliquer(ctx, cible)
 
     quoi = (mot_type + " ") if mot_type else ""
-    return Response.error("Je ne trouve pas " + quoi + "« " + libelle + " » à l'écran.")
+    return ctx.erreur(
+        "Je ne trouve pas " + quoi + "« " + libelle + " » à l'écran.",
+        "I can't find " + quoi + "\"" + libelle + "\" on screen.",
+    )
 
 
-def _cliquer(cible) -> Response:
+def _cliquer(ctx: CommandContext, cible) -> Response:
     if interaction.cliquer(cible):
-        return Response(text="Je clique sur « " + interaction.titre_affiche(cible.nom)[:60] + " ».")
-    return Response.error("Je n'ai pas réussi à cliquer sur « " + cible.nom[:40] + " ».")
+        nom = interaction.titre_affiche(cible.nom)[:60]
+        return ctx.reponse("Je clique sur « " + nom + " ».",
+                           "Clicking \"" + nom + "\".")
+    return ctx.erreur("Je n'ai pas réussi à cliquer sur « " + cible.nom[:40] + " ».",
+                      "I couldn't click \"" + cible.nom[:40] + "\".")

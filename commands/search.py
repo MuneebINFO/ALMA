@@ -45,9 +45,11 @@ def search_youtube(ctx: CommandContext) -> Response:
     """Lance une recherche YouTube dans le navigateur."""
     query = ctx.arg
     if not query:
-        return Response.error("Que dois-je chercher sur YouTube ?")
+        return ctx.erreur("Que dois-je chercher sur YouTube ?",
+                          "What should I look up on YouTube?")
     open_url("https://www.youtube.com/results?search_query=" + quote_plus(query))
-    return Response(text="Je cherche « " + query + " » sur YouTube.")
+    return ctx.reponse("Je cherche « " + query + " » sur YouTube.",
+                       'Searching YouTube for "' + query + '".')
 
 
 @command(
@@ -71,15 +73,16 @@ def ask_claude(ctx: CommandContext) -> Response:
     query = ctx.arg
     if not query:
         open_url("https://claude.ai/new")
-        return Response(text="J'ouvre Claude.")
+        return ctx.reponse("J'ouvre Claude.", "Opening Claude.")
     from core import win_utils
 
     # La question est aussi copiée dans le presse-papiers : pratique si le
     # paramêtre d URL n'est pas pris en compte par le site.
     win_utils.set_clipboard(query)
     open_url("https://claude.ai/new?q=" + quote_plus(query))
-    return Response(
-        text="Je transmets votre question à Claude (elle est aussi copiée dans le presse-papiers)."
+    return ctx.reponse(
+        "Je transmets votre question à Claude (elle est aussi copiée dans le presse-papiers).",
+        "Passing your question to Claude (it's also copied to the clipboard).",
     )
 
 
@@ -157,7 +160,7 @@ def search_wikipedia(ctx: CommandContext) -> Response:
     """Recupere un résumé Wikipedia et l affiche (et le lit en mode voix)."""
     query = ctx.arg
     if not query:
-        return Response.error("Sur quel sujet ?")
+        return ctx.erreur("Sur quel sujet ?", "On what subject?")
     lang = str(ctx.config.get("general.language", "fr"))[:2]
     page_url = "https://" + lang + ".wikipedia.org/wiki/Special:Search?search=" + quote_plus(query)
 
@@ -176,11 +179,13 @@ def search_wikipedia(ctx: CommandContext) -> Response:
         short = ". ".join(sentences[:3]).strip()
         if short and not short.endswith("."):
             short += "."
-        return Response(text="D'après Wikipedia, " + title + " : " + short)
+        return ctx.reponse("D'après Wikipedia, " + title + " : " + short,
+                           "According to Wikipedia, " + title + ": " + short)
 
     open_url(page_url)
-    return Response(
-        text="Je n'ai pas trouvé de résumé pour « " + query + " » : j'ouvre la recherche Wikipedia."
+    return ctx.reponse(
+        "Je n'ai pas trouvé de résumé pour « " + query + " » : j'ouvre la recherche Wikipedia.",
+        "I couldn't find a summary for \"" + query + "\": opening the Wikipedia search.",
     )
 
 
@@ -200,7 +205,7 @@ def translate(ctx: CommandContext) -> Response:
     """Ouvre Google Traduction avec le texte pre-rempli."""
     text = ctx.arg
     if not text:
-        return Response.error("Que dois-je traduire ?")
+        return ctx.erreur("Que dois-je traduire ?", "What should I translate?")
     target_word = ctx.group(2).lower() if ctx.match and ctx.match.lastindex and ctx.match.lastindex >= 2 else ""
     target = LANGUAGES.get(target_word, "")
     if not target:
@@ -212,7 +217,8 @@ def translate(ctx: CommandContext) -> Response:
     )
     open_url(url)
     label = target_word if target_word in LANGUAGES else target
-    return Response(text="Je traduis « " + text + " » en " + label + ".")
+    return ctx.reponse("Je traduis « " + text + " » en " + label + ".",
+                       'Translating "' + text + '" into ' + label + ".")
 
 
 @command(
@@ -232,9 +238,10 @@ def search_google(ctx: CommandContext) -> Response:
     """Lance une recherche Google dans le navigateur."""
     query = ctx.arg
     if not query:
-        return Response.error("Que dois-je chercher ?")
+        return ctx.erreur("Que dois-je chercher ?", "What should I search for?")
     open_url("https://www.google.com/search?q=" + quote_plus(query))
-    return Response(text="Je cherche « " + query + " » sur Google.")
+    return ctx.reponse("Je cherche « " + query + " » sur Google.",
+                       'Searching Google for "' + query + '".')
 
 
 @command(
@@ -252,9 +259,10 @@ def search_images(ctx: CommandContext) -> Response:
     """Lance une recherche Google Images."""
     query = ctx.arg
     if not query:
-        return Response.error("Des images de quoi ?")
+        return ctx.erreur("Des images de quoi ?", "Images of what?")
     open_url("https://www.google.com/search?tbm=isch&q=" + quote_plus(query))
-    return Response(text="Voici des images de « " + query + " ».")
+    return ctx.reponse("Voici des images de « " + query + " ».",
+                       'Here are images of "' + query + '".')
 
 
 @command(
@@ -273,6 +281,7 @@ def search_maps(ctx: CommandContext) -> Response:
     """Ouvre Google Maps sur un lieu."""
     query = ctx.arg
     if not query:
-        return Response.error("Quel lieu ?")
+        return ctx.erreur("Quel lieu ?", "Which place?")
     open_url("https://www.google.com/maps/search/" + quote_plus(query))
-    return Response(text="Je localise « " + query + " » sur Maps.")
+    return ctx.reponse("Je localise « " + query + " » sur Maps.",
+                       'Finding "' + query + '" on Maps.')
