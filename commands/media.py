@@ -156,13 +156,17 @@ def media_pause_ecran(ctx: CommandContext) -> Response:
     index = ecran_cible(ctx)
     ecrans = desktop.ecrans()
     if ecrans and index > len(ecrans):
-        return Response.error(
-            "Je ne vois que " + str(len(ecrans)) + " écran(s), pas d'écran " + str(index) + "."
+        return ctx.erreur(
+            "Je ne vois que " + str(len(ecrans)) + " écran(s), pas d'écran " + str(index) + ".",
+            "I only see " + str(len(ecrans)) + " screen(s), there is no screen "
+            + str(index) + ".",
         )
     ok, detail = media_control.agir_sur_ecran(index, "pause")
     if ok:
-        return Response(text="Pause sur l'écran " + str(index) + " : " + detail + ".")
-    return Response.error("Rien à mettre en pause sur l'écran " + str(index) + " (" + detail + ").")
+        return ctx.reponse("Pause sur l'écran " + str(index) + " : " + detail + ".",
+                           "Paused on screen " + str(index) + ": " + detail + ".")
+    return ctx.erreur("Rien à mettre en pause sur l'écran " + str(index) + " (" + detail + ").",
+                      "Nothing to pause on screen " + str(index) + " (" + detail + ").")
 
 
 @command(
@@ -182,8 +186,11 @@ def media_reprise_ecran(ctx: CommandContext) -> Response:
     index = ecran_cible(ctx)
     ok, detail = media_control.agir_sur_ecran(index, "play")
     if ok:
-        return Response(text="Lecture reprise sur l'écran " + str(index) + " : " + detail + ".")
-    return Response.error("Rien à relancer sur l'écran " + str(index) + " (" + detail + ").")
+        return ctx.reponse(
+            "Lecture reprise sur l'écran " + str(index) + " : " + detail + ".",
+            "Playback resumed on screen " + str(index) + ": " + detail + ".")
+    return ctx.erreur("Rien à relancer sur l'écran " + str(index) + " (" + detail + ").",
+                      "Nothing to resume on screen " + str(index) + " (" + detail + ").")
 
 
 @command(
@@ -205,9 +212,11 @@ def media_pause_tout(ctx: CommandContext) -> Response:
     """Met en pause chaque lecteur en cours, sur tous les écrans."""
     arretes = media_control.mettre_en_pause_tout()
     if not arretes:
-        return Response(text="Rien ne jouait, mais j'ai envoyé la commande pause.", speak=False)
+        return ctx.reponse("Rien ne jouait, mais j'ai envoyé la commande pause.",
+                           "Nothing was playing, but I sent the pause command.",
+                           speak=False)
     noms = ", ".join(s.application for s in arretes)
-    return Response(text="J'ai mis en pause : " + noms + ".")
+    return ctx.reponse("J'ai mis en pause : " + noms + ".", "Paused: " + noms + ".")
 
 
 @command(
@@ -232,15 +241,21 @@ def media_what_is_playing(ctx: CommandContext) -> Response:
     index = ecran_cible(ctx)
     sessions = media_control.sessions_sur_ecran(index)
     en_cours = [s for s in sessions if s.joue]
+    anglais = ctx.lang == "en"
     if not en_cours:
         if sessions:
-            return Response(text="Rien ne joue sur l'écran " + str(index)
-                                 + ", tout est en pause.")
-        return Response(text="Aucune lecture en cours sur l'écran " + str(index) + ".")
+            return ctx.reponse(
+                "Rien ne joue sur l'écran " + str(index) + ", tout est en pause.",
+                "Nothing is playing on screen " + str(index) + ", it's all paused.")
+        return ctx.reponse("Aucune lecture en cours sur l'écran " + str(index) + ".",
+                           "Nothing is playing on screen " + str(index) + ".")
     parties = [
-        (s.titre or "un contenu") + " sur " + s.application for s in en_cours
+        (s.titre or ("something" if anglais else "un contenu"))
+        + (" on " if anglais else " sur ") + s.application
+        for s in en_cours
     ]
-    return Response(text="En cours : " + " ; ".join(parties) + ".")
+    return ctx.reponse("En cours : " + " ; ".join(parties) + ".",
+                       "Playing: " + " ; ".join(parties) + ".")
 
 
 @command(
@@ -263,8 +278,9 @@ def media_play_pause(ctx: CommandContext) -> Response:
     ok, detail = media_control.agir_sur_ecran(
         index, "bascule", fenetre_active=fenetre_regardee(ctx, index))
     if ok:
-        return Response(text="C'est fait.", speak=False)
-    return Response.error("Rien à piloter sur l'écran " + str(index) + " (" + detail + ").")
+        return ctx.reponse("C'est fait.", "Done.", speak=False)
+    return ctx.erreur("Rien à piloter sur l'écran " + str(index) + " (" + detail + ").",
+                      "Nothing to control on screen " + str(index) + " (" + detail + ").")
 
 
 @command(
@@ -292,8 +308,9 @@ def media_next(ctx: CommandContext) -> Response:
     ok, detail = media_control.agir_sur_ecran(
         index, "suivant", fenetre_active=fenetre_regardee(ctx, index))
     if ok:
-        return Response(text="Morceau suivant.", speak=False)
-    return Response.error("Rien à faire défiler sur l'écran " + str(index) + " (" + detail + ").")
+        return ctx.reponse("Morceau suivant.", "Next track.", speak=False)
+    return ctx.erreur("Rien à faire défiler sur l'écran " + str(index) + " (" + detail + ").",
+                      "Nothing to skip on screen " + str(index) + " (" + detail + ").")
 
 
 @command(
@@ -318,8 +335,9 @@ def media_previous(ctx: CommandContext) -> Response:
     ok, detail = media_control.agir_sur_ecran(
         index, "precedent", fenetre_active=fenetre_regardee(ctx, index))
     if ok:
-        return Response(text="Morceau précédent.", speak=False)
-    return Response.error("Rien à faire défiler sur l'écran " + str(index) + " (" + detail + ").")
+        return ctx.reponse("Morceau précédent.", "Previous track.", speak=False)
+    return ctx.erreur("Rien à faire défiler sur l'écran " + str(index) + " (" + detail + ").",
+                      "Nothing to skip on screen " + str(index) + " (" + detail + ").")
 
 
 @command(
@@ -353,16 +371,21 @@ def play_music(ctx: CommandContext) -> Response:
         piste = random.choice(pistes)
         ok, detail = win_utils.launch([piste])
         if ok:
-            return Response(text="Je lance " + Path(piste).stem + ".")
-        return Response.error("Lecture impossible : " + detail)
+            return ctx.reponse("Je lance " + Path(piste).stem + ".",
+                               "Playing " + Path(piste).stem + ".")
+        return ctx.erreur("Lecture impossible : " + detail,
+                          "Playback failed: " + detail)
 
     apps = ctx.config.get("applications", {}) or {}
     ok, detail = win_utils.launch((apps.get("spotify", {}) or {}).get("paths", []) or [])
     if ok:
-        return Response(text="Aucun fichier local trouvé : j'ouvre Spotify.")
-    return Response.error(
+        return ctx.reponse("Aucun fichier local trouvé : j'ouvre Spotify.",
+                           "No local file found: opening Spotify.")
+    return ctx.erreur(
         "Aucune musique dans " + str(dossier) + " et Spotify est introuvable. "
-        "Renseignez paths.music dans config.yaml."
+        "Renseignez paths.music dans config.yaml.",
+        "No music in " + str(dossier) + " and Spotify is nowhere to be found. "
+        "Set paths.music in config.yaml.",
     )
 
 
@@ -399,8 +422,10 @@ def media_lecture(ctx: CommandContext) -> Response:
     ok, detail = media_control.agir_sur_ecran(
         index, "play", fenetre_active=fenetre_regardee(ctx, index))
     if ok:
-        return Response(text="Lecture : " + detail + ".", speak=False)
-    return Response.error("Rien à relancer sur l'écran " + str(index) + " (" + detail + ").")
+        return ctx.reponse("Lecture : " + detail + ".", "Playing: " + detail + ".",
+                           speak=False)
+    return ctx.erreur("Rien à relancer sur l'écran " + str(index) + " (" + detail + ").",
+                      "Nothing to resume on screen " + str(index) + " (" + detail + ").")
 
 
 @command(
@@ -429,5 +454,7 @@ def media_mettre_en_pause(ctx: CommandContext) -> Response:
     ok, detail = media_control.agir_sur_ecran(
         index, "pause", fenetre_active=fenetre_regardee(ctx, index))
     if ok:
-        return Response(text="En pause : " + detail + ".", speak=False)
-    return Response.error("Rien à mettre en pause sur l'écran " + str(index) + " (" + detail + ").")
+        return ctx.reponse("En pause : " + detail + ".", "Paused: " + detail + ".",
+                           speak=False)
+    return ctx.erreur("Rien à mettre en pause sur l'écran " + str(index) + " (" + detail + ").",
+                      "Nothing to pause on screen " + str(index) + " (" + detail + ").")
