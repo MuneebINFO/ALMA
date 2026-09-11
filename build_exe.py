@@ -81,11 +81,35 @@ def construire(nom: str, point_entree: str, fenetre: bool) -> int:
     return subprocess.call(argv, cwd=str(RACINE))
 
 
+def _avertir_si_pas_dans_un_venv() -> None:
+    """
+    PyInstaller embarque tout ce qu il trouve dans l environnement qui
+    l execute -- constate a l usage : lance avec le Python GLOBAL d une
+    machine qui a par ailleurs pandas/scipy/scikit-learn/Jupyter installes
+    pour tout autre chose, Alma.exe est ressorti a 427 Mo au lieu de
+    quelques dizaines. sys.prefix == sys.base_prefix signifie qu on tourne
+    hors d un environnement virtuel : un simple avertissement, pas un
+    blocage, au cas ou un venv legitime porte un autre nom que .venv.
+    """
+    import sys
+
+    if sys.prefix == sys.base_prefix:
+        print(
+            "ATTENTION : ce script tourne avec " + sys.executable + ", qui "
+            "n'est pas un environnement virtuel. PyInstaller va embarquer "
+            "TOUT ce qui est installe ici -- si cette machine a d'autres "
+            "paquets globaux (pandas, Jupyter...), Alma.exe grossira pour "
+            "rien. Utilisez plutot : .venv\\Scripts\\python.exe build_exe.py"
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Construit Alma.exe")
     parser.add_argument("--console", action="store_true",
                         help="construire aussi la version console (AlmaConsole.exe)")
     args = parser.parse_args()
+
+    _avertir_si_pas_dans_un_venv()
 
     for dossier in ("build", "dist"):
         chemin = RACINE / dossier

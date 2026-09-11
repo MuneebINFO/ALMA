@@ -40,7 +40,7 @@ identité, pas un fichier du dépôt.
 Depuis une invite PowerShell, à la racine du dépôt :
 
 ```powershell
-pip install -r requirements-build.txt
+.venv\Scripts\python.exe -m pip install -r requirements-build.txt
 powershell -ExecutionPolicy Bypass -File packaging\msix\build_msix.ps1
 ```
 
@@ -48,6 +48,13 @@ powershell -ExecutionPolicy Bypass -File packaging\msix\build_msix.ps1
 Store à partir du même dessin que l'icône (`make_store_assets.py`), remplit
 le manifeste avec votre identité (`render_manifest.py`), et empaquette le
 tout avec `makeappx.exe`. Résultat : `packaging/msix/Alma.msix`.
+
+`build_msix.ps1` construit toujours avec `.venv\Scripts\python.exe`, jamais
+le `python` du PATH : sur une machine dont le Python global a d'autres
+paquets installés pour autre chose, PyInstaller les embarquerait tous dans
+`Alma.exe` sans raison — c'est exactement ce qui s'est passé la première
+fois (427 Mo au lieu de quelques dizaines, à cause de pandas/scipy/Jupyter
+installés globalement, sans rapport avec ALMA).
 
 ### Tester l'installation avant de soumettre
 

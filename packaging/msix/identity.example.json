@@ -11,6 +11,7 @@
   "_publisher_display_name_comment": "Ce que les utilisateurs verront comme éditeur sur la fiche Store.",
 
   "app_display_name": "ALMA",
+  "_app_display_name_comment": "DOIT correspondre EXACTEMENT au nom que vous avez reserve sur Partner Center (Product identity), points compris s'il y en a -- sinon la validation du paquet le refuse : 'uses a display name that you have not reserved'.",
   "app_description": "Assistant vocal et texte 100% local pour Windows, sans IA payante par defaut.",
 
   "version": "1.0.0.0",

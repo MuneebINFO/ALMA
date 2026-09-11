@@ -30,6 +30,18 @@ $Racine = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $MsixDir = $PSScriptRoot
 $Layout = Join-Path $MsixDir "PackageLayout"
 
+# Le "python" du PATH peut etre n'importe quel interpreteur global installe
+# sur la machine, avec n'importe quoi dedans -- constate a l usage : un
+# Alma.exe de 427 Mo, parce que PyInstaller a suivi le "python" global et
+# embarque pandas/scipy/scikit-learn/Jupyter, installes ici pour tout autre
+# chose. Le .venv du projet, lui, ne contient que ce qu ALMA declare dans
+# requirements*.txt : c est TOUJOURS lui qu il faut utiliser pour construire.
+$VenvPython = Join-Path $Racine ".venv\Scripts\python.exe"
+if (-not (Test-Path $VenvPython)) {
+    Write-Host "ATTENTION : $VenvPython introuvable -- repli sur le python du PATH, qui peut contenir n'importe quoi d'autre installe sur cette machine et gonfler Alma.exe. Creez le venv du projet (python -m venv .venv) et installez requirements-build.txt dedans." -ForegroundColor Yellow
+    $VenvPython = "python"
+}
+
 function Trouver-OutilSdk([string]$Nom) {
     <#
     Cherche un outil du Windows SDK (makeappx.exe, signtool.exe) : d'abord
@@ -52,20 +64,20 @@ function Trouver-OutilSdk([string]$Nom) {
     return $null
 }
 
-Write-Host "== 1/5 : compilation d'Alma.exe ==" -ForegroundColor Cyan
+Write-Host "== 1/5 : compilation d'Alma.exe (via $VenvPython) ==" -ForegroundColor Cyan
 Push-Location $Racine
 try {
-    python build_exe.py
+    & $VenvPython build_exe.py
     if ($LASTEXITCODE -ne 0) { throw "build_exe.py a echoue." }
 }
 finally { Pop-Location }
 
 Write-Host "== 2/5 : images du Store ==" -ForegroundColor Cyan
-python (Join-Path $MsixDir "make_store_assets.py")
+& $VenvPython (Join-Path $MsixDir "make_store_assets.py")
 if ($LASTEXITCODE -ne 0) { throw "make_store_assets.py a echoue." }
 
 Write-Host "== 3/5 : manifeste ==" -ForegroundColor Cyan
-python (Join-Path $MsixDir "render_manifest.py")
+& $VenvPython (Join-Path $MsixDir "render_manifest.py")
 if ($LASTEXITCODE -ne 0) { throw "render_manifest.py a echoue (voir le message ci-dessus)." }
 
 Write-Host "== 4/5 : mise en page du paquet ==" -ForegroundColor Cyan

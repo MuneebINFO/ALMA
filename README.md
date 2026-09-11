@@ -355,11 +355,18 @@ The two usual causes:
 
 ```bash
 pip install -r requirements-build.txt
-python build_exe.py
+.venv\Scripts\python.exe build_exe.py
 ```
 
 This produces `dist/Alma.exe` (~54 MB, self-contained, no Python needed on the
 target machine).
+
+> **Build from the project's `.venv`, not a global Python.** PyInstaller
+> bundles everything importable in whatever interpreter runs it — on a
+> machine whose global Python also has unrelated packages installed (data
+> science libraries, Jupyter, anything), `Alma.exe` balloons to hundreds of
+> MB for no reason. `build_exe.py` warns if it detects it isn't running
+> inside a virtual environment.
 
 > **Windows Smart App Control blocks unsigned executables.** If it is enabled,
 > the executable builds correctly but Windows refuses to run it
