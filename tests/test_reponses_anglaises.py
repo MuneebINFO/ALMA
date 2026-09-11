@@ -89,8 +89,11 @@ def test_la_meme_commande_repond_en_francais(assistant):
     # Système : des refus, puisque rien ne joue et que l'écran 9 n'existe pas
     "what's playing", "pause the video on screen 9",
     "set the video volume to 30",
-    # Le reste
-    "help", "xyzzy plover",
+    # Le reste. La derniere n'atteint aucune commande : c'est le « je n'ai
+    # pas compris » qui est verifie, et il a sa version anglaise. Une phrase
+    # de pur charabia ne conviendrait pas -- sans le moindre mot reconnu,
+    # aucune langue ne se detecte et le francais reprend la main.
+    "help", "please do the xyzzy plover thing",
 ])
 def test_aucune_reponse_anglaise_ne_parle_francais(assistant, phrase):
     reponse = assistant.handle(phrase)
