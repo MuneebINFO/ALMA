@@ -4,15 +4,20 @@
   Win32 classique (Alma.exe, construit par build_exe.py) empaquetee pour le
   Store, PAS une application UWP en bac a sable. C'est ce que fait
   runFullTrust : ALMA tourne avec les memes droits qu'une installation
-  normale -- exactement ce dont elle a besoin pour piloter d'autres fenetres
+  normale, exactement ce dont elle a besoin pour piloter d'autres fenetres
   (UI Automation, clavier/souris), sans passer par la capacite restreinte
   inputInjectionBrokered, reservee a des scenarios bien plus etroits
   (authentification bancaire, applis d'entreprise) et a une revue plus lourde.
 
+  ATTENTION, fichier XML : un commentaire XML ne peut JAMAIS contenir deux
+  tirets d affilee ailleurs qu a son ouverture ou sa fermeture. C est ce qui
+  a fait echouer le tout premier essai de packaging (erreur de validation,
+  « '>' attendu » a la ligne du commentaire fautif).
+
   Ce fichier est un MODELE : render_manifest.py le remplit a partir de
-  identity.local.json (jamais versionne -- ce sont vos identifiants
+  identity.local.json (jamais versionne, ce sont vos identifiants
   personnels reserves sur Partner Center) et ecrit le resultat dans
-  PackageLayout/Package.appxmanifest.
+  PackageLayout/AppxManifest.xml (nom exige par makeappx.exe).
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -42,7 +47,7 @@
 
   <Capabilities>
     <!-- Desktop Bridge : ALMA est une appli Win32 a part entiere, pas une
-         appli en bac a sable -- voir la note en tete de fichier. -->
+         appli en bac a sable. Voir la note en tete de fichier. -->
     <rescap:Capability Name="runFullTrust" />
     <!-- Capacite ordinaire (pas de revue Store particuliere) : le mode voix
          a besoin du micro. -->

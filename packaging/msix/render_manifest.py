@@ -1,6 +1,7 @@
 """
 Remplit Package.appxmanifest.template avec votre identite Partner Center et
-ecrit le resultat dans PackageLayout/Package.appxmanifest.
+ecrit le resultat dans PackageLayout/AppxManifest.xml (nom exige par
+makeappx.exe -- pas celui du modele).
 
 Usage :
     python packaging/msix/render_manifest.py
@@ -18,7 +19,12 @@ from pathlib import Path
 ICI = Path(__file__).resolve().parent
 IDENTITE = ICI / "identity.local.json"
 MODELE = ICI / "Package.appxmanifest.template"
-CIBLE = ICI / "PackageLayout" / "Package.appxmanifest"
+# makeappx.exe exige ce nom EXACT dans le dossier passe a /d -- « Package.
+# appxmanifest » est la convention d un projet Visual Studio (qui le
+# renomme lui-meme a la compilation), pas celle de makeappx en ligne de
+# commande : sans ce nom precis, il refuse le paquet ("missing a required
+# footprint file").
+CIBLE = ICI / "PackageLayout" / "AppxManifest.xml"
 
 # Cle du JSON -> jeton a remplacer dans le modele.
 CHAMPS = {
@@ -52,6 +58,21 @@ def main() -> int:
     if manquants:
         print("Ces champs de identity.local.json n'ont pas ete remplis (ou "
               "sont encore la valeur d'exemple) :", ", ".join(manquants))
+        return 1
+
+    # makeappx accepte un XML mal forme sans le dire clairement (« '>'
+    # attendu », sans numero de ligne utile) -- on le valide nous-memes ici,
+    # avec un message qui dit vraiment ou est le probleme. Vu une fois pour
+    # de vrai : deux tirets d affilee a l interieur d un commentaire XML,
+    # pourtant courants dans la prose francaise du modele.
+    import xml.etree.ElementTree as ET
+
+    try:
+        ET.fromstring(texte)
+    except ET.ParseError as exc:
+        print("Le manifeste rempli n'est pas un XML valide :", exc)
+        print("(un commentaire <!-- ... --> ne peut jamais contenir deux "
+              "tirets d'affilee ailleurs qu'a son ouverture/fermeture)")
         return 1
 
     CIBLE.parent.mkdir(parents=True, exist_ok=True)
