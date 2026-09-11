@@ -218,7 +218,7 @@ def media_pause_tout(ctx: CommandContext) -> Response:
         r"quelle?\s+(?:musique|chanson|video)\s+(?:joue|passe|est\s+en\s+cours)|"
         r"c\s+est\s+quoi\s+(?:cette|la)\s+(?:musique|chanson))",
         r"^(?:qu\s+est\s+ce\s+qui\s+passe)$",
-        r"what\s*(?:'s|\s+is)\s+playing",
+        r"what\s+(?:is\s+|s\s+)?playing",
         r"what\s+(?:song|music|video)\s+is\s+(?:this|playing)",
     ],
     keywords=[["quoi", "joue"], ["quelle", "musique"], ["what", "playing"]],

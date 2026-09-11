@@ -125,3 +125,34 @@ def test_media_en_anglais(router, phrase, attendu):
 ])
 def test_websites_en_anglais(router, phrase, attendu):
     assert route(router, phrase) == attendu, phrase
+
+
+# --------------------------------------------------------------------------
+# commands/system.py -- volume, luminosité, session, dossiers
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("phrase,attendu", [
+    ("set the video volume to 30", "volume_media_set"),
+    ("turn up the video volume", "volume_media_up"),
+    ("turn down the video volume", "volume_media_down"),
+    ("set the volume to 70", "volume_set"),
+    ("turn up the volume", "volume_up"),
+    ("louder", "volume_up"),
+    ("turn down the volume", "volume_down"),
+    ("quieter", "volume_down"),
+    ("mute", "volume_mute"),
+    ("unmute", "volume_unmute"),
+    ("what's the volume", "volume_status"),
+    ("set the brightness to 50", "brightness_set"),
+    ("increase the brightness", "brightness_change"),
+    ("decrease the brightness", "brightness_change"),
+    ("take a screenshot", "screenshot"),
+    ("lock the computer", "lock_session"),
+    ("put the computer to sleep", "sleep_pc"),
+    ("shut down the computer", "shutdown_pc"),
+    ("restart the computer", "restart_pc"),
+    ("cancel the shutdown", "abort_shutdown"),
+    ("open my downloads", "open_folder"),
+    ("open the folder Documents", "open_folder"),
+])
+def test_system_en_anglais(router, phrase, attendu):
+    assert route(router, phrase) == attendu, phrase

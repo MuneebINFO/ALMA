@@ -23,6 +23,10 @@ Practical notes, learned while retrofitting the existing commands:
   and `commands/media.py`'s `ORDINAUX` already understand English number
   words and ordinals ("first", "3rd", "third"...) — reuse them instead of
   writing a parallel English number table in your command file.
+- **Apostrophes don't survive normalization.** `text_utils.normalize` turns
+  `"what's"` into `"what s"` (two tokens) before any pattern sees it. Never
+  write a literal `'s` in a pattern — match `s\s+` (or make it optional
+  alongside `is\s+`) instead, e.g. `r"what\s+(?:is\s+|s\s+)?playing"`.
 - **Add an English example** to the command's `examples=[...]`, and an
   English row to `commandes.json` if the command has one there.
 - **Test it.** Add the phrase to `tests/test_anglais.py`, parametrized

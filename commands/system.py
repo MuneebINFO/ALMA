@@ -24,7 +24,8 @@ def _percent(ctx: CommandContext, default: int = 50) -> int:
 # affiche sur l ecran de travail -- celui de YouTube, Netflix, Twitch... --
 # et laisse le volume general de l ordinateur intact.
 OBJET_MEDIA = (r"(?:video|videos|film|films|serie|series|episode|musique|"
-               r"chanson|lecture|podcast|streaming|navigateur|onglet)")
+               r"chanson|lecture|podcast|streaming|navigateur|onglet|"
+               r"movie|movies|show|song|browser|tab)")
 DETERMINANT = r"(?:de\s+la\s+|de\s+l\s+|du\s+|des\s+|de\s+)"
 VERBES_REGLAGE = (r"(?:met[s]?|mettre|regle|regler|passe|baisse|baisser|"
                   r"diminue|diminuer|reduis|reduire|monte|monter|augmente|augmenter)")
@@ -65,10 +66,14 @@ def _pas_de_curseur() -> Response:
         + OBJET_MEDIA + r"\s+(?:a|sur)\s+(" + r"\d" + r"{1,3})",
         r"(?:son|volume)\s+" + DETERMINANT + OBJET_MEDIA
         + r"\s+(?:a|sur)\s+(\d{1,3})",
+        # « set the video volume to 30 », « set the volume of the movie to 60 »
+        r"(?:set|put)\s+(?:the\s+)?" + OBJET_MEDIA + r"(?:'?s)?\s+volume\s+to\s+(\d{1,3})",
+        r"(?:set|put)\s+(?:the\s+)?volume\s+of\s+the\s+" + OBJET_MEDIA + r"\s+to\s+(\d{1,3})",
     ],
     category="Système",
     description="Régler le volume de la vidéo, sans toucher au volume général",
-    examples=["baisse le volume de la vidéo à 30", "mets le volume du film à 60"],
+    examples=["baisse le volume de la vidéo à 30", "mets le volume du film à 60",
+              "set the video volume to 30"],
     priority=95,
 )
 def volume_media_set(ctx: CommandContext) -> Response:
@@ -98,10 +103,13 @@ def volume_media_set(ctx: CommandContext) -> Response:
         + DETERMINANT + OBJET_MEDIA + r"\b",
         r"(?:met[s]?|mettre)\s+(?:la\s+|le\s+|l\s+)?" + OBJET_MEDIA
         + r"\s+plus\s+fort",
+        r"(?:turn\s+up|raise|increase)\s+(?:the\s+)?" + OBJET_MEDIA + r"(?:'?s)?\s+volume",
+        r"(?:make|turn)\s+(?:the\s+)?" + OBJET_MEDIA + r"\s+louder",
     ],
     category="Système",
     description="Augmenter le volume de la vidéo seule",
-    examples=["monte le volume de la vidéo", "mets la vidéo plus fort"],
+    examples=["monte le volume de la vidéo", "mets la vidéo plus fort",
+              "turn up the video volume"],
     priority=94,
 )
 def volume_media_up(ctx: CommandContext) -> Response:
@@ -116,10 +124,13 @@ def volume_media_up(ctx: CommandContext) -> Response:
         r"(?:son|volume)\s+" + DETERMINANT + OBJET_MEDIA + r"\b",
         r"(?:met[s]?|mettre)\s+(?:la\s+|le\s+|l\s+)?" + OBJET_MEDIA
         + r"\s+moins\s+fort",
+        r"(?:turn\s+down|lower|decrease)\s+(?:the\s+)?" + OBJET_MEDIA + r"(?:'?s)?\s+volume",
+        r"(?:make|turn)\s+(?:the\s+)?" + OBJET_MEDIA + r"\s+quieter",
     ],
     category="Système",
     description="Baisser le volume de la vidéo seule",
-    examples=["baisse le volume de la vidéo", "mets le film moins fort"],
+    examples=["baisse le volume de la vidéo", "mets le film moins fort",
+              "turn down the video volume"],
     priority=94,
 )
 def volume_media_down(ctx: CommandContext) -> Response:
@@ -144,10 +155,12 @@ def _ajuster_volume_media(ctx: CommandContext, delta: int) -> Response:
     patterns=[
         r"(?:met|mets|mettre|regle|regler|passe)\s+(?:le\s+)?(?:son|volume)\s+(?:a|sur)\s+(\d{1,3})",
         r"volume\s+(?:a|sur)\s+(\d{1,3})",
+        r"(?:set)\s+(?:the\s+)?volume\s+to\s+(\d{1,3})",
+        r"^volume\s+(\d{1,3})%?$",
     ],
     category="Système",
     description="Régler le volume a un pourcentage precis",
-    examples=["mets le volume a 30%", "volume a 70"],
+    examples=["mets le volume a 30%", "volume a 70", "set the volume to 70"],
     priority=90,
 )
 def volume_set(ctx: CommandContext) -> Response:
@@ -164,11 +177,13 @@ def volume_set(ctx: CommandContext) -> Response:
 @command(
     name="volume_up",
     patterns=[r"(?:monte|augmente|augmenter|monter|plus\s+fort)\s*(?:le\s+)?(?:son|volume)?",
-              r"(?:met|mets)\s+plus\s+fort"],
-    keywords=[["monte", "son"], ["augmente", "volume"]],
+              r"(?:met|mets)\s+plus\s+fort",
+              r"(?:turn\s+up|raise|increase)\s*(?:the\s+)?(?:volume|sound)?$",
+              r"^louder$"],
+    keywords=[["monte", "son"], ["augmente", "volume"], ["turn", "up"]],
     category="Système",
     description="Augmenter le volume",
-    examples=["monte le son", "augmente le volume"],
+    examples=["monte le son", "augmente le volume", "turn up the volume"],
     priority=85,
 )
 def volume_up(ctx: CommandContext) -> Response:
@@ -181,11 +196,13 @@ def volume_up(ctx: CommandContext) -> Response:
 
 @command(
     name="volume_down",
-    patterns=[r"(?:baisse|baisser|diminue|reduis|moins\s+fort)\s*(?:le\s+)?(?:son|volume)?"],
-    keywords=[["baisse", "son"], ["baisse", "volume"]],
+    patterns=[r"(?:baisse|baisser|diminue|reduis|moins\s+fort)\s*(?:le\s+)?(?:son|volume)?",
+              r"(?:turn\s+down|lower|decrease)\s*(?:the\s+)?(?:volume|sound)?$",
+              r"^quieter$"],
+    keywords=[["baisse", "son"], ["baisse", "volume"], ["turn", "down"]],
     category="Système",
     description="Baisser le volume",
-    examples=["baisse le son", "baisse le volume"],
+    examples=["baisse le son", "baisse le volume", "turn down the volume"],
     priority=85,
 )
 def volume_down(ctx: CommandContext) -> Response:
@@ -199,11 +216,12 @@ def volume_down(ctx: CommandContext) -> Response:
 @command(
     name="volume_mute",
     patterns=[r"(?:coupe|couper|mute|silence)\s*(?:le\s+)?(?:son|volume|micro)?$",
-              r"^(?:chut|silence)$"],
-    keywords=[["coupe", "son"]],
+              r"^(?:chut|silence)$",
+              r"^mute\s*(?:the\s+)?(?:sound|volume)?$"],
+    keywords=[["coupe", "son"], ["mute"]],
     category="Système",
     description="Couper le son",
-    examples=["coupe le son", "silence"],
+    examples=["coupe le son", "silence", "mute"],
     priority=88,
 )
 def volume_mute(ctx: CommandContext) -> Response:
@@ -216,10 +234,11 @@ def volume_mute(ctx: CommandContext) -> Response:
 @command(
     name="volume_unmute",
     patterns=[r"(?:remet|remets|retablis|reactive|restaure)\s*(?:le\s+)?(?:son|volume)",
-              r"^(?:unmute|son\s+on)$"],
+              r"^(?:unmute|son\s+on)$",
+              r"^(?:restore|turn\s+on)\s+(?:the\s+)?(?:sound|volume)$"],
     category="Système",
     description="Rétablir le son",
-    examples=["remets le son"],
+    examples=["remets le son", "unmute"],
     priority=89,
 )
 def volume_unmute(ctx: CommandContext) -> Response:
@@ -232,10 +251,11 @@ def volume_unmute(ctx: CommandContext) -> Response:
 @command(
     name="volume_status",
     informatif=True,
-    patterns=[r"(?:quel|quelle)\s+(?:est\s+)?(?:le\s+)?(?:niveau\s+(?:du|de)\s+)?volume"],
+    patterns=[r"(?:quel|quelle)\s+(?:est\s+)?(?:le\s+)?(?:niveau\s+(?:du|de)\s+)?volume",
+              r"what\s+(?:is\s+|s\s+)?the\s+volume(?:\s+level)?"],
     category="Système",
     description="Connaître le niveau de volume",
-    examples=["quel est le volume"],
+    examples=["quel est le volume", "what's the volume"],
     priority=91,
 )
 def volume_status(ctx: CommandContext) -> Response:
@@ -253,10 +273,11 @@ def volume_status(ctx: CommandContext) -> Response:
     patterns=[
         r"(?:met|mets|regle|passe)\s+(?:la\s+)?(?:luminosite|lumiere|brightness)\s+(?:a|sur)\s+(\d{1,3})",
         r"(?:luminosite|brightness)\s+(?:a|sur)\s+(\d{1,3})",
+        r"set\s+(?:the\s+)?brightness\s+to\s+(\d{1,3})",
     ],
     category="Système",
     description="Régler la luminosité de l'écran",
-    examples=["mets la luminosité a 50%"],
+    examples=["mets la luminosité a 50%", "set the brightness to 50"],
     priority=90,
 )
 def brightness_set(ctx: CommandContext) -> Response:
@@ -271,10 +292,11 @@ def brightness_set(ctx: CommandContext) -> Response:
 
 @command(
     name="brightness_change",
-    patterns=[r"(?:monte|augmente|baisse|diminue|reduis)\s+(?:la\s+)?(?:luminosite|lumiere)"],
+    patterns=[r"(?:monte|augmente|baisse|diminue|reduis)\s+(?:la\s+)?(?:luminosite|lumiere)",
+              r"(?:increase|raise|turn\s+up|decrease|lower|turn\s+down)\s+(?:the\s+)?brightness"],
     category="Système",
     description="Augmenter ou baisser la luminosité",
-    examples=["monte la luminosité", "baisse la luminosité"],
+    examples=["monte la luminosité", "baisse la luminosité", "increase the brightness"],
     priority=86,
 )
 def brightness_change(ctx: CommandContext) -> Response:
@@ -282,7 +304,8 @@ def brightness_change(ctx: CommandContext) -> Response:
     current = win_utils.get_brightness()
     if current is None:
         return Response.error("Je ne peux pas lire la luminosité de cet ecran.")
-    down = any(text_utils.fuzzy_in(word, ctx.tokens) for word in ("baisse", "diminue", "reduis"))
+    down = any(text_utils.fuzzy_in(word, ctx.tokens)
+              for word in ("baisse", "diminue", "reduis", "decrease", "lower", "down"))
     target = max(0, min(100, current + (-10 if down else 10)))
     if win_utils.set_brightness(target):
         return Response(text="Luminosité à " + str(target) + " pour cent.")
@@ -294,11 +317,12 @@ def brightness_change(ctx: CommandContext) -> Response:
     patterns=[
         r"(?:prend|prends|prendre|fais|faire|capture)\s+(?:moi\s+)?(?:une\s+|un\s+)?(?:capture|screenshot|photo\s+de\s+l\s+ecran)",
         r"^(?:capture|screenshot)$",
+        r"(?:take|grab)\s+(?:a\s+)?screenshot",
     ],
     keywords=[["capture", "ecran"], ["screenshot"]],
     category="Système",
     description="Prendre une capture d'écran",
-    examples=["prends une capture d'écran", "screenshot"],
+    examples=["prends une capture d'écran", "screenshot", "take a screenshot"],
     priority=88,
 )
 def screenshot(ctx: CommandContext) -> Response:
@@ -314,12 +338,13 @@ def screenshot(ctx: CommandContext) -> Response:
 
 @command(
     name="lock_session",
-    patterns=[r"(?:verrouille|verrouiller|verouille|lock)\s*(?:l\s+)?(?:ordinateur|ecran|session|pc)?",
+    patterns=[r"(?:verrouille|verrouiller|verouille|lock)\s*(?:l\s+|the\s+)?"
+              r"(?:ordinateur|ecran|session|pc|computer|screen)?",
               r"^lock$"],
-    keywords=[["verrouille", "ordinateur"], ["verrouille", "session"]],
+    keywords=[["verrouille", "ordinateur"], ["verrouille", "session"], ["lock", "computer"]],
     category="Système",
     description="Verrouiller la session Windows",
-    examples=["verrouille l ordinateur"],
+    examples=["verrouille l ordinateur", "lock the computer"],
     priority=88,
 )
 def lock_session(ctx: CommandContext) -> Response:
@@ -331,11 +356,12 @@ def lock_session(ctx: CommandContext) -> Response:
 
 @command(
     name="sleep_pc",
-    patterns=[r"(?:met|mets|mettre)\s+(?:l\s+)?(?:ordinateur|pc)?\s*en\s+veille", r"^veille$"],
-    keywords=[["mets", "veille"]],
+    patterns=[r"(?:met|mets|mettre)\s+(?:l\s+)?(?:ordinateur|pc)?\s*en\s+veille", r"^veille$",
+              r"(?:put|send)\s+(?:the\s+)?(?:computer|pc)?\s*to\s+sleep", r"^sleep$"],
+    keywords=[["mets", "veille"], ["sleep"]],
     category="Système",
     description="Mettre l'ordinateur en veille (confirmation demandée)",
-    examples=["mets l'ordinateur en veille"],
+    examples=["mets l'ordinateur en veille", "put the computer to sleep"],
     priority=88,
 )
 def sleep_pc(ctx: CommandContext) -> Response:
@@ -351,11 +377,12 @@ def sleep_pc(ctx: CommandContext) -> Response:
 @command(
     name="shutdown_pc",
     patterns=[r"(?:eteins|eteindre|arrete|arreter|shutdown)\s+(?:l\s+)?(?:ordinateur|pc|systeme)",
-              r"^(?:eteins|shutdown)$"],
-    keywords=[["eteins", "ordinateur"]],
+              r"^(?:eteins|shutdown)$",
+              r"(?:shut\s+down|turn\s+off)\s+(?:the\s+)?(?:computer|pc|system)"],
+    keywords=[["eteins", "ordinateur"], ["shut", "down"]],
     category="Système",
     description="Éteindre l'ordinateur (confirmation obligatoire)",
-    examples=["eteins l ordinateur"],
+    examples=["eteins l ordinateur", "shut down the computer"],
     priority=88,
 )
 def shutdown_pc(ctx: CommandContext) -> Response:
@@ -372,11 +399,12 @@ def shutdown_pc(ctx: CommandContext) -> Response:
 
 @command(
     name="restart_pc",
-    patterns=[r"(?:redemarre|redemarrer|reboot|restart)\s*(?:l\s+)?(?:ordinateur|pc|systeme)?"],
-    keywords=[["redemarre", "ordinateur"]],
+    patterns=[r"(?:redemarre|redemarrer|reboot|restart)\s*(?:l\s+)?(?:ordinateur|pc|systeme|"
+              r"the\s+computer|computer)?"],
+    keywords=[["redemarre", "ordinateur"], ["restart", "computer"]],
     category="Système",
     description="Redémarrer l'ordinateur (confirmation obligatoire)",
-    examples=["redemarre l ordinateur"],
+    examples=["redemarre l ordinateur", "restart the computer"],
     priority=88,
 )
 def restart_pc(ctx: CommandContext) -> Response:
@@ -393,10 +421,11 @@ def restart_pc(ctx: CommandContext) -> Response:
 
 @command(
     name="abort_shutdown",
-    patterns=[r"(?:annule|annuler|stop|arrete)\s+(?:l\s+)?(?:extinction|arret|redemarrage|shutdown)"],
+    patterns=[r"(?:annule|annuler|stop|arrete)\s+(?:l\s+)?(?:extinction|arret|redemarrage|shutdown)",
+              r"(?:cancel|abort)\s+(?:the\s+)?(?:shutdown|restart)"],
     category="Système",
     description="Annuler une extinction ou un redémarrage programmé",
-    examples=["annule l'extinction"],
+    examples=["annule l'extinction", "cancel the shutdown"],
     priority=93,
 )
 def abort_shutdown(ctx: CommandContext) -> Response:
@@ -411,11 +440,15 @@ def abort_shutdown(ctx: CommandContext) -> Response:
     name="open_folder",
     patterns=[
         r"^(?:ouvre|ouvrir|montre|affiche)\s+(?:le\s+dossier|mon\s+dossier|le\s+repertoire)\s+(.+)$",
-        r"^(?:ouvre|ouvrir)\s+(?:mes\s+|mon\s+|le\s+)?(telechargements?|downloads?|documents?|images|photos|bureau|desktop|videos)$",
+        r"^(?:ouvre|ouvrir)\s+(?:mes\s+|mon\s+|le\s+)?(telechargements?|downloads?|documents?|"
+        r"images|photos|bureau|desktop|videos|musique|music)$",
+        r"^(?:open|show)\s+(?:the\s+|my\s+)?folder\s+(.+)$",
+        r"^open\s+(?:my\s+)?(downloads?|documents?|photos|desktop|music|videos)$",
     ],
     category="Système",
     description="Ouvrir un dossier dans l explorateur",
-    examples=["ouvre le dossier telechargements", "ouvre mes documents"],
+    examples=["ouvre le dossier telechargements", "ouvre mes documents",
+              "open my downloads"],
     priority=87,
 )
 def open_folder(ctx: CommandContext) -> Response:
