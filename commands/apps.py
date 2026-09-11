@@ -272,11 +272,14 @@ def open_app(ctx: CommandContext) -> Response:
 
     nom, ecran = separer_ecran(ctx.arg)
     if not nom:
-        return Response.error("Quelle application dois-je ouvrir ?")
+        return ctx.erreur("Quelle application dois-je ouvrir ?",
+                          "Which application should I open?")
     ecrans = desktop.ecrans()
     if ecran is not None and ecrans and ecran > len(ecrans):
-        return Response.error(
-            "Je ne vois que " + str(len(ecrans)) + " écran(s), pas d'écran " + str(ecran) + "."
+        return ctx.erreur(
+            "Je ne vois que " + str(len(ecrans)) + " écran(s), pas d'écran " + str(ecran) + ".",
+            "I only see " + str(len(ecrans)) + " screen(s), there's no screen "
+            + str(ecran) + ".",
         )
     index = ecran or getattr(ctx.assistant, "ecran_actif", None) or ECRAN_PAR_DEFAUT
     connues = desktop.poignees_visibles()
@@ -292,26 +295,35 @@ def open_app(ctx: CommandContext) -> Response:
         ok, detail = win_utils.launch(entree.get("paths", []) or [])
         if ok:
             _placer(connues, index, processus=str(entree.get("process", "") or ""))
-            return Response(text="J'ouvre " + _joli(libelle) + _sur(ecran) + ".")
+            return ctx.reponse("J'ouvre " + _joli(libelle) + _sur(ecran) + ".",
+                               "Opening " + _joli(libelle) + _on(ecran) + ".")
         # Le chemin configure est faux : l application est peut-etre installee
         # ailleurs, on continue plutot que d abandonner.
         log.debug("Chemin configure inutilisable pour %s : %s", cle, detail)
 
     trouvee = applications.chercher(cible_nom)
     if trouvee is None:
-        return Response.error(
-            "Je ne trouve pas d'application « " + cible_nom + " » sur cet ordinateur."
+        return ctx.erreur(
+            "Je ne trouve pas d'application « " + cible_nom + " » sur cet ordinateur.",
+            "I can't find an application called \"" + cible_nom + "\" on this computer.",
         )
     libelle, cible = trouvee
     ok, detail = applications.lancer(cible)
     if not ok:
-        return Response.error("Impossible d'ouvrir " + libelle + ". " + detail)
+        return ctx.erreur("Impossible d'ouvrir " + libelle + ". " + detail,
+                          "Couldn't open " + libelle + ". " + detail)
     _placer(connues, index)
-    return Response(text="J'ouvre " + _joli(libelle) + _sur(ecran) + ".")
+    return ctx.reponse("J'ouvre " + _joli(libelle) + _sur(ecran) + ".",
+                       "Opening " + _joli(libelle) + _on(ecran) + ".")
 
 
 def _sur(ecran) -> str:
     return (" sur l'écran " + str(ecran)) if ecran else ""
+
+
+def _on(ecran) -> str:
+    """`_sur`, cote anglais."""
+    return (" on screen " + str(ecran)) if ecran else ""
 
 
 def _prefere_lapplication(config, nom: str) -> bool:
@@ -408,8 +420,10 @@ def aller_sur_application(ctx: CommandContext) -> Response:
     ici = _fenetre_de_lapplication(cible, ctx.config, voulu)
     if ici is not None:
         if not desktop.mettre_au_premier_plan(ici.handle):
-            return Response.error("Je n'arrive pas à afficher " + _joli(cible) + ".")
-        return Response(text="Voilà " + _joli(cible) + ".", speak=False)
+            return ctx.erreur("Je n'arrive pas à afficher " + _joli(cible) + ".",
+                              "I can't bring up " + _joli(cible) + ".")
+        return ctx.reponse("Voilà " + _joli(cible) + ".", "Here's " + _joli(cible) + ".",
+                           speak=False)
 
     # Pas ouverte ICI. Avant d en ouvrir une deuxieme, on regarde si elle
     # tourne ne serait-ce qu ailleurs : mieux vaut l amener sur l ecran de
@@ -419,7 +433,8 @@ def aller_sur_application(ctx: CommandContext) -> Response:
     if ailleurs is not None:
         amenee = desktop.deplacer_vers_ecran(ailleurs.handle, voulu)
         if amenee and desktop.mettre_au_premier_plan(ailleurs.handle):
-            return Response(text="Voilà " + _joli(cible) + ".", speak=False)
+            return ctx.reponse("Voilà " + _joli(cible) + ".",
+                               "Here's " + _joli(cible) + ".", speak=False)
 
     # Pas ouverte du tout : « va sur Chrome » veut voir Chrome, ouvrir revient
     # au meme pour qui parle.
@@ -504,7 +519,8 @@ def close_app(ctx: CommandContext) -> Response:
     nom, ecran = separer_ecran(ctx.arg)
     resolved = resolve_app(ctx.config, nom)
     if resolved is None:
-        return Response.error("Je ne connais pas cette application.")
+        return ctx.erreur("Je ne connais pas cette application.",
+                          "I don't know that application.")
     key, entry = resolved
     label = (entry.get("aliases") or [key])[0]
     process = (entry.get("process", "") or "").lower()
@@ -516,18 +532,24 @@ def close_app(ctx: CommandContext) -> Response:
     # on tue le processus, seul moyen dans ces cas.
     if tout or fenetre is None:
         if not process:
-            return Response.error(
+            return ctx.erreur(
                 "Aucun processus n'est configuré pour " + label
-                + " (applications." + key + ".process dans config.yaml)."
+                + " (applications." + key + ".process dans config.yaml).",
+                "No process is configured for " + label
+                + " (applications." + key + ".process in config.yaml).",
             )
         ok, detail = win_utils.kill_process(process)
         if ok:
-            return Response(text="J'ai fermé " + label + ".", speak=False)
-        return Response.error(label + " ne semble pas ouvert. (" + detail + ")")
+            return ctx.reponse("J'ai fermé " + label + ".", "Closed " + label + ".",
+                               speak=False)
+        return ctx.erreur(label + " ne semble pas ouvert. (" + detail + ")",
+                          label + " doesn't seem to be open. (" + detail + ")")
 
     if desktop.fermer_fenetre(fenetre.handle):
-        return Response(text="J'ai fermé " + label + ".", speak=False)
-    return Response.error("Je n'ai pas réussi à fermer " + label + ".")
+        return ctx.reponse("J'ai fermé " + label + ".", "Closed " + label + ".",
+                           speak=False)
+    return ctx.erreur("Je n'ai pas réussi à fermer " + label + ".",
+                      "I couldn't close " + label + ".")
 
 
 @command(
@@ -544,7 +566,8 @@ def list_apps(ctx: CommandContext) -> Response:
     """Liste les applications configurées."""
     apps = ctx.config.get("applications", {}) or {}
     names = sorted((entry.get("aliases") or [key])[0] for key, entry in apps.items())
-    return Response(
-        text="Je peux ouvrir " + str(len(names)) + " applications : " + ", ".join(names) + ".",
+    return ctx.reponse(
+        "Je peux ouvrir " + str(len(names)) + " applications : " + ", ".join(names) + ".",
+        "I can open " + str(len(names)) + " applications: " + ", ".join(names) + ".",
         speak=False,
     )
