@@ -209,6 +209,34 @@ def test_calcul_en_anglais(router, phrase, attendu):
     assert route(router, phrase) == attendu, phrase
 
 
+@pytest.mark.parametrize("phrase,attendu", [
+    ("clear history", "clear_history"),
+])
+def test_misc_en_anglais(router, phrase, attendu):
+    assert route(router, phrase) == attendu, phrase
+
+
+@pytest.mark.parametrize("phrase,attendu", [
+    ("battery level", "batterie"),
+    ("free disk space", "espace_disque"),
+    ("what's my ip address", "adresse_ip"),
+    ("empty the recycle bin", "vider_corbeille"),
+])
+def test_infos_systeme_en_anglais(router, phrase, attendu):
+    assert route(router, phrase) == attendu, phrase
+
+
+@pytest.mark.parametrize("phrase,attendu", [
+    ("who is Marie Curie", "search_wikipedia"),
+    ("where is the Eiffel Tower", "search_maps"),
+    ("directions to Paris", "search_maps"),
+    ("search images of mountains", "search_images"),
+    ("show me photos of cats", "search_images"),
+])
+def test_search_en_anglais(router, phrase, attendu):
+    assert route(router, phrase) == attendu, phrase
+
+
 def test_calcul_en_anglais_donne_le_bon_resultat():
     from commands.calcul import en_expression, evaluer
 

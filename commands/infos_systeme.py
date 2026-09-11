@@ -14,11 +14,12 @@ from core.registry import command
     informatif=True,
     patterns=[r"(?:niveau|etat|combien)\s+(?:de\s+|d\s+)?batterie",
               r"^batterie$", r"(?:il\s+me\s+reste|reste)\s+combien\s+de\s+batterie",
-              r"(?:je\s+suis|suis\s+je)\s+charge"],
-    keywords=[["batterie"]],
+              r"(?:je\s+suis|suis\s+je)\s+charge",
+              r"(?:battery\s+level|how\s+much\s+battery)", r"^battery$"],
+    keywords=[["batterie"], ["battery"]],
     category="Informations",
     description="Connaître le niveau de batterie",
-    examples=["niveau de batterie"],
+    examples=["niveau de batterie", "battery level"],
     priority=92,
 )
 def batterie(ctx: CommandContext) -> Response:
@@ -48,11 +49,13 @@ def batterie(ctx: CommandContext) -> Response:
     informatif=True,
     patterns=[r"(?:espace|place)\s+(?:libre\s+)?(?:sur\s+le\s+)?disque",
               r"(?:combien|reste)\s+(?:de\s+)?(?:place|espace)",
-              r"^disque\s+dur$"],
-    keywords=[["espace", "disque"], ["place", "disque"]],
+              r"^disque\s+dur$",
+              r"(?:free\s+)?disk\s+space", r"how\s+much\s+(?:disk\s+)?space",
+              r"^hard\s+drive$"],
+    keywords=[["espace", "disque"], ["place", "disque"], ["disk", "space"]],
     category="Informations",
     description="Connaître l'espace disque disponible",
-    examples=["espace libre sur le disque"],
+    examples=["espace libre sur le disque", "free disk space"],
     priority=92,
 )
 def espace_disque(ctx: CommandContext) -> Response:
@@ -76,11 +79,12 @@ def espace_disque(ctx: CommandContext) -> Response:
     name="adresse_ip",
     informatif=True,
     patterns=[r"(?:quelle?\s+est\s+)?(?:mon|l)\s+adresse\s+ip",
-              r"^(?:adresse\s+)?ip$", r"(?:quelle?\s+est\s+)?mon\s+ip"],
-    keywords=[["adresse", "ip"]],
+              r"^(?:adresse\s+)?ip$", r"(?:quelle?\s+est\s+)?mon\s+ip",
+              r"(?:what\s+is|what\s+s)?\s*my\s+ip(?:\s+address)?", r"^ip\s+address$"],
+    keywords=[["adresse", "ip"], ["ip", "address"]],
     category="Informations",
     description="Donner l'adresse IP locale",
-    examples=["mon adresse IP"],
+    examples=["mon adresse IP", "what's my ip address"],
     priority=93,
 )
 def adresse_ip(ctx: CommandContext) -> Response:
@@ -105,11 +109,12 @@ def adresse_ip(ctx: CommandContext) -> Response:
 
 @command(
     name="vider_corbeille",
-    patterns=[r"(?:vide|vider|nettoie)\s+(?:la\s+)?corbeille"],
-    keywords=[["vide", "corbeille"]],
+    patterns=[r"(?:vide|vider|nettoie)\s+(?:la\s+)?corbeille",
+              r"empty\s+(?:the\s+)?(?:recycle\s+bin|trash)"],
+    keywords=[["vide", "corbeille"], ["empty", "trash"]],
     category="Système",
     description="Vider la corbeille (confirmation demandée)",
-    examples=["vide la corbeille"],
+    examples=["vide la corbeille", "empty the recycle bin"],
     priority=94,
 )
 def vider_corbeille(ctx: CommandContext) -> Response:

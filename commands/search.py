@@ -90,6 +90,7 @@ def ask_claude(ctx: CommandContext) -> Response:
         r"^" + SEARCH_VERBS + r"\s+(.+?)\s+sur\s+wikipedia$",
         r"^wikipedia\s+(.+)$",
         r"^(?:qui\s+est|qu\s+est\s+ce\s+que|qu\s+est\s+ce\s+qu|c\s+est\s+quoi|parle\s+moi\s+de|definition\s+de)\s+(.+)$",
+        r"^(?:who\s+is|what\s+is|tell\s+me\s+about|definition\s+of)\s+(.+)$",
     ],
     category="Recherche",
     description="Lire un résumé Wikipedia",
@@ -239,8 +240,8 @@ def search_google(ctx: CommandContext) -> Response:
 @command(
     name="search_images",
     patterns=[
-        r"^" + SEARCH_VERBS + r"\s+(?:des\s+|une\s+|les\s+)?(?:images?|photos?)\s+(?:de\s+|d\s+)?(.+)$",
-        r"^(?:montre|montrer)\s+(?:moi\s+)?(?:des\s+)?(?:images?|photos?)\s+(?:de\s+|d\s+)?(.+)$",
+        r"^" + SEARCH_VERBS + r"\s+(?:des\s+|une\s+|les\s+)?(?:images?|photos?)\s+(?:de\s+|d\s+|of\s+)?(.+)$",
+        r"^(?:montre|montrer|show)\s+(?:moi\s+|me\s+)?(?:des\s+)?(?:images?|photos?)\s+(?:de\s+|d\s+|of\s+)?(.+)$",
     ],
     category="Recherche",
     description="Rechercher des images",
@@ -261,6 +262,7 @@ def search_images(ctx: CommandContext) -> Response:
     patterns=[
         r"^(?:ou\s+est|ou\s+se\s+trouve|itineraire\s+(?:vers|pour)|localise|carte\s+de)\s+(.+)$",
         r"^" + SEARCH_VERBS + r"\s+(.+?)\s+sur\s+(?:google\s+)?maps$",
+        r"^(?:where\s+is|directions\s+to|locate)\s+(.+)$",
     ],
     category="Recherche",
     description="Localiser un lieu sur Google Maps",

@@ -50,7 +50,7 @@ def show_help(ctx: CommandContext) -> Response:
     patterns=[r"^(?:repete|repeter|refais|encore|again|recommence)\s*(?:la\s+derniere\s+commande)?$"],
     category="Divers",
     description="Répéter la dernière commande",
-    examples=["repete", "refais"],
+    examples=["repete", "refais", "again"],
     priority=95,
 )
 def repeat_last(ctx: CommandContext) -> Response:
@@ -72,7 +72,7 @@ def repeat_last(ctx: CommandContext) -> Response:
     keywords=[["historique"]],
     category="Divers",
     description="Voir les commandes demandées aujourd'hui",
-    examples=["qu est-ce que je t ai demande aujourd'hui", "historique"],
+    examples=["qu est-ce que je t ai demande aujourd'hui", "historique", "history"],
     priority=90,
 )
 def history(ctx: CommandContext) -> Response:
@@ -94,10 +94,11 @@ def history(ctx: CommandContext) -> Response:
 
 @command(
     name="clear_history",
-    patterns=[r"(?:efface|effacer|vide|supprime)\s+(?:l\s+)?historique"],
+    patterns=[r"(?:efface|effacer|vide|supprime)\s+(?:l\s+)?historique",
+              r"(?:clear|delete)\s+(?:the\s+)?history"],
     category="Divers",
     description="Effacer l'historique des commandes",
-    examples=["efface l'historique"],
+    examples=["efface l'historique", "clear history"],
     priority=93,
 )
 def clear_history(ctx: CommandContext) -> Response:
