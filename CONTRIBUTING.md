@@ -33,6 +33,39 @@ Practical notes, learned while retrofitting the existing commands:
   alongside the others, asserting it routes to the same command name as its
   French equivalent.
 
+## And it must ANSWER in the language it was asked in
+
+Routing is only half of it. A command that understands "note that ..." and
+replies "C'est noté" is still wrong. Build every reply through the context,
+never with a bare `Response`:
+
+```python
+return ctx.reponse("C'est noté : " + contenu, "Noted: " + contenu)
+return ctx.erreur("Je ne connais pas ce site.", "I don't know that site.")
+if not ctx.confirm("Vider la corbeille ?", "Empty the recycle bin?"):
+    ...
+```
+
+`ctx.lang` holds `"fr"` or `"en"`, decided by `text_utils.detect_language`
+from marker words in the sentence. Read it directly when a reply is built
+in pieces (a list, a sentence assembled in a loop) rather than in one call.
+
+- **Write the English side, don't translate it.** A joke, a greeting, a
+  unit: say what that language actually says. English reads the clock on
+  12 hours with am/pm, French on 24. "1920 by 1080", not "1920 sur 1080".
+- **Only three exceptions may stay in one language**, and each is content
+  rather than a reply: what Claude or an AI provider answered, what the
+  clipboard contains, and names that come from `config.yaml` (application
+  and site names are the user's own words).
+- **A new marker word costs nothing but must be exclusive.** Add it to
+  `_MARQUEURS_ANGLAIS` only if it cannot be a French word after
+  normalization — "second", "note", "volume", "timer", "video", "series"
+  are shared and are deliberately absent. A sentence with no marker at all
+  falls back to French.
+- **Test it** in `tests/test_reponses_anglaises.py`: an exact text if the
+  machine doesn't change it, otherwise add the phrase to the net that
+  refuses any French-only word in a reply to an English sentence.
+
 ## Running the tests
 
 ```bash
