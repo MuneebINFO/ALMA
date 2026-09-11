@@ -372,6 +372,15 @@ target machine).
 > someone else — and you would then need to sign it, or turn Smart App Control
 > off (**note: re-enabling it requires reinstalling Windows**).
 
+### Publishing to the Microsoft Store
+
+The signing problem above goes away on the Store: Microsoft signs the
+package at certification, so a Store install never hits Smart App Control.
+`packaging/msix/` packages `Alma.exe` as a Desktop Bridge `.msix` — see
+[`packaging/msix/README.md`](packaging/msix/README.md) for the full walkthrough
+(Partner Center setup, build, local test install, submission checklist) and
+[`PRIVACY.md`](PRIVACY.md) for what the free version reads and sends where.
+
 ---
 
 ## What ALMA can do
@@ -1072,6 +1081,16 @@ alma/
 ├── make_icon.py            generates assets/alma.ico
 ├── config.py               configuration (defaults built in)
 ├── config.yaml.example     documented configuration to copy
+├── PRIVACY.md              what the free version reads and sends where
+│
+├── packaging/
+│   └── msix/                Microsoft Store packaging (Desktop Bridge)
+│       ├── README.md              Partner Center walkthrough + checklist
+│       ├── Package.appxmanifest.template
+│       ├── identity.example.json  copy to identity.local.json (not versioned)
+│       ├── make_store_assets.py   generates the Store tiles from alma.ico's design
+│       ├── render_manifest.py     fills the manifest from your identity
+│       └── build_msix.ps1         build_exe.py → assets → manifest → .msix
 │
 ├── core/
 │   ├── assistant.py        wires everything together; single handle() entry point

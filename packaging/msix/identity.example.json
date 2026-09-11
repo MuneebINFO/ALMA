@@ -1,0 +1,18 @@
+{
+  "_comment": "Copiez ce fichier en identity.local.json (jamais versionne -- il contient votre identite Partner Center) et remplissez-le avec VOS valeurs reelles. Voir packaging/msix/README.md pour savoir ou les trouver.",
+
+  "package_name": "VotrePseudoPartnerCenter.ALMA",
+  "_package_name_comment": "Partner Center -> votre appli -> Product management -> App identity -> « Package/Identity/Name ». Reserve automatiquement quand vous reservez le nom de l'appli.",
+
+  "publisher": "CN=00000000-0000-0000-0000-000000000000",
+  "_publisher_comment": "Meme page, champ « Package/Identity/Publisher ». Copiez-le tel quel, guillemets et « CN= » compris.",
+
+  "publisher_display_name": "Votre nom ou celui de votre societe",
+  "_publisher_display_name_comment": "Ce que les utilisateurs verront comme éditeur sur la fiche Store.",
+
+  "app_display_name": "ALMA",
+  "app_description": "Assistant vocal et texte 100% local pour Windows, sans IA payante par defaut.",
+
+  "version": "1.0.0.0",
+  "_version_comment": "Incrementez le 3e chiffre (1.0.1.0, 1.0.2.0...) a chaque nouvelle soumission -- le Store refuse un package deja soumis avec le meme numero."
+}

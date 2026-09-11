@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Modele de manifeste MSIX pour ALMA, en "Desktop Bridge" : une application
+  Win32 classique (Alma.exe, construit par build_exe.py) empaquetee pour le
+  Store, PAS une application UWP en bac a sable. C'est ce que fait
+  runFullTrust : ALMA tourne avec les memes droits qu'une installation
+  normale -- exactement ce dont elle a besoin pour piloter d'autres fenetres
+  (UI Automation, clavier/souris), sans passer par la capacite restreinte
+  inputInjectionBrokered, reservee a des scenarios bien plus etroits
+  (authentification bancaire, applis d'entreprise) et a une revue plus lourde.
+
+  Ce fichier est un MODELE : render_manifest.py le remplit a partir de
+  identity.local.json (jamais versionne -- ce sont vos identifiants
+  personnels reserves sur Partner Center) et ecrit le resultat dans
+  PackageLayout/Package.appxmanifest.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="__PACKAGE_NAME__"
+    Publisher="__PUBLISHER__"
+    Version="__VERSION__"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>__APP_DISPLAY_NAME__</DisplayName>
+    <PublisherDisplayName>__PUBLISHER_DISPLAY_NAME__</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Resources>
+    <Resource Language="fr-fr" />
+  </Resources>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Capabilities>
+    <!-- Desktop Bridge : ALMA est une appli Win32 a part entiere, pas une
+         appli en bac a sable -- voir la note en tete de fichier. -->
+    <rescap:Capability Name="runFullTrust" />
+    <!-- Capacite ordinaire (pas de revue Store particuliere) : le mode voix
+         a besoin du micro. -->
+    <DeviceCapability Name="microphone" />
+  </Capabilities>
+
+  <Applications>
+    <Application Id="Alma" Executable="Alma.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="__APP_DISPLAY_NAME__"
+        Description="__APP_DESCRIPTION__"
+        BackgroundColor="#0A0E17"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\Square310x150Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#0A0E17" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+</Package>

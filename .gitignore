@@ -26,6 +26,15 @@ build/
 dist/
 *.spec
 
+# --- Paquet MSIX (Store) ----------------------------------------------------
+# identity.local.json contient votre identite Partner Center (personnelle,
+# jamais partagee) ; PackageLayout/ et *.msix sont regeneres par
+# build_msix.ps1 ; le .pfx est un certificat de TEST local uniquement.
+packaging/msix/identity.local.json
+packaging/msix/PackageLayout/
+packaging/msix/*.msix
+packaging/msix/*.pfx
+
 # Raccourci Windows : il contient des chemins absolus propres a chaque
 # machine, il doit etre regenere avec « python creer_raccourci.py ».
 Alma.lnk

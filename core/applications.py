@@ -79,7 +79,12 @@ def raccourcis_du_menu() -> dict:
 
 
 def _chemin_cache() -> Path:
-    return Path(__file__).resolve().parent.parent / "data" / "applications_installees.json"
+    # Le dossier de donnees de l utilisateur (config.DATA_DIR), pas un chemin
+    # relatif au module : une fois Alma empaquetee (--onefile, MSIX...), ce
+    # dernier pointerait dans un dossier temporaire ou en lecture seule.
+    from config import DATA_DIR
+
+    return DATA_DIR / "applications_installees.json"
 
 
 def _lire_cache() -> dict | None:

@@ -10,9 +10,32 @@ from __future__ import annotations
 
 import copy
 import os
+import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+
+def _dossier_utilisateur() -> Path:
+    """
+    La ou Alma lit et ecrit ses reglages et ses donnees.
+
+    En developpement (lancee depuis les sources), c est le dossier du projet
+    -- pratique, tout reste au meme endroit. Une fois empaquetee (Alma.exe,
+    onefile PyInstaller, ou le MSIX du Store), le dossier de l executable
+    n est NI stable NI inscriptible : --onefile l extrait dans un dossier
+    temporaire different a chaque lancement (config.yaml et l historique y
+    seraient perdus a chaque redemarrage), et le Store installe l appli en
+    lecture seule. On ecrit alors dans le dossier de donnees standard de
+    l utilisateur, comme le fait toute application Windows -- pour un
+    Desktop Bridge (MSIX), Windows redirige %LOCALAPPDATA% vers le stockage
+    propre a l appli automatiquement, sans rien de plus a faire ici.
+    """
+    if getattr(sys, "frozen", False):
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home())
+        return Path(base) / "Alma"
+    return Path(__file__).resolve().parent
+
+
+ROOT = _dossier_utilisateur()
 DATA_DIR = ROOT / "data"
 SCREENSHOT_DIR = ROOT / "screenshots"
 DEFAULT_CONFIG_FILE = ROOT / "config.yaml"
@@ -392,7 +415,10 @@ def load_config(path: str | Path | None = None) -> Config:
         str(prefixe).strip().lower() + " " + mot for prefixe in prefixes
     ]
 
-    DATA_DIR.mkdir(exist_ok=True)
+    # parents=True : quand ROOT est %LOCALAPPDATA%\Alma (voir
+    # _dossier_utilisateur), ce dossier lui-meme n existe pas encore au
+    # tout premier lancement.
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     return Config(data, source)
 
 
