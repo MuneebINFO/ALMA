@@ -12,11 +12,17 @@ from core.context import CommandContext, Response
 from core.registry import command
 
 
-def _raccourci(ctx: CommandContext, libelle: str, *touches) -> Response:
-    """Envoie un raccourci et repond sans commenter l evidence."""
+def _raccourci(ctx: CommandContext, libelle: str, label: str, *touches) -> Response:
+    """
+    Envoie un raccourci et repond sans commenter l evidence.
+
+    `libelle` est la confirmation en francais, `label` la meme en anglais :
+    on repond dans la langue ou l on a ete sollicite.
+    """
     if win_utils.raccourci(*touches):
-        return Response(text=libelle, speak=False)
-    return Response.error("Je n'ai pas pu envoyer ce raccourci.")
+        return ctx.reponse(libelle, label, speak=False)
+    return ctx.erreur("Je n'ai pas pu envoyer ce raccourci.",
+                      "I couldn't send that shortcut.")
 
 
 @command(
@@ -32,7 +38,7 @@ def _raccourci(ctx: CommandContext, libelle: str, *touches) -> Response:
 )
 def copier(ctx: CommandContext) -> Response:
     """Ctrl+C sur l'application active."""
-    return _raccourci(ctx, "Copié.", "ctrl", "c")
+    return _raccourci(ctx, "Copié.", "Copied.", "ctrl", "c")
 
 
 @command(
@@ -48,7 +54,7 @@ def copier(ctx: CommandContext) -> Response:
 )
 def coller(ctx: CommandContext) -> Response:
     """Ctrl+V sur l'application active."""
-    return _raccourci(ctx, "Collé.", "ctrl", "v")
+    return _raccourci(ctx, "Collé.", "Pasted.", "ctrl", "v")
 
 
 @command(
@@ -63,7 +69,7 @@ def coller(ctx: CommandContext) -> Response:
 )
 def couper_selection(ctx: CommandContext) -> Response:
     """Ctrl+X. Prioritaire sur « coupe le son », qui vise le volume."""
-    return _raccourci(ctx, "Coupé.", "ctrl", "x")
+    return _raccourci(ctx, "Coupé.", "Cut.", "ctrl", "x")
 
 
 @command(
@@ -79,7 +85,7 @@ def couper_selection(ctx: CommandContext) -> Response:
 )
 def annuler(ctx: CommandContext) -> Response:
     """Ctrl+Z."""
-    return _raccourci(ctx, "Annulé.", "ctrl", "z")
+    return _raccourci(ctx, "Annulé.", "Undone.", "ctrl", "z")
 
 
 @command(
@@ -94,7 +100,7 @@ def annuler(ctx: CommandContext) -> Response:
 )
 def refaire(ctx: CommandContext) -> Response:
     """Ctrl+Y."""
-    return _raccourci(ctx, "Rétabli.", "ctrl", "y")
+    return _raccourci(ctx, "Rétabli.", "Redone.", "ctrl", "y")
 
 
 @command(
@@ -110,7 +116,7 @@ def refaire(ctx: CommandContext) -> Response:
 )
 def tout_selectionner(ctx: CommandContext) -> Response:
     """Ctrl+A."""
-    return _raccourci(ctx, "Tout sélectionné.", "ctrl", "a")
+    return _raccourci(ctx, "Tout sélectionné.", "All selected.", "ctrl", "a")
 
 
 @command(
@@ -125,7 +131,7 @@ def tout_selectionner(ctx: CommandContext) -> Response:
 )
 def enregistrer(ctx: CommandContext) -> Response:
     """Ctrl+S."""
-    return _raccourci(ctx, "Enregistré.", "ctrl", "s")
+    return _raccourci(ctx, "Enregistré.", "Saved.", "ctrl", "s")
 
 
 @command(
@@ -140,7 +146,7 @@ def enregistrer(ctx: CommandContext) -> Response:
 )
 def imprimer(ctx: CommandContext) -> Response:
     """Ctrl+P."""
-    return _raccourci(ctx, "Fenêtre d'impression ouverte.", "ctrl", "p")
+    return _raccourci(ctx, "Fenêtre d'impression ouverte.", "Print dialog opened.", "ctrl", "p")
 
 
 @command(
@@ -157,15 +163,17 @@ def imprimer(ctx: CommandContext) -> Response:
 def rechercher_dans_page(ctx: CommandContext) -> Response:
     """Ctrl+F, puis saisit le terme s'il a été dicté."""
     if not win_utils.raccourci("ctrl", "f"):
-        return Response.error("Je n'ai pas pu ouvrir la recherche.")
+        return ctx.erreur("Je n'ai pas pu ouvrir la recherche.",
+                          "I couldn't open the search box.")
     terme = ctx.arg.strip() if ctx.match and ctx.match.lastindex else ""
     if terme:
         import time
 
         time.sleep(0.25)
         win_utils.type_text(terme)
-        return Response(text="Je cherche « " + terme + " » dans la page.", speak=False)
-    return Response(text="Recherche ouverte.", speak=False)
+        return ctx.reponse("Je cherche « " + terme + " » dans la page.",
+                           "Searching the page for \"" + terme + "\".", speak=False)
+    return ctx.reponse("Recherche ouverte.", "Search opened.", speak=False)
 
 
 @command(
@@ -181,10 +189,11 @@ def dicter(ctx: CommandContext) -> Response:
     """Saisit le texte dicté là où se trouve le curseur."""
     texte = ctx.arg.strip()
     if not texte:
-        return Response.error("Que dois-je écrire ?")
+        return ctx.erreur("Que dois-je écrire ?", "What should I write?")
     if win_utils.type_text(texte):
-        return Response(text="Écrit : " + texte, speak=False)
-    return Response.error("Je n'ai pas pu écrire ce texte.")
+        return ctx.reponse("Écrit : " + texte, "Written: " + texte, speak=False)
+    return ctx.erreur("Je n'ai pas pu écrire ce texte.",
+                      "I couldn't type that text.")
 
 
 @command(
@@ -198,7 +207,7 @@ def dicter(ctx: CommandContext) -> Response:
 )
 def valider(ctx: CommandContext) -> Response:
     """Touche Entrée."""
-    return _raccourci(ctx, "Validé.", "entree")
+    return _raccourci(ctx, "Validé.", "Confirmed.", "entree")
 
 
 @command(
@@ -212,4 +221,4 @@ def valider(ctx: CommandContext) -> Response:
 )
 def echapper(ctx: CommandContext) -> Response:
     """Touche Échap."""
-    return _raccourci(ctx, "Échap.", "echap")
+    return _raccourci(ctx, "Échap.", "Escape.", "echap")

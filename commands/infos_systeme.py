@@ -31,17 +31,22 @@ def batterie(ctx: CommandContext) -> Response:
     except Exception:
         etat = None
     if etat is None:
-        return Response.error("Je ne vois pas de batterie sur cette machine.")
+        return ctx.erreur("Je ne vois pas de batterie sur cette machine.",
+                          "I don't see a battery on this machine.")
 
-    niveau = int(round(etat.percent))
+    niveau = str(int(round(etat.percent)))
     if etat.power_plugged:
-        return Response(text="Batterie à " + str(niveau) + " pour cent, en charge.")
-    reste = ""
+        return ctx.reponse("Batterie à " + niveau + " pour cent, en charge.",
+                           "Battery at " + niveau + " percent, charging.")
+    reste, left = "", ""
     if etat.secsleft and etat.secsleft > 0:
         heures, minutes = divmod(int(etat.secsleft) // 60, 60)
         reste = ", environ " + (str(heures) + " heures " if heures else "") \
             + str(minutes) + " minutes d'autonomie"
-    return Response(text="Batterie à " + str(niveau) + " pour cent" + reste + ".")
+        left = ", about " + (str(heures) + " hours " if heures else "") \
+            + str(minutes) + " minutes left"
+    return ctx.reponse("Batterie à " + niveau + " pour cent" + reste + ".",
+                       "Battery at " + niveau + " percent" + left + ".")
 
 
 @command(
@@ -65,13 +70,16 @@ def espace_disque(ctx: CommandContext) -> Response:
 
         total, _utilise, libre = shutil.disk_usage("C:/")
     except Exception as exc:
-        return Response.error("Je n'ai pas pu lire le disque : " + str(exc))
-    libre_go = libre / (1024 ** 3)
-    total_go = total / (1024 ** 3)
-    pourcent = int(round(libre / total * 100))
-    return Response(
-        text="Il reste " + ("%.0f" % libre_go) + " gigaoctets libres sur "
-        + ("%.0f" % total_go) + ", soit " + str(pourcent) + " pour cent."
+        return ctx.erreur("Je n'ai pas pu lire le disque : " + str(exc),
+                          "I couldn't read the disk: " + str(exc))
+    libre_go = "%.0f" % (libre / (1024 ** 3))
+    total_go = "%.0f" % (total / (1024 ** 3))
+    pourcent = str(int(round(libre / total * 100)))
+    return ctx.reponse(
+        "Il reste " + libre_go + " gigaoctets libres sur " + total_go
+        + ", soit " + pourcent + " pour cent.",
+        libre_go + " gigabytes free out of " + total_go + ", that's "
+        + pourcent + " percent.",
     )
 
 
@@ -103,8 +111,10 @@ def adresse_ip(ctx: CommandContext) -> Response:
         try:
             adresse = socket.gethostbyname(socket.gethostname())
         except Exception:
-            return Response.error("Je n'ai pas pu déterminer l'adresse IP.")
-    return Response(text="Votre adresse IP locale est " + adresse + ".")
+            return ctx.erreur("Je n'ai pas pu déterminer l'adresse IP.",
+                              "I couldn't determine the IP address.")
+    return ctx.reponse("Votre adresse IP locale est " + adresse + ".",
+                       "Your local IP address is " + adresse + ".")
 
 
 @command(
@@ -120,12 +130,14 @@ def adresse_ip(ctx: CommandContext) -> Response:
 def vider_corbeille(ctx: CommandContext) -> Response:
     """Suppression definitive : confirmation obligatoire."""
     if not ctx.confirm("Vider définitivement la corbeille ?"):
-        return Response(text="Corbeille conservée.")
+        return ctx.reponse("Corbeille conservée.", "Recycle bin left alone.")
     ok, sortie = win_utils.run_command([
         "powershell", "-NoProfile", "-Command", "Clear-RecycleBin -Force -ErrorAction Stop"
     ])
     if ok:
-        return Response(text="Corbeille vidée.")
+        return ctx.reponse("Corbeille vidée.", "Recycle bin emptied.")
     if "vide" in sortie.lower() or "empty" in sortie.lower():
-        return Response(text="La corbeille était déjà vide.")
-    return Response.error("Je n'ai pas pu vider la corbeille : " + sortie[:80])
+        return ctx.reponse("La corbeille était déjà vide.",
+                           "The recycle bin was already empty.")
+    return ctx.erreur("Je n'ai pas pu vider la corbeille : " + sortie[:80],
+                      "I couldn't empty the recycle bin: " + sortie[:80])
