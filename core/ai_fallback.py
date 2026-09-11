@@ -41,6 +41,14 @@ SUGGESTIONS = [
     "Pardon ?",
 ]
 
+# Les memes, pour qui parle anglais. Ce ne sont pas des traductions mot a
+# mot : ce sont les formules courtes qu on emploie dans cette langue.
+SUGGESTIONS_EN = [
+    "I didn't catch that.",
+    "Sorry, I didn't get that.",
+    "Pardon?",
+]
+
 
 class NullProvider:
     """Provider par defaut : aucune IA, aucun reseau, aucun sous-processus."""
@@ -138,7 +146,11 @@ def handle_unmatched(utterance: Utterance, assistant=None) -> Response:
             return deduit
 
     if not delegation_automatique(config, utterance.raw):
-        return Response(text=random.choice(SUGGESTIONS), ok=False)
+        langue = getattr(utterance, "lang", "fr")
+        return Response(
+            text=random.choice(SUGGESTIONS_EN if langue == "en" else SUGGESTIONS),
+            ok=False,
+        )
 
     # ok=False signale « je n ai pas compris » : c est vrai tant qu aucun
     # provider ne repond, faux des qu un provider a REPONDU quelque chose.

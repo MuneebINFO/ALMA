@@ -46,17 +46,25 @@ def _fenetre_de_lecture(ctx: CommandContext):
     return (fenetres[0] if fenetres else None), index
 
 
-def _rien_ne_joue(index: int) -> Response:
-    return Response.error(
-        "Rien ne joue sur l'écran " + str(index) + " : il n'y a pas de volume à régler."
+def _rien_ne_joue(ctx: CommandContext, index: int) -> Response:
+    return ctx.erreur(
+        "Rien ne joue sur l'écran " + str(index) + " : il n'y a pas de volume à régler.",
+        "Nothing is playing on screen " + str(index) + ": there is no volume to set.",
     )
 
 
-def _pas_de_curseur() -> Response:
-    return Response.error(
+def _pas_de_curseur(ctx: CommandContext) -> Response:
+    return ctx.erreur(
         "Je n'ai pas trouvé de réglage de volume dans ce lecteur. "
-        "Vous pouvez régler le volume de l'ordinateur à la place."
+        "Vous pouvez régler le volume de l'ordinateur à la place.",
+        "I couldn't find a volume slider in that player. "
+        "You can set the computer volume instead.",
     )
+
+
+def _pour_cent(ctx: CommandContext, niveau: int) -> tuple[str, str]:
+    """« 30 pour cent » / "30 percent", une seule fois pour tout le module."""
+    return (str(niveau) + " pour cent", str(niveau) + " percent")
 
 
 @command(
@@ -82,18 +90,20 @@ def volume_media_set(ctx: CommandContext) -> Response:
 
     fenetre, index = _fenetre_de_lecture(ctx)
     if fenetre is None:
-        return _rien_ne_joue(index)
+        return _rien_ne_joue(ctx, index)
     cible = max(0, min(100, int(ctx.arg or 50)))
     niveau = player_volume.regler(fenetre, cible)
     if niveau is None:
-        return _pas_de_curseur()
+        return _pas_de_curseur(ctx)
+    fr, en = _pour_cent(ctx, niveau)
     if abs(niveau - cible) > 10:
-        return Response.error(
-            "Je n'ai pas pu descendre plus bas que " + str(niveau) + " pour cent."
-            if niveau > cible else
-            "Je n'ai pas pu monter plus haut que " + str(niveau) + " pour cent."
-        )
-    return Response(text="Volume de la vidéo à " + str(niveau) + " pour cent.")
+        if niveau > cible:
+            return ctx.erreur("Je n'ai pas pu descendre plus bas que " + fr + ".",
+                              "I couldn't go lower than " + en + ".")
+        return ctx.erreur("Je n'ai pas pu monter plus haut que " + fr + ".",
+                          "I couldn't go higher than " + en + ".")
+    return ctx.reponse("Volume de la vidéo à " + fr + ".",
+                       "Video volume at " + en + ".")
 
 
 @command(
@@ -143,11 +153,13 @@ def _ajuster_volume_media(ctx: CommandContext, delta: int) -> Response:
 
     fenetre, index = _fenetre_de_lecture(ctx)
     if fenetre is None:
-        return _rien_ne_joue(index)
+        return _rien_ne_joue(ctx, index)
     niveau = player_volume.ajuster(fenetre, delta)
     if niveau is None:
-        return _pas_de_curseur()
-    return Response(text="Volume de la vidéo à " + str(niveau) + " pour cent.")
+        return _pas_de_curseur(ctx)
+    fr, en = _pour_cent(ctx, niveau)
+    return ctx.reponse("Volume de la vidéo à " + fr + ".",
+                       "Video volume at " + en + ".")
 
 
 @command(
@@ -167,10 +179,12 @@ def volume_set(ctx: CommandContext) -> Response:
     """Regle le volume principal."""
     level = int(ctx.arg or 50)
     level = max(0, min(100, level))
+    fr, en = _pour_cent(ctx, level)
     if win_utils.set_volume(level):
-        return Response(text="Volume réglé à " + str(level) + " pour cent.")
-    return Response.error(
-        "Je n'ai pas pu réglér le volume. Installez pycaw (pip install -r requirements.txt)."
+        return ctx.reponse("Volume réglé à " + fr + ".", "Volume set to " + en + ".")
+    return ctx.erreur(
+        "Je n'ai pas pu réglér le volume. Installez pycaw (pip install -r requirements.txt).",
+        "I couldn't set the volume. Install pycaw (pip install -r requirements.txt).",
     )
 
 
@@ -190,8 +204,9 @@ def volume_up(ctx: CommandContext) -> Response:
     """Augmente le volume de 10 points."""
     new_level = win_utils.change_volume(10)
     if new_level is None:
-        return Response(text="J'augmente le volume.")
-    return Response(text="Volume à " + str(new_level) + " pour cent.")
+        return ctx.reponse("J'augmente le volume.", "Turning the volume up.")
+    fr, en = _pour_cent(ctx, new_level)
+    return ctx.reponse("Volume à " + fr + ".", "Volume at " + en + ".")
 
 
 @command(
@@ -209,8 +224,9 @@ def volume_down(ctx: CommandContext) -> Response:
     """Diminue le volume de 10 points."""
     new_level = win_utils.change_volume(-10)
     if new_level is None:
-        return Response(text="Je baisse le volume.")
-    return Response(text="Volume à " + str(new_level) + " pour cent.")
+        return ctx.reponse("Je baisse le volume.", "Turning the volume down.")
+    fr, en = _pour_cent(ctx, new_level)
+    return ctx.reponse("Volume à " + fr + ".", "Volume at " + en + ".")
 
 
 @command(
@@ -227,8 +243,8 @@ def volume_down(ctx: CommandContext) -> Response:
 def volume_mute(ctx: CommandContext) -> Response:
     """Coupe le son."""
     if win_utils.set_mute(True):
-        return Response(text="Son coupé.")
-    return Response.error("Je n'ai pas pu couper le son.")
+        return ctx.reponse("Son coupé.", "Sound muted.")
+    return ctx.erreur("Je n'ai pas pu couper le son.", "I couldn't mute the sound.")
 
 
 @command(
@@ -244,8 +260,9 @@ def volume_mute(ctx: CommandContext) -> Response:
 def volume_unmute(ctx: CommandContext) -> Response:
     """Retablit le son."""
     if win_utils.set_mute(False):
-        return Response(text="Son rétabli.")
-    return Response.error("Je n'ai pas pu rétablir le son.")
+        return ctx.reponse("Son rétabli.", "Sound restored.")
+    return ctx.erreur("Je n'ai pas pu rétablir le son.",
+                      "I couldn't restore the sound.")
 
 
 @command(
@@ -262,10 +279,12 @@ def volume_status(ctx: CommandContext) -> Response:
     """Indique le niveau de volume actuel."""
     level = win_utils.get_volume()
     if level is None:
-        return Response.error("Je ne peux pas lire le volume (pycaw non disponible).")
+        return ctx.erreur("Je ne peux pas lire le volume (pycaw non disponible).",
+                          "I can't read the volume (pycaw is not available).")
     muted = win_utils.is_muted()
-    suffix = " (son coupe)" if muted else ""
-    return Response(text="Le volume est à " + str(level) + " pour cent" + suffix + ".")
+    fr, en = _pour_cent(ctx, level)
+    return ctx.reponse("Le volume est à " + fr + (" (son coupe)" if muted else "") + ".",
+                       "The volume is at " + en + (" (muted)" if muted else "") + ".")
 
 
 @command(
@@ -283,10 +302,13 @@ def volume_status(ctx: CommandContext) -> Response:
 def brightness_set(ctx: CommandContext) -> Response:
     """Regle la luminosité de l'écran."""
     level = max(0, min(100, int(ctx.arg or 50)))
+    fr, en = _pour_cent(ctx, level)
     if win_utils.set_brightness(level):
-        return Response(text="Luminosité réglée à " + str(level) + " pour cent.")
-    return Response.error(
-        "Luminosité non modifiable sur cet ecran (fréquent sur les écrans externes)."
+        return ctx.reponse("Luminosité réglée à " + fr + ".",
+                           "Brightness set to " + en + ".")
+    return ctx.erreur(
+        "Luminosité non modifiable sur cet ecran (fréquent sur les écrans externes).",
+        "Brightness can't be changed on this screen (common on external monitors).",
     )
 
 
@@ -303,13 +325,16 @@ def brightness_change(ctx: CommandContext) -> Response:
     """Ajuste la luminosité de 10 points."""
     current = win_utils.get_brightness()
     if current is None:
-        return Response.error("Je ne peux pas lire la luminosité de cet ecran.")
+        return ctx.erreur("Je ne peux pas lire la luminosité de cet ecran.",
+                          "I can't read this screen's brightness.")
     down = any(text_utils.fuzzy_in(word, ctx.tokens)
               for word in ("baisse", "diminue", "reduis", "decrease", "lower", "down"))
     target = max(0, min(100, current + (-10 if down else 10)))
+    fr, en = _pour_cent(ctx, target)
     if win_utils.set_brightness(target):
-        return Response(text="Luminosité à " + str(target) + " pour cent.")
-    return Response.error("Luminosité non modifiable sur cet ecran.")
+        return ctx.reponse("Luminosité à " + fr + ".", "Brightness at " + en + ".")
+    return ctx.erreur("Luminosité non modifiable sur cet ecran.",
+                      "Brightness can't be changed on this screen.")
 
 
 @command(
@@ -332,8 +357,10 @@ def screenshot(ctx: CommandContext) -> Response:
     if ok:
         from pathlib import Path
 
-        return Response(text="Capture enregistrée : " + Path(detail).name)
-    return Response.error("Capture impossible : " + detail)
+        return ctx.reponse("Capture enregistrée : " + Path(detail).name,
+                           "Screenshot saved: " + Path(detail).name)
+    return ctx.erreur("Capture impossible : " + detail,
+                      "Screenshot failed: " + detail)
 
 
 @command(
@@ -350,8 +377,9 @@ def screenshot(ctx: CommandContext) -> Response:
 def lock_session(ctx: CommandContext) -> Response:
     """Verrouille la session (action non destructrice, sans confirmation)."""
     if win_utils.lock_workstation():
-        return Response(text="Session verrouillée.", speak=False)
-    return Response.error("Je n'ai pas pu verrouiller la session.")
+        return ctx.reponse("Session verrouillée.", "Session locked.", speak=False)
+    return ctx.erreur("Je n'ai pas pu verrouiller la session.",
+                      "I couldn't lock the session.")
 
 
 @command(
@@ -366,12 +394,14 @@ def lock_session(ctx: CommandContext) -> Response:
 )
 def sleep_pc(ctx: CommandContext) -> Response:
     """Met la machine en veille apres confirmation."""
-    if not ctx.confirm("Voulez-vous vraiment mettre l'ordinateur en veille ?"):
-        return Response(text="Mise en veille annulée.")
+    if not ctx.confirm("Voulez-vous vraiment mettre l'ordinateur en veille ?",
+                       "Do you really want to put the computer to sleep?"):
+        return ctx.reponse("Mise en veille annulée.", "Sleep cancelled.")
     ok, out = win_utils.run_command(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])
     if ok:
-        return Response(text="Mise en veille.", speak=False)
-    return Response.error("Mise en veille impossible : " + out)
+        return ctx.reponse("Mise en veille.", "Going to sleep.", speak=False)
+    return ctx.erreur("Mise en veille impossible : " + out,
+                      "Sleep failed: " + out)
 
 
 @command(
@@ -387,14 +417,16 @@ def sleep_pc(ctx: CommandContext) -> Response:
 )
 def shutdown_pc(ctx: CommandContext) -> Response:
     """Eteint la machine apres confirmation, avec 30 secondes de delai."""
-    if not ctx.confirm("ATTENTION : voulez-vous vraiment eteindre l'ordinateur ?"):
-        return Response(text="Extinction annulée.")
+    if not ctx.confirm("ATTENTION : voulez-vous vraiment eteindre l'ordinateur ?",
+                       "WARNING: do you really want to shut the computer down?"):
+        return ctx.reponse("Extinction annulée.", "Shutdown cancelled.")
     ok, out = win_utils.run_command(["shutdown", "/s", "/t", "30"])
     if ok:
-        return Response(
-            text="Extinction dans 30 secondes. Tapez « annule l'extinction » pour l interrompre."
+        return ctx.reponse(
+            "Extinction dans 30 secondes. Tapez « annule l'extinction » pour l interrompre.",
+            "Shutting down in 30 seconds. Type \"cancel the shutdown\" to stop it.",
         )
-    return Response.error("Extinction impossible : " + out)
+    return ctx.erreur("Extinction impossible : " + out, "Shutdown failed: " + out)
 
 
 @command(
@@ -409,14 +441,16 @@ def shutdown_pc(ctx: CommandContext) -> Response:
 )
 def restart_pc(ctx: CommandContext) -> Response:
     """Redemarre la machine apres confirmation, avec 30 secondes de delai."""
-    if not ctx.confirm("ATTENTION : voulez-vous vraiment redemarrer l'ordinateur ?"):
-        return Response(text="Redémarrage annulé.")
+    if not ctx.confirm("ATTENTION : voulez-vous vraiment redemarrer l'ordinateur ?",
+                       "WARNING: do you really want to restart the computer?"):
+        return ctx.reponse("Redémarrage annulé.", "Restart cancelled.")
     ok, out = win_utils.run_command(["shutdown", "/r", "/t", "30"])
     if ok:
-        return Response(
-            text="Redémarrage dans 30 secondes. Tapez « annule l'extinction » pour l interrompre."
+        return ctx.reponse(
+            "Redémarrage dans 30 secondes. Tapez « annule l'extinction » pour l interrompre.",
+            "Restarting in 30 seconds. Type \"cancel the shutdown\" to stop it.",
         )
-    return Response.error("Redemarrage impossible : " + out)
+    return ctx.erreur("Redemarrage impossible : " + out, "Restart failed: " + out)
 
 
 @command(
@@ -432,8 +466,9 @@ def abort_shutdown(ctx: CommandContext) -> Response:
     """Interrompt un arret programme."""
     ok, out = win_utils.run_command(["shutdown", "/a"])
     if ok:
-        return Response(text="Extinction annulée.")
-    return Response.error("Aucune extinction n'était programmée.")
+        return ctx.reponse("Extinction annulée.", "Shutdown cancelled.")
+    return ctx.erreur("Aucune extinction n'était programmée.",
+                      "No shutdown was scheduled.")
 
 
 @command(
@@ -464,5 +499,6 @@ def open_folder(ctx: CommandContext) -> Response:
         path = target  # peut-être un chemin complet donne par l'utilisateur
     ok, resolved = win_utils.open_folder(path)
     if ok:
-        return Response(text="J'ouvre " + resolved + ".")
-    return Response.error("Dossier introuvable : " + resolved)
+        return ctx.reponse("J'ouvre " + resolved + ".", "Opening " + resolved + ".")
+    return ctx.erreur("Dossier introuvable : " + resolved,
+                      "Folder not found: " + resolved)

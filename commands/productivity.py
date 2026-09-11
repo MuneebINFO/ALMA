@@ -103,7 +103,8 @@ def delete_note(ctx: CommandContext) -> Response:
 )
 def clear_notes(ctx: CommandContext) -> Response:
     """Vide le carnet de notes apres confirmation."""
-    if not ctx.confirm("Supprimer definitivement toutes vos notes ?"):
+    if not ctx.confirm("Supprimer definitivement toutes vos notes ?",
+                       "Delete all your notes for good?"):
         return ctx.reponse("Vos notes sont conservées.", "Your notes are kept.")
     count = ctx.storage.notes.clear()
     return ctx.reponse(str(count) + " notes supprimées.",

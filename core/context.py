@@ -170,8 +170,15 @@ class CommandContext:
         """Message intermediaire (avant la reponse finale)."""
         self.assistant.emit(text)
 
-    def confirm(self, question: str) -> bool:
-        """Demande une confirmation explicite (actions destructrices)."""
+    def confirm(self, question: str, anglais: str = "") -> bool:
+        """
+        Demande une confirmation explicite (actions destructrices).
+
+        La question se pose dans la langue de la demande : `anglais` porte la
+        version anglaise, et vaut la francaise tant qu elle n est pas ecrite.
+        """
+        if self.lang == "en" and anglais:
+            return self.assistant.confirm(anglais)
         return self.assistant.confirm(question)
 
 

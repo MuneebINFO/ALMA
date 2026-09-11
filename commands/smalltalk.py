@@ -102,10 +102,17 @@ def thanks(ctx: CommandContext) -> Response:
 @command(
     name="who_are_you",
     informatif=True,
-    patterns=[r"(?:qui\s+es\s+tu|tu\s+es\s+qui|presente\s+toi|who\s+are\s+you|c\s+est\s+quoi\s+alma)"],
+    patterns=[
+        r"(?:qui\s+es\s+tu|tu\s+es\s+qui|presente\s+toi|who\s+are\s+you|"
+        r"c\s+est\s+quoi\s+alma)",
+        r"(?:comment\s+(?:tu\s+t\s+appelles|t\s+appelles\s+tu)|"
+        r"quel\s+est\s+ton\s+nom)",
+        r"what\s+(?:is\s+|s\s+)?your\s+name",
+        r"(?:introduce\s+yourself|tell\s+me\s+about\s+yourself)",
+    ],
     category="Conversation",
     description="Se présenter",
-    examples=["qui es-tu"],
+    examples=["qui es-tu", "who are you", "what's your name"],
     priority=92,
 )
 def who_are_you(ctx: CommandContext) -> Response:

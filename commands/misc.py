@@ -109,7 +109,8 @@ def history(ctx: CommandContext) -> Response:
 )
 def clear_history(ctx: CommandContext) -> Response:
     """Efface l'historique apres confirmation."""
-    if not ctx.confirm("Effacer tout l'historique des commandes ?"):
+    if not ctx.confirm("Effacer tout l'historique des commandes ?",
+                       "Erase the whole command history?"):
         return ctx.reponse("Historique conservé.", "History kept.")
     count = str(ctx.storage.history.clear())
     return ctx.reponse("Historique effacé (" + count + " entrées).",

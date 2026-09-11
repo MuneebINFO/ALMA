@@ -147,7 +147,16 @@ _MARQUEURS_ANGLAIS = frozenset((
     "folder", "file", "clipboard", "desktop", "everything", "history",
     # Petits mots de direction et de lieu, tous absents du francais.
     "go", "home", "up", "down", "back", "out", "off", "to", "it",
-    "here", "there",
+    "here", "there", "left", "right",
+    # Ce qu on demande a lister, regler ou lancer. Meme regle que plus haut :
+    # rien de partage avec le francais (« liste », « musique », « annule »
+    # s ecrivent autrement ; « notes », « timer », « volume » sont exclus).
+    "list", "websites", "reminders", "timers", "music", "playing", "movie",
+    "picture", "browser", "computer", "help", "again", "everywhere",
+    "translate", "cancel", "add", "create", "press", "wait", "lower",
+    "raise", "increase", "decrease", "quit", "loud", "mouse", "keyboard",
+    "weather", "time", "temperature", "bye", "goodbye", "name",
+    "pictures", "pics", "anything", "nothing", "something",
 ))
 
 
