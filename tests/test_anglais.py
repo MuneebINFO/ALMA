@@ -192,3 +192,25 @@ def test_interaction_en_anglais(router, phrase, attendu):
 ])
 def test_clavier_en_anglais(router, phrase, attendu):
     assert route(router, phrase) == attendu, phrase
+
+
+# --------------------------------------------------------------------------
+# commands/calcul.py -- calcul, hasard
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("phrase,attendu", [
+    ("how much is 15 times 4", "calculer"),
+    ("what is 15 plus 4", "calculer"),
+    ("calculate 15 minus 4", "calculer"),
+    ("flip a coin", "pile_ou_face"),
+    ("roll a die", "lancer_de"),
+    ("random number between 1 and 100", "nombre_aleatoire"),
+])
+def test_calcul_en_anglais(router, phrase, attendu):
+    assert route(router, phrase) == attendu, phrase
+
+
+def test_calcul_en_anglais_donne_le_bon_resultat():
+    from commands.calcul import en_expression, evaluer
+
+    assert evaluer(en_expression("how much is 15 times 4")) == 60
+    assert evaluer(en_expression("15 divided by 3")) == 5.0

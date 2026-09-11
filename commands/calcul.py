@@ -26,6 +26,10 @@ OPERATEURS = (
     ("x", "*"),
     ("plus", "+"), ("moins", "-"), ("au carre", "**2"),
     ("plus que", "+"), ("plus de", "+"),
+    # Memes operateurs, en anglais. "plus" est deja partage entre les deux
+    # langues.
+    ("divided by", "/"), ("multiplied by", "*"), ("times", "*"),
+    ("minus", "-"), ("squared", "**2"),
 )
 
 NOMBRES = {
@@ -106,7 +110,8 @@ def formater(valeur) -> str:
 # Les mots qui trahissent une operation. Ils suffisent a tenter le calcul --
 # le guard tranche ensuite, en verifiant que la phrase s evalue vraiment.
 MOTS_OPERATION = (r"fois|plus|moins|divise\s+par|divisee\s+par|multiplie\s+par|"
-                  r"multipliee\s+par|au\s+carre|pourcent|pour\s+cent|x")
+                  r"multipliee\s+par|au\s+carre|pourcent|pour\s+cent|x|"
+                  r"times|divided\s+by|multiplied\s+by|minus|squared")
 
 
 def _est_un_calcul(ctx: CommandContext) -> bool:
@@ -135,13 +140,16 @@ def _est_un_calcul(ctx: CommandContext) -> bool:
         r"^(?:fais|faire|donne)\s+(?:moi\s+)?(?:un\s+)?calculs?\s*(?:de\s+|:\s*)?(.+)$",
         r"^calculs?\s+(?:de\s+)?(.+)$",
         r"^combien\s+(?:de\s+|font\s+|ca\s+)?(.+)$",
+        # « how much is 15 times 4 », « what's 15 times 4 », « calculate 15 times 4 »
+        r"^(?:how\s+much\s+is|what\s+is|what\s+s)\s+(.+)$",
+        r"^calculate\s+(.+)$",
         # L operation dictee seule : « 15 fois 4 ». Sans verbe, il ne reste que
         # les mots d operation pour la reconnaitre -- et le guard pour trancher.
         r"^((?:.*\s)?(?:" + MOTS_OPERATION + r")(?:\s.*)?)$",
     ],
     category="Informations",
     description="Faire un calcul",
-    examples=["combien font 15 fois 4"],
+    examples=["combien font 15 fois 4", "how much is 15 times 4"],
     priority=94,
 )
 def calculer(ctx: CommandContext) -> Response:
@@ -156,11 +164,12 @@ def calculer(ctx: CommandContext) -> Response:
 @command(
     name="pile_ou_face",
     informatif=True,
-    patterns=[r"(?:pile\s+ou\s+face|lance\s+(?:une\s+)?piece|tire\s+a\s+pile\s+ou\s+face)"],
-    keywords=[["pile", "face"]],
+    patterns=[r"(?:pile\s+ou\s+face|lance\s+(?:une\s+)?piece|tire\s+a\s+pile\s+ou\s+face)",
+              r"(?:heads\s+or\s+tails|flip\s+(?:a\s+)?coin)"],
+    keywords=[["pile", "face"], ["heads", "tails"]],
     category="Divers",
     description="Tirer à pile ou face",
-    examples=["pile ou face"],
+    examples=["pile ou face", "flip a coin"],
     priority=95,
 )
 def pile_ou_face(ctx: CommandContext) -> Response:
@@ -173,11 +182,13 @@ def pile_ou_face(ctx: CommandContext) -> Response:
     # « \b » en tete : sans lui, « balance de la musique » contient
     # « lance de » et declencherait un lancer de de.
     patterns=[r"\b(?:lance|jette|tire)\s+(?:un\s+|les\s+)?des?\b",
-              r"^(?:un\s+)?de\s+a\s+(\d+)\s+faces?$"],
-    keywords=[["lance", "de"]],
+              r"^(?:un\s+)?de\s+a\s+(\d+)\s+faces?$",
+              r"\b(?:roll|throw)\s+(?:a\s+|the\s+)?dice?\b",
+              r"^(\d+)[\s-]?sided\s+die$"],
+    keywords=[["lance", "de"], ["roll", "dice"]],
     category="Divers",
     description="Lancer un dé",
-    examples=["lance un dé"],
+    examples=["lance un dé", "roll a die"],
     priority=95,
 )
 def lancer_de(ctx: CommandContext) -> Response:
@@ -194,11 +205,13 @@ def lancer_de(ctx: CommandContext) -> Response:
     informatif=True,
     patterns=[r"(?:un\s+)?(?:nombre|chiffre)\s+(?:au\s+hasard|aleatoire)\s*"
               r"(?:entre\s+(\d+)\s+et\s+(\d+))?",
-              r"(?:tire|choisis|donne)\s+(?:moi\s+)?un\s+nombre\s+entre\s+(\d+)\s+et\s+(\d+)"],
-    keywords=[["nombre", "hasard"]],
+              r"(?:tire|choisis|donne)\s+(?:moi\s+)?un\s+nombre\s+entre\s+(\d+)\s+et\s+(\d+)",
+              r"(?:a\s+)?random\s+number\s*(?:between\s+(\d+)\s+and\s+(\d+))?",
+              r"(?:give|pick)\s+(?:me\s+)?a\s+number\s+between\s+(\d+)\s+and\s+(\d+)"],
+    keywords=[["nombre", "hasard"], ["random", "number"]],
     category="Divers",
     description="Tirer un nombre au hasard",
-    examples=["donne-moi un nombre entre 1 et 100"],
+    examples=["donne-moi un nombre entre 1 et 100", "random number between 1 and 100"],
     priority=95,
 )
 def nombre_aleatoire(ctx: CommandContext) -> Response:
