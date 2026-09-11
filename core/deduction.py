@@ -23,6 +23,7 @@ voulait bien quelque chose.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from core import text_utils
@@ -146,6 +147,17 @@ NOMBRES_MOTS = {
     "sept": 7, "septieme": 7,
     "huit": 8, "huitieme": 8,
     "neuf": 9, "neuvieme": 9,
+    # Memes nombres, en anglais -- ALMA comprend les deux langues partout,
+    # pas seulement dans les verbes des commandes.
+    "one": 1, "first": 1,
+    "two": 2,                        # "second" vaut deja 2 cote francais
+    "three": 3, "third": 3,
+    "four": 4, "fourth": 4,
+    "five": 5, "fifth": 5,
+    "sixth": 6,                      # "six" est deja partage entre les deux langues
+    "seven": 7, "seventh": 7,
+    "eight": 8, "eighth": 8,
+    "nine": 9, "ninth": 9,
 }
 
 # Transcriptions fautives constatees. Certaines de ces formes sont des mots
@@ -175,6 +187,9 @@ def nombre_entendu(mot: str, maximum: int = 9):
     mot = text_utils.normalize(mot or "").strip().lower()
     if not mot:
         return None
+    # Suffixe ordinal colle au chiffre : « 3e », « 3eme » (francais), « 3rd »,
+    # « 4th » (anglais). Un chiffre suivi de son suffixe reste un chiffre.
+    mot = re.sub(r"^(\d+)\s*(?:eme|e|st|nd|rd|th)$", r"\1", mot)
     if mot.isdigit():
         valeur = int(mot)
         return valeur if 1 <= valeur <= maximum else None

@@ -25,6 +25,7 @@ _FILLERS = (
     # « toutes les fenêtres », pas le nom de l'application.
     "tout", "toute", "toutes", "tous", "completement", "entierement",
     "definitivement", "partout",
+    "all", "completely", "entirely", "everywhere", "for", "good", "window",
     "s'il te plaît", "s il vous plait", "please",
 )
 
@@ -104,7 +105,8 @@ ECRAN_PAR_DEFAUT = 1
 
 # Mots qui relient le nom de l application a la mention d ecran, et qui ne
 # font donc partie ni de l un ni de l autre.
-LIAISONS_ECRAN = ("sur", "dans", "a", "vers", "l", "le", "la", "du", "de", "des")
+LIAISONS_ECRAN = ("sur", "dans", "a", "vers", "l", "le", "la", "du", "de", "des",
+                   "on", "in", "to", "the")
 
 
 def separer_ecran(demande: str) -> tuple:
@@ -253,7 +255,7 @@ def _joli(libelle: str) -> str:
     category="Applications",
     description="Ouvrir une application, au besoin sur un écran précis",
     examples=["ouvre Chrome", "lance la calculatrice",
-              "ouvre Visual Studio Code sur l'écran 1"],
+              "ouvre Visual Studio Code sur l'écran 1", "open Chrome"],
     priority=60,
     guard=_est_une_application,
 )
@@ -321,7 +323,8 @@ def _prefere_lapplication(config, nom: str) -> bool:
 
 
 VERBES_ALLER = (r"(?:va|vas|aller|bascule|basculer|passe|passer|affiche|afficher|"
-                r"montre|montrer|retourne|retourner|reviens|revenir)")
+                r"montre|montrer|retourne|retourner|reviens|revenir|"
+                r"go|switch|show|display|bring\s+up)")
 
 
 def _rang_de_fenetre(fenetre, cible: str, processus_attendu: str):
@@ -383,11 +386,11 @@ def _fenetre_de_lapplication(nom: str, config, ecran=None):
 
 @command(
     name="aller_sur_application",
-    patterns=[r"^" + VERBES_ALLER + r"\s+(?:moi\s+)?(?:sur|a|vers|dans)?\s*"
-              r"(?:l\s+|le\s+|la\s+|les\s+)?(.+)$"],
+    patterns=[r"^" + VERBES_ALLER + r"\s+(?:moi\s+)?(?:sur|a|vers|dans|to)?\s*"
+              r"(?:l\s+|le\s+|la\s+|les\s+|the\s+)?(.+)$"],
     category="Applications",
     description="Aller sur une application",
-    examples=["va sur Chrome", "affiche Spotify"],
+    examples=["va sur Chrome", "affiche Spotify", "switch to Chrome"],
     # Sous open_app et open_website : « va sur YouTube » reste un site, « va
     # sur l ecran 2 » reste un ecran. Ne restent ici que les applications.
     priority=58,
@@ -426,7 +429,8 @@ def aller_sur_application(ctx: CommandContext) -> Response:
 # « ferme tout Chrome », « ferme complètement Spotify », « tue Chrome » :
 # là, on veut bien fermer TOUTES les fenêtres, quitte à tuer le processus.
 _MOTS_TOUT = ("tout", "toute", "toutes", "tous", "completement", "entierement",
-              "partout", "definitivement")
+              "partout", "definitivement",
+              "all", "completely", "entirely", "everywhere", "for good")
 _VERBES_TUER = ("tue", "tuer", "kill")
 
 
@@ -475,7 +479,7 @@ def _fenetre_a_fermer(ctx: CommandContext, cible: str, processus: str,
     patterns=[r"^" + CLOSE_VERBS + r"\s+(.+)$"],
     category="Applications",
     description="Fermer une application ouverte",
-    examples=["ferme Chrome", "quitte Spotify"],
+    examples=["ferme Chrome", "quitte Spotify", "close Chrome"],
     priority=60,
     guard=_is_known_app,
 )

@@ -29,6 +29,11 @@ ORDINAUX = {
     "deuxieme": 2, "second": 2, "seconde": 2, "deux": 2, "2eme": 2,
     "troisieme": 3, "trois": 3, "3eme": 3,
     "quatrieme": 4, "quatre": 4,
+    # Memes ordinaux, en anglais.
+    "first": 1, "1st": 1,
+    "2nd": 2,                     # "second" est deja partage entre les deux langues
+    "third": 3, "3rd": 3,
+    "fourth": 4, "4th": 4,
 }
 
 VERBES_PAUSE = r"(?:pause|met[s]?\s+en\s+pause|mettre\s+en\s+pause|stoppe|stopper|arrete|arreter|coupe|couper|suspend|suspendre|freeze|gele)"
@@ -42,8 +47,9 @@ def music_folder(config) -> Path:
 
 
 # Les mots qui designent un ecran, et ceux qui s intercalent avant son numero.
-MOTS_ECRAN = ("ecran", "ecrans", "moniteur", "moniteurs", "affichage", "screen")
-MOTS_LIAISON = ("numero", "no", "l", "le", "la", "les", "sur", "est")
+MOTS_ECRAN = ("ecran", "ecrans", "moniteur", "moniteurs", "affichage", "screen", "monitor")
+MOTS_LIAISON = ("numero", "no", "l", "le", "la", "les", "sur", "est",
+                "number", "the", "on", "is")
 
 
 def nombre_voisin_d_un_ecran(tokens) -> int | None:
@@ -84,14 +90,15 @@ def numero_ecran(ctx: CommandContext) -> int | None:
     # Les reperes de position passent AVANT la deduction phonetique : dans
     # « ecran de droite », « de » est une preposition, pas le chiffre deux.
     ecrans = desktop.ecrans()
-    if any(text_utils.fuzzy_in(mot, tokens) for mot in ("droite", "droit")):
+    if any(text_utils.fuzzy_in(mot, tokens) for mot in ("droite", "droit", "right")):
         return len(ecrans) if ecrans else None
-    if text_utils.fuzzy_in("gauche", tokens):
+    if any(text_utils.fuzzy_in(mot, tokens) for mot in ("gauche", "left")):
         return 1
-    if any(text_utils.fuzzy_in(mot, tokens) for mot in ("principal", "principale")):
+    if any(text_utils.fuzzy_in(mot, tokens) for mot in ("principal", "principale", "main")):
         return 1
-    if text_utils.fuzzy_in("autre", tokens):
-        # « l autre ecran » : celui qui n affiche pas la fenetre active.
+    if any(text_utils.fuzzy_in(mot, tokens) for mot in ("autre", "other")):
+        # « l autre ecran » / "the other screen" : celui qui n affiche pas la
+        # fenetre active.
         return 2 if len(ecrans) > 1 else None
     return nombre_voisin_d_un_ecran(tokens)
 
