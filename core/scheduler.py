@@ -145,10 +145,19 @@ def parse_duration(tokens: list) -> timedelta | None:
         "minute": 60, "minutes": 60, "min": 60, "mn": 60,
         "heure": 3600, "heures": 3600, "h": 3600,
         "jour": 86400, "jours": 86400,
+        # Memes unites, en anglais.
+        "second": 1, "seconds": 1,
+        "mins": 60,
+        "hour": 3600, "hours": 3600, "hr": 3600, "hrs": 3600,
+        "day": 86400, "days": 86400,
     }
     words = {"une": 1, "un": 1, "deux": 2, "trois": 3, "quatre": 4, "cinq": 5,
              "six": 6, "sept": 7, "huit": 8, "neuf": 9, "dix": 10, "quinze": 15,
-             "vingt": 20, "trente": 30, "demi": 0.5}
+             "vingt": 20, "trente": 30, "demi": 0.5,
+             # Memes nombres, en anglais.
+             "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "seven": 7,
+             "eight": 8, "nine": 9, "ten": 10, "fifteen": 15, "twenty": 20,
+             "thirty": 30, "half": 0.5}
     total = 0.0
     found = False
     for index, token in enumerate(tokens):

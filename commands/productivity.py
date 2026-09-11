@@ -17,10 +17,13 @@ from core.scheduler import parse_duration
     patterns=[
         r"^(?:note|notes|noter)\s+(?:que|qu\s+il\s+faut|de|:)?\s*(.+)$",
         r"^(?:prends?|prendre|ajoute|ajouter|cree)\s+(?:une\s+)?notes?\s*(?::|que|de)?\s*(.+)$",
+        r"^note\s*(?:that|:)?\s*(.+)$",
+        r"^(?:take|add|create)\s+(?:a\s+)?notes?\s*(?::|that)?\s*(.+)$",
     ],
     category="Productivité",
     description="Prendre une note horodatée",
-    examples=["note que je dois rappeler ma banque demain"],
+    examples=["note que je dois rappeler ma banque demain",
+              "note that I need to call my bank tomorrow"],
     priority=85,
 )
 def add_note(ctx: CommandContext) -> Response:
@@ -39,11 +42,13 @@ def add_note(ctx: CommandContext) -> Response:
         r"(?:lis|lire|montre|affiche|liste|donne)\s*(?:moi)?\s*(?:mes|les)?\s*notes",
         r"^(?:mes\s+notes|notes)$",
         r"(?:qu\s+est\s+ce\s+que\s+j\s+ai\s+note)",
+        r"(?:read|show|list)\s*(?:me)?\s*(?:my\s+)?notes",
+        r"^my\s+notes$",
     ],
-    keywords=[["lis", "notes"], ["mes", "notes"]],
+    keywords=[["lis", "notes"], ["mes", "notes"], ["my", "notes"]],
     category="Productivité",
     description="Relire les notes enregistrées",
-    examples=["lis mes notes"],
+    examples=["lis mes notes", "read my notes"],
     priority=90,
 )
 def read_notes(ctx: CommandContext) -> Response:
@@ -65,10 +70,11 @@ def read_notes(ctx: CommandContext) -> Response:
 
 @command(
     name="delete_note",
-    patterns=[r"(?:supprime|supprimer|efface|effacer|retire)\s+(?:la\s+)?notes?\s*(?:numero\s*)?(\d+)"],
+    patterns=[r"(?:supprime|supprimer|efface|effacer|retire)\s+(?:la\s+)?notes?\s*(?:numero\s*)?(\d+)",
+              r"(?:delete|remove)\s+notes?\s*(?:number\s*|#\s*)?(\d+)"],
     category="Productivité",
     description="Supprimer une note par son numéro",
-    examples=["supprime la note 2"],
+    examples=["supprime la note 2", "delete note 2"],
     priority=92,
 )
 def delete_note(ctx: CommandContext) -> Response:
@@ -81,10 +87,11 @@ def delete_note(ctx: CommandContext) -> Response:
 
 @command(
     name="clear_notes",
-    patterns=[r"(?:supprime|efface|vide)\s+(?:toutes\s+)?(?:mes|les)\s+notes"],
+    patterns=[r"(?:supprime|efface|vide)\s+(?:toutes\s+)?(?:mes|les)\s+notes",
+              r"(?:delete|clear)\s+(?:all\s+)?(?:my\s+)?notes"],
     category="Productivité",
     description="Supprimer toutes les notes",
-    examples=["efface toutes mes notes"],
+    examples=["efface toutes mes notes", "clear all my notes"],
     priority=93,
 )
 def clear_notes(ctx: CommandContext) -> Response:
@@ -100,10 +107,13 @@ def clear_notes(ctx: CommandContext) -> Response:
     patterns=[
         r"^(?:rappelle|rappeler)\s*(?:moi)?\s+(?:dans|d\s+ici)\s+.+?\s+(?:de|que|d)\s+(.+)$",
         r"^(?:rappelle|rappeler)\s*(?:moi)?\s+(.+?)\s+dans\s+\d+.*$",
+        r"^remind\s+me\s+in\s+.+?\s+to\s+(.+)$",
+        r"^remind\s+me\s+to\s+(.+?)\s+in\s+\d+.*$",
     ],
     category="Productivité",
     description="Programmer un rappel (notification + son)",
-    examples=["rappelle-moi dans 10 minutes de sortir le gateau"],
+    examples=["rappelle-moi dans 10 minutes de sortir le gateau",
+              "remind me in 10 minutes to take out the cake"],
     priority=94,
 )
 def set_reminder(ctx: CommandContext) -> Response:
@@ -124,11 +134,13 @@ def set_reminder(ctx: CommandContext) -> Response:
     patterns=[
         r"(?:lance|lancer|demarre|met|mets|programme)\s+(?:un\s+)?(?:minuteur|timer|chrono|compte\s+a\s+rebours)",
         r"^(?:minuteur|timer)\s+(?:de\s+)?\d+",
+        r"(?:start|set)\s+(?:a\s+)?(?:timer|countdown)",
+        r"^timer\s+(?:for\s+)?\d+",
     ],
     keywords=[["minuteur"], ["timer"]],
     category="Productivité",
     description="Lancer un minuteur",
-    examples=["lance un minuteur de 5 minutes"],
+    examples=["lance un minuteur de 5 minutes", "start a timer for 5 minutes"],
     priority=94,
 )
 def set_timer(ctx: CommandContext) -> Response:
@@ -149,10 +161,12 @@ def set_timer(ctx: CommandContext) -> Response:
     patterns=[
         r"(?:liste|montre|affiche|quels?\s+sont)\s*(?:moi)?\s*(?:mes|les)\s+(?:rappels|minuteurs|alarmes)",
         r"^(?:mes\s+rappels|rappels)$",
+        r"(?:list|show)\s*(?:me)?\s*(?:my\s+)?(?:reminders|timers|alarms)",
+        r"^my\s+reminders$",
     ],
     category="Productivité",
     description="Lister les rappels en attente",
-    examples=["mes rappels"],
+    examples=["mes rappels", "my reminders"],
     priority=92,
 )
 def list_reminders(ctx: CommandContext) -> Response:
@@ -170,10 +184,11 @@ def list_reminders(ctx: CommandContext) -> Response:
 
 @command(
     name="cancel_reminders",
-    patterns=[r"(?:annule|annuler|supprime|arrete)\s+(?:tous\s+)?(?:mes|les)\s+(?:rappels|minuteurs)"],
+    patterns=[r"(?:annule|annuler|supprime|arrete)\s+(?:tous\s+)?(?:mes|les)\s+(?:rappels|minuteurs)",
+              r"(?:cancel|clear)\s+(?:all\s+)?(?:my\s+)?(?:reminders|timers)"],
     category="Productivité",
     description="Annuler tous les rappels",
-    examples=["annule mes rappels"],
+    examples=["annule mes rappels", "cancel all my reminders"],
     priority=95,
 )
 def cancel_reminders(ctx: CommandContext) -> Response:
@@ -188,11 +203,13 @@ def cancel_reminders(ctx: CommandContext) -> Response:
     patterns=[
         r"(?:lis|lire|montre|affiche|donne)\s*(?:moi)?\s*(?:le\s+)?presse\s*papiers?",
         r"qu\s+est\s+ce\s+qu\s+il\s+y\s+a\s+dans\s+le\s+presse\s*papiers?",
+        r"(?:read|show)\s*(?:me)?\s*(?:the\s+)?clipboard",
+        r"what\s+s\s+in\s+the\s+clipboard",
     ],
-    keywords=[["lis", "presse papiers"]],
+    keywords=[["lis", "presse papiers"], ["read", "clipboard"]],
     category="Productivité",
     description="Lire le contenu du presse-papiers",
-    examples=["lis le presse-papiers"],
+    examples=["lis le presse-papiers", "read the clipboard"],
     priority=90,
 )
 def read_clipboard(ctx: CommandContext) -> Response:
@@ -210,10 +227,12 @@ def read_clipboard(ctx: CommandContext) -> Response:
     patterns=[
         r"^(?:copie|copier)\s+(.+?)\s+dans\s+le\s+presse\s*papiers?$",
         r"^(?:copie|copier)\s+(.+)$",
+        r"^copy\s+(.+?)\s+to\s+(?:the\s+)?clipboard$",
     ],
     category="Productivité",
     description="Copier un texte dans le presse-papiers",
-    examples=["copie bonjour tout le monde dans le presse-papiers"],
+    examples=["copie bonjour tout le monde dans le presse-papiers",
+              "copy hello world to the clipboard"],
     priority=84,
 )
 def write_clipboard(ctx: CommandContext) -> Response:

@@ -237,6 +237,33 @@ def test_search_en_anglais(router, phrase, attendu):
     assert route(router, phrase) == attendu, phrase
 
 
+@pytest.mark.parametrize("phrase,attendu", [
+    ("note that I need to call my bank tomorrow", "add_note"),
+    ("read my notes", "read_notes"),
+    ("delete note 2", "delete_note"),
+    ("clear all my notes", "clear_notes"),
+    ("remind me in 10 minutes to take out the cake", "set_reminder"),
+    ("start a timer for 5 minutes", "set_timer"),
+    ("my reminders", "list_reminders"),
+    ("cancel all my reminders", "cancel_reminders"),
+    ("read the clipboard", "read_clipboard"),
+    ("copy hello world to the clipboard", "write_clipboard"),
+])
+def test_productivity_en_anglais(router, phrase, attendu):
+    assert route(router, phrase) == attendu, phrase
+
+
+def test_duree_en_anglais_est_comprise():
+    from core import text_utils
+    from core.scheduler import parse_duration
+    from datetime import timedelta
+
+    tokens = text_utils.tokenize(text_utils.normalize("in 10 minutes"))
+    assert parse_duration(tokens) == timedelta(minutes=10)
+    tokens = text_utils.tokenize(text_utils.normalize("in 2 hours"))
+    assert parse_duration(tokens) == timedelta(hours=2)
+
+
 def test_calcul_en_anglais_donne_le_bon_resultat():
     from commands.calcul import en_expression, evaluer
 
