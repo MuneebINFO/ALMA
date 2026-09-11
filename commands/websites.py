@@ -225,24 +225,27 @@ def open_website(ctx: CommandContext) -> Response:
     """Ouvre un site declare dans la configuration."""
     resolved = resolve_website(ctx.config, ctx.arg)
     if resolved is None:
-        return Response.error("Je ne connais pas ce site.")
+        return ctx.erreur("Je ne connais pas ce site.", "I don't know that site.")
     key, url = resolved
     # On retient le site : « recherche Damso » juste apres devra s y appliquer.
     ctx.assistant.memoriser("site", key)
 
     if _demande_une_ouverture(ctx):
         if _nouvel_onglet(ctx, url):
-            return Response(text="J'ouvre " + key + ".")
-        return Response.error("Je n'ai pas réussi à ouvrir " + key + ".")
+            return ctx.reponse("J'ouvre " + key + ".", "Opening " + key + ".")
+        return ctx.erreur("Je n'ai pas réussi à ouvrir " + key + ".",
+                          "I couldn't open " + key + ".")
 
     ok, mode = afficher_site(ctx.config, key, url, naviguer=False, assistant=ctx.assistant)
     if not ok:
-        return Response.error("Je n'ai pas réussi à ouvrir " + url + ".")
+        return ctx.erreur("Je n'ai pas réussi à ouvrir " + url + ".",
+                          "I couldn't open " + url + ".")
     if mode == "onglet":
-        return Response(text="Je bascule sur l'onglet " + key + ".")
+        return ctx.reponse("Je bascule sur l'onglet " + key + ".",
+                           "Switching to the " + key + " tab.")
     if mode == "fenetre":
-        return Response(text="Je reviens sur " + key + ".")
-    return Response(text="J'ouvre " + key + ".")
+        return ctx.reponse("Je reviens sur " + key + ".", "Back on " + key + ".")
+    return ctx.reponse("J'ouvre " + key + ".", "Opening " + key + ".")
 
 
 @command(
@@ -259,11 +262,13 @@ def open_raw_url(ctx: CommandContext) -> Response:
     raw = ctx.arg.strip()
     tokens = [t for t in text_utils.tokenize(text_utils.normalize(raw)) if t not in ("https", "http")]
     if not tokens:
-        return Response.error("Je n'ai pas compris l'adresse.")
+        return ctx.erreur("Je n'ai pas compris l'adresse.",
+                          "I didn't catch the address.")
     url = "https://" + ".".join(tokens)
     if open_url(url):
-        return Response(text="J'ouvre " + url + ".")
-    return Response.error("Je n'ai pas réussi à ouvrir " + url + ".")
+        return ctx.reponse("J'ouvre " + url + ".", "Opening " + url + ".")
+    return ctx.erreur("Je n'ai pas réussi à ouvrir " + url + ".",
+                      "I couldn't open " + url + ".")
 
 
 @command(
@@ -278,8 +283,10 @@ def open_raw_url(ctx: CommandContext) -> Response:
 def list_websites(ctx: CommandContext) -> Response:
     """Liste les sites configures."""
     sites = ctx.config.get("websites", {}) or {}
-    return Response(
-        text="Je connais " + str(len(sites)) + " sites : " + ", ".join(sorted(sites)) + ".",
+    liste = ", ".join(sorted(sites))
+    return ctx.reponse(
+        "Je connais " + str(len(sites)) + " sites : " + liste + ".",
+        "I know " + str(len(sites)) + " sites: " + liste + ".",
         speak=False,
     )
 
@@ -421,14 +428,17 @@ def site_search(ctx: CommandContext) -> Response:
     """
     resolu = resolve_website(ctx.config, ctx.group("site"))
     if resolu is None:
-        return Response.error("Je ne connais pas ce site.")
+        return ctx.erreur("Je ne connais pas ce site.", "I don't know that site.")
     cle, url = resolu
     requete = ctx.group("query").strip()
     if not requete:
-        return Response.error("Que dois-je chercher sur " + cle + " ?")
+        return ctx.erreur("Que dois-je chercher sur " + cle + " ?",
+                          "What should I look up on " + cle + "?")
     if chercher_sur_le_site(ctx, cle, url, requete):
-        return Response(text="Je cherche « " + requete + " » sur " + cle + ".")
-    return Response.error("Je n'ai pas réussi à chercher sur " + cle + ".")
+        return ctx.reponse("Je cherche « " + requete + " » sur " + cle + ".",
+                           "Searching " + cle + " for \"" + requete + "\".")
+    return ctx.erreur("Je n'ai pas réussi à chercher sur " + cle + ".",
+                      "I couldn't search on " + cle + ".")
 
 
 def _site_en_contexte(ctx: CommandContext) -> bool:
@@ -461,12 +471,14 @@ def site_search_contextuel(ctx: CommandContext) -> Response:
     cle = ctx.assistant.rappeler("site")
     requete = ctx.arg.strip()
     if not cle or not requete:
-        return Response.error("Que dois-je chercher ?")
+        return ctx.erreur("Que dois-je chercher ?", "What should I search for?")
     entree = (ctx.config.get("websites", {}) or {}).get(cle, {})
     url = entree.get("url") if isinstance(entree, dict) else str(entree)
     if chercher_sur_le_site(ctx, cle, url or "", requete):
-        return Response(text="Je cherche « " + requete + " » sur " + cle + ".")
-    return Response.error("Je n'ai pas réussi à chercher sur " + cle + ".")
+        return ctx.reponse("Je cherche « " + requete + " » sur " + cle + ".",
+                           "Searching " + cle + " for \"" + requete + "\".")
+    return ctx.erreur("Je n'ai pas réussi à chercher sur " + cle + ".",
+                      "I couldn't search on " + cle + ".")
 
 
 def _site_pour_nouvel_onglet(ctx: CommandContext) -> bool:
@@ -501,12 +513,14 @@ def ouvrir_site_nouvel_onglet(ctx: CommandContext) -> Response:
     """
     resolu = resolve_website(ctx.config, ctx.arg)
     if resolu is None:
-        return Response.error("Je ne connais pas ce site.")
+        return ctx.erreur("Je ne connais pas ce site.", "I don't know that site.")
     cle, url = resolu
     ctx.assistant.memoriser("site", cle)
     if _nouvel_onglet(ctx, url):
-        return Response(text="Nouvel onglet sur " + cle + ".", speak=False)
-    return Response.error("Je n'ai pas réussi à ouvrir " + cle + ".")
+        return ctx.reponse("Nouvel onglet sur " + cle + ".",
+                           "New tab on " + cle + ".", speak=False)
+    return ctx.erreur("Je n'ai pas réussi à ouvrir " + cle + ".",
+                      "I couldn't open " + cle + ".")
 
 
 # --------------------------------------------------------------------------
@@ -587,18 +601,22 @@ def retour_accueil(ctx: CommandContext) -> Response:
     if demande:
         trouve = resolve_website(ctx.config, demande)
         if trouve is None:
-            return Response.error("Je ne connais pas le site « " + demande + " ».")
+            return ctx.erreur("Je ne connais pas le site « " + demande + " ».",
+                              "I don't know the site \"" + demande + "\".")
         cle, url = trouve
         ok, _comment = afficher_site(ctx.config, cle, url, naviguer=True,
                                      assistant=ctx.assistant)
         if ok:
             ctx.assistant.memoriser("site", cle)
-            return Response(text="Accueil de " + demande + ".")
-        return Response.error("Je n'ai pas pu ouvrir l'accueil de " + demande + ".")
+            return ctx.reponse("Accueil de " + demande + ".",
+                               demande + " home page.")
+        return ctx.erreur("Je n'ai pas pu ouvrir l'accueil de " + demande + ".",
+                          "I couldn't open the " + demande + " home page.")
 
     fenetre = fenetre_visee(ctx)
     if fenetre is None:
-        return Response.error("Je ne vois aucune page ouverte.")
+        return ctx.erreur("Je ne vois aucune page ouverte.",
+                          "I don't see any open page.")
 
     accueil = browser_tabs.racine_du_site(browser_tabs.adresse_courante(fenetre))
     nom = accueil.split("//")[-1].strip("/") if accueil else ""
@@ -606,15 +624,19 @@ def retour_accueil(ctx: CommandContext) -> Response:
         # Barre d adresse illisible : on reconnait le site a son titre.
         trouve = site_du_titre(ctx.config, fenetre.titre)
         if trouve is None:
-            return Response.error(
+            return ctx.erreur(
                 "Je n'arrive pas à savoir sur quel site vous êtes. "
-                "Dites par exemple « retourne à l'accueil de Netflix »."
+                "Dites par exemple « retourne à l'accueil de Netflix ».",
+                "I can't tell which site you're on. "
+                "Say for example \"go back to the Netflix home page\".",
             )
         nom, accueil = trouve
 
     if desktop.naviguer_dans_fenetre(fenetre, accueil):
-        return Response(text="Retour à l'accueil de " + nom + ".")
-    return Response.error("Je n'ai pas pu revenir à l'accueil de " + nom + ".")
+        return ctx.reponse("Retour à l'accueil de " + nom + ".",
+                           "Back to the " + nom + " home page.")
+    return ctx.erreur("Je n'ai pas pu revenir à l'accueil de " + nom + ".",
+                      "I couldn't get back to the " + nom + " home page.")
 
 
 # --------------------------------------------------------------------------
@@ -816,27 +838,33 @@ def lancer_titre(ctx: CommandContext) -> Response:
         # « sur » faisait partie du titre : « Le Pont sur la riviere Kwai ».
         titre = (titre + " sur " + dit_site).strip()
     if not titre:
-        return Response.error("Quel titre dois-je chercher ?")
+        return ctx.erreur("Quel titre dois-je chercher ?",
+                          "Which title should I look for?")
 
     if resolu is None:
         resolu = _site_courant(ctx)
     if resolu is None:
-        return Response.error(
+        return ctx.erreur(
             "Sur quel service ? Dites par exemple « mets la série "
-            + titre + " sur Netflix »."
+            + titre + " sur Netflix ».",
+            "On which service? Say for example \"put on the series "
+            + titre + " on Netflix\".",
         )
     cle, url = resolu
     if not chercher_sur_le_site(ctx, cle, url, titre):
-        return Response.error("Je n'ai pas réussi à chercher sur " + cle + ".")
+        return ctx.erreur("Je n'ai pas réussi à chercher sur " + cle + ".",
+                          "I couldn't search on " + cle + ".")
 
     fenetre = fenetre_visee(ctx)
     if fenetre is None:
-        return Response.error("Je ne vois plus la fenêtre de " + cle + ".")
+        return ctx.erreur("Je ne vois plus la fenêtre de " + cle + ".",
+                          "I can't see the " + cle + " window any more.")
 
     resultat, nom = _ouvrir_le_resultat(fenetre, titre)
     if resultat is None:
-        return Response.error(
-            "Je ne trouve pas « " + titre + " » sur " + cle + "."
+        return ctx.erreur(
+            "Je ne trouve pas « " + titre + " » sur " + cle + ".",
+            "I can't find \"" + titre + "\" on " + cle + ".",
         )
     if nom is not None:
         # Certains services ouvrent la fiche, d autres reprennent la lecture
@@ -845,13 +873,16 @@ def lancer_titre(ctx: CommandContext) -> Response:
 
         adresse = browser_tabs.adresse_courante(fenetre).lower()
         if any(marque in adresse for marque in ADRESSES_LECTURE):
-            return Response(text="Je lance " + nom + ".")
-        return Response(text=nom + " est ouvert.")
+            return ctx.reponse("Je lance " + nom + ".", "Playing " + nom + ".")
+        return ctx.reponse(nom + " est ouvert.", nom + " is open.")
     nom = interaction.titre_affiche(resultat.nom)[:60]
     # Le resultat a ete clique mais rien ne propose de le lire : c est souvent
     # que le catalogue ne l a pas et que la page suggere autre chose.
-    return Response.error(
+    return ctx.erreur(
         "J'ai ouvert « " + nom + " » sur " + cle
         + ", mais je n'y vois pas de bouton de lecture. "
-        "Le titre n'est peut-être pas disponible sur ce service."
+        "Le titre n'est peut-être pas disponible sur ce service.",
+        "I opened \"" + nom + "\" on " + cle
+        + ", but I don't see a play button there. "
+        "The title may not be available on this service.",
     )
