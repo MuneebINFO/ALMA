@@ -264,6 +264,46 @@ def test_duree_en_anglais_est_comprise():
     assert parse_duration(tokens) == timedelta(hours=2)
 
 
+@pytest.mark.parametrize("phrase,attendu", [
+    ("remember that I'm allergic to peanuts", "memoire_retenir"),
+    ("what do you know about me", "memoire_rappeler"),
+    ("my memories", "memoire_rappeler"),
+    ("forget that I'm allergic to peanuts", "memoire_oublier"),
+    ("forget everything", "memoire_oublier"),
+])
+def test_memoire_en_anglais(router, phrase, attendu):
+    assert route(router, phrase) == attendu, phrase
+
+
+@pytest.mark.parametrize("phrase,attendu,groupe,valeur", [
+    ("ask Claude how a search engine works", "claude_demander",
+     "question", "how a search engine works"),
+    ("ask Claude Code to list the files in the folder", "claude_code_tache",
+     "tache", "list the files in the folder"),
+    ("ask Cowork to summarize my notes from this week", "claude_cowork",
+     "tache", "summarize my notes from this week"),
+    ("go to Cowork", "claude_section", "section", "cowork"),
+    ("new session", "claude_section", "section", "new"),
+    ("new chat", "claude_section", "section", "new"),
+])
+def test_claude_en_anglais(phrase, attendu, groupe, valeur):
+    """
+    Ces commandes exigent l'application Claude ouverte (guard) : on
+    verrouille donc directement le motif regex et l'extraction, comme le
+    fait deja le reste de la suite pour ce fichier, plutot que de rejouer
+    tout le routage.
+    """
+    from core.registry import load_commands, all_commands
+    from core.context import Utterance
+
+    load_commands()
+    cmd = next(c for c in all_commands() if c.name == attendu)
+    u = Utterance.parse(phrase, wake_words=["alma"])
+    trouve = next((m for m in (p.search(u.norm) for p in cmd.patterns) if m), None)
+    assert trouve is not None, phrase
+    assert trouve.group(groupe).strip().lower() == valeur
+
+
 def test_calcul_en_anglais_donne_le_bon_resultat():
     from commands.calcul import en_expression, evaluer
 

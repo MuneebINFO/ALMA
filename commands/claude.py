@@ -35,6 +35,7 @@ SECTIONS = {
     "artefacts": ("Artifacts", "les artifacts"),
     "nouvelle": ("New", "une nouvelle session"),
     "nouveau": ("New", "une nouvelle session"),
+    "new": ("New", "a new session"),
 }
 
 # Longueur lue a voix haute : au-dela, on renvoie a l ecran.
@@ -51,11 +52,14 @@ def _application_ouverte(ctx: CommandContext) -> bool:
     patterns=[
         r"^(?:demande|demander|pose|poser)\s+a\s+claude\s*(?:que|de|:)?\s*(?P<question>.+)$",
         r"^claude\s*,?\s+(?P<question>.+)$",
+        r"^ask\s+claude\s*(?:that|to|:)?\s*(?P<question>.+)$",
+        r"^tell\s+claude\s*(?::)?\s*(?P<question>.+)$",
     ],
-    keywords=[["demande", "claude"]],
+    keywords=[["demande", "claude"], ["ask", "claude"]],
     category="Recherche",
     description="Poser une question à l'application Claude et lire sa réponse",
-    examples=["demande à Claude comment fonctionne un moteur de recherche"],
+    examples=["demande à Claude comment fonctionne un moteur de recherche",
+              "ask Claude how a search engine works"],
     priority=95,
     guard=_application_ouverte,
     informatif=True,
@@ -114,11 +118,14 @@ def _delegation_ouverte(ctx: CommandContext) -> bool:
         r"^(?:lance|lancer|fais|faire)\s+(?:une\s+)?tache\s+"
         r"(?:avec\s+|dans\s+|en\s+|sur\s+)?claude\s+code\s*:?\s*(?P<tache>.+)$",
         r"^claude\s+code\s*,\s*(?P<tache>.+)$",
+        r"^ask\s+claude\s+code\s+to\s+(?P<tache>.+)$",
+        r"^(?:run|start)\s+(?:a\s+)?task\s+(?:with\s+|in\s+|on\s+)?claude\s+code\s*:?\s*(?P<tache>.+)$",
     ],
-    keywords=[["claude", "code", "demande"]],
+    keywords=[["claude", "code", "demande"], ["claude", "code", "ask"]],
     category="Recherche",
     description="Confier une tâche au CLI Claude Code",
-    examples=["demande à Claude Code de lister les fichiers du dossier"],
+    examples=["demande à Claude Code de lister les fichiers du dossier",
+              "ask Claude Code to list the files in the folder"],
     priority=98,
     guard=_delegation_ouverte,
     informatif=True,
@@ -145,12 +152,16 @@ def claude_code_tache(ctx: CommandContext) -> Response:
         r"^(?:lance|lancer|demarre|demarrer|fais|faire)\s+(?:une\s+)?"
         r"(?:tache\s+)?(?:en\s+|dans\s+|avec\s+|sur\s+)?cowork\s*:?\s*(?P<tache>.+)$",
         r"^(?P<tache>.+?)\s+(?:en|dans|avec)\s+cowork$",
+        r"^ask\s+cowork\s+to\s+(?P<tache>.+)$",
+        r"^(?:run|start)\s+(?:a\s+)?task\s+(?:in\s+|with\s+|on\s+)?cowork\s*:?\s*(?P<tache>.+)$",
+        r"^(?P<tache>.+?)\s+in\s+cowork$",
     ],
     keywords=[["cowork"]],
     category="Recherche",
     description="Lancer une tâche dans Cowork",
     examples=["demande à Cowork de résumer mes notes de la semaine",
-              "lance une tâche Cowork : trier mes captures d'écran"],
+              "lance une tâche Cowork : trier mes captures d'écran",
+              "ask Cowork to summarize my notes from this week"],
     priority=97,
     guard=_application_ouverte,
     contextuel=True,
@@ -194,11 +205,19 @@ def claude_cowork(ctx: CommandContext) -> Response:
         # « nouvelle session Claude », « nouveau chat Claude »
         r"^(?P<section>nouvelle|nouveau)\s+(?:session|chat|conversation)"
         r"(?:\s+(?:de\s+|dans\s+)?claude)?$",
+        # « go to Cowork », « switch to the artifacts », « open Claude Code »
+        r"^(?:go|switch|open|show)\s+(?:me\s+)?(?:to\s+|on\s+)?(?:the\s+)?"
+        r"(?P<section>cowork|chat|conversation|artifacts)"
+        r"(?:\s+(?:in\s+|of\s+)?claude)?$",
+        r"^(?:(?:go|switch|open|show)\s+(?:to\s+)?)?"
+        r"claude\s+(?P<section>cowork|chat|code|artifacts)$",
+        r"^(?P<section>new)\s+(?:session|chat|conversation)(?:\s+(?:in\s+|of\s+)?claude)?$",
     ],
     keywords=[["claude", "cowork"], ["claude", "code"]],
     category="Recherche",
     description="Afficher Chat, Cowork, Code ou Artifacts dans l'application Claude",
-    examples=["ouvre Cowork", "va sur Claude Code", "nouvelle session Claude"],
+    examples=["ouvre Cowork", "va sur Claude Code", "nouvelle session Claude",
+              "go to Cowork"],
     priority=96,
     guard=_application_ouverte,
     contextuel=True,

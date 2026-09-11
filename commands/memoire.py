@@ -28,10 +28,15 @@ MOTS_VIDES = {
     "qui", "quoi", "est", "sont", "ai", "as", "mon", "ma", "mes", "ton",
     "ta", "tes", "son", "sa", "ses", "pour", "avec", "dans", "sur", "par",
     "ne", "pas", "plus", "tout", "tous", "toute", "c", "ce", "cette", "s",
+    # Memes mots vides, en anglais.
+    "i", "you", "he", "she", "we", "they", "my", "your", "his", "her",
+    "our", "their", "the", "of", "and", "or", "that", "who", "what",
+    "is", "are", "am", "for", "with", "about", "everything",
 }
 
 VERBES_RETENIR = (r"(?:retiens|retenir|souviens\s+toi|souvenez\s+vous|"
-                  r"note\s+bien|memorise|memoriser|rappelle\s+toi|garde\s+en\s+tete)")
+                  r"note\s+bien|memorise|memoriser|rappelle\s+toi|garde\s+en\s+tete|"
+                  r"remember|keep\s+in\s+mind)")
 
 
 def _mots_utiles(texte: str) -> set:
@@ -61,13 +66,14 @@ def _pertinence(souvenir: dict, mots: set) -> int:
 @command(
     name="memoire_retenir",
     patterns=[
-        r"^" + VERBES_RETENIR + r"\s+(?:bien\s+)?(?:que\s+|:\s*)?(?P<fait>.+)$",
+        r"^" + VERBES_RETENIR + r"\s+(?:bien\s+)?(?:que\s+|that\s+|:\s*)?(?P<fait>.+)$",
     ],
-    keywords=[["retiens"], ["souviens", "toi"], ["memorise"]],
+    keywords=[["retiens"], ["souviens", "toi"], ["memorise"], ["remember"]],
     category="Productivité",
     description="Retenir un fait durablement",
     examples=["retiens que je suis allergique aux arachides",
-              "souviens-toi que ma sœur s'appelle Yasmine"],
+              "souviens-toi que ma sœur s'appelle Yasmine",
+              "remember that I'm allergic to peanuts"],
     priority=92,
 )
 def memoire_retenir(ctx: CommandContext) -> Response:
@@ -93,11 +99,14 @@ def memoire_retenir(ctx: CommandContext) -> Response:
         r"(?:\s+(?:sur|de|a\s+propos\s+de|concernant))?\s*(?P<sujet>.*)$",
         r"^(?:de\s+quoi\s+)?te\s+souviens\s+tu(?:\s+(?:sur|de))?\s*(?P<sujet>.*)$",
         r"^(?:mes\s+)?souvenirs$",
+        r"^what\s+do\s+you\s+(?:know|remember)(?:\s+about)?\s*(?P<sujet>.*)$",
+        r"^my\s+memories$",
     ],
-    keywords=[["que", "sais", "tu"], ["souviens", "tu"]],
+    keywords=[["que", "sais", "tu"], ["souviens", "tu"], ["what", "remember"]],
     category="Productivité",
     description="Dire ce qui a été retenu",
-    examples=["qu'est-ce que tu sais sur moi", "de quoi te souviens-tu"],
+    examples=["qu'est-ce que tu sais sur moi", "de quoi te souviens-tu",
+              "what do you know about me"],
     priority=93,
     informatif=True,
 )
@@ -130,11 +139,13 @@ def memoire_rappeler(ctx: CommandContext) -> Response:
     patterns=[
         r"^(?:oublie|oublier|efface|effacer|supprime)\s+(?:que\s+|le\s+souvenir\s+)?"
         r"(?P<sujet>.+)$",
+        r"^forget\s+(?:that\s+)?(?P<sujet>.+)$",
     ],
-    keywords=[["oublie"], ["efface", "souvenir"]],
+    keywords=[["oublie"], ["efface", "souvenir"], ["forget"]],
     category="Productivité",
     description="Oublier ce qui a été retenu sur un sujet",
-    examples=["oublie que je suis allergique aux arachides"],
+    examples=["oublie que je suis allergique aux arachides",
+              "forget that I'm allergic to peanuts"],
     priority=92,
 )
 def memoire_oublier(ctx: CommandContext) -> Response:
@@ -144,7 +155,10 @@ def memoire_oublier(ctx: CommandContext) -> Response:
     if not souvenirs:
         return Response(text="Je ne retiens rien.", speak=False)
 
-    if text_utils.normalize(sujet).strip() in ("tout", "tous mes souvenirs", "mes souvenirs"):
+    if text_utils.normalize(sujet).strip() in (
+        "tout", "tous mes souvenirs", "mes souvenirs",
+        "everything", "all my memories", "my memories",
+    ):
         ctx.storage.souvenirs.clear()
         return Response(text="J'ai tout oublié.", speak=False)
 
