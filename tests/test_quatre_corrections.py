@@ -144,8 +144,11 @@ def test_aucune_action_nexplique_a_lutilisateur_quoi_dire():
                 break
             depart = position + 1
             avant = texte[max(0, position - 300):position]
-            if "Response.error(" in avant:
-                continue          # message d'échec : le conseil y a sa place
+            # Message d'échec : le conseil y a sa place. Les deux écritures
+            # comptent -- `ctx.erreur(fr, en)` est la version bilingue de
+            # `Response.error(...)`, pas une réponse ordinaire.
+            if "Response.error(" in avant or "ctx.erreur(" in avant:
+                continue
             ligne = texte.count(chr(10), 0, position) + 1
             fautifs.append("%s:%d" % (fichier.name, ligne))
     assert not fautifs, "mode d'emploi dans une réponse : " + ", ".join(fautifs)
