@@ -26,16 +26,17 @@ from core.registry import command
 
 # Ce qu on peut demander d afficher, et les mots qui y menent. Les libelles de
 # l application sont en anglais, ce qu on ne demandera pas a l utilisateur.
+# Chaque entree : (libelle dans l application, nom parle en francais, en anglais).
 SECTIONS = {
-    "cowork": ("Chat and Cowork", "Cowork"),
-    "chat": ("Chat and Cowork", "le chat"),
-    "conversation": ("Chat and Cowork", "le chat"),
-    "code": ("Code", "Claude Code"),
-    "artifacts": ("Artifacts", "les artifacts"),
-    "artefacts": ("Artifacts", "les artifacts"),
-    "nouvelle": ("New", "une nouvelle session"),
-    "nouveau": ("New", "une nouvelle session"),
-    "new": ("New", "a new session"),
+    "cowork": ("Chat and Cowork", "Cowork", "Cowork"),
+    "chat": ("Chat and Cowork", "le chat", "the chat"),
+    "conversation": ("Chat and Cowork", "le chat", "the chat"),
+    "code": ("Code", "Claude Code", "Claude Code"),
+    "artifacts": ("Artifacts", "les artifacts", "the artifacts"),
+    "artefacts": ("Artifacts", "les artifacts", "the artifacts"),
+    "nouvelle": ("New", "une nouvelle session", "a new session"),
+    "nouveau": ("New", "une nouvelle session", "a new session"),
+    "new": ("New", "une nouvelle session", "a new session"),
 }
 
 # Longueur lue a voix haute : au-dela, on renvoie a l ecran.
@@ -71,38 +72,44 @@ def claude_demander(ctx: CommandContext) -> Response:
     """Transmet la question à l'application Claude et rapporte sa réponse."""
     question = (ctx.group("question") or "").strip()
     if not question:
-        return Response.error("Que dois-je lui demander ?")
+        return ctx.erreur("Que dois-je lui demander ?", "What should I ask it?")
 
     fenetre = claude_app.fenetre()
     if not claude_app.reveiller(fenetre):
-        return Response.error(
-            "L'application Claude ne répond pas. Ouvrez-la, puis réessayez."
+        return ctx.erreur(
+            "L'application Claude ne répond pas. Ouvrez-la, puis réessayez.",
+            "The Claude app isn't responding. Open it, then try again.",
         )
 
     # La question part dans une conversation NEUVE, et on demande d'abord.
     # Sans cela elle atterrit dans ce qui est affiché — une session Claude Code
     # en cours de travail, par exemple — et s'y mélange à autre chose.
     if not ctx.confirm("J'ouvre une nouvelle conversation Claude ?"):
-        return Response(text="Très bien, je n'ouvre rien.", speak=False)
+        return ctx.reponse("Très bien, je n'ouvre rien.",
+                           "All right, I won't open anything.", speak=False)
     # Le chat d'abord : « New » depuis la section Code créerait une session de
     # code, pas une conversation.
     claude_app.activer(fenetre, "Chat and Cowork")
     if not claude_app.activer(fenetre, "New"):
-        return Response.error("Je n'ai pas pu ouvrir de nouvelle conversation Claude.")
+        return ctx.erreur("Je n'ai pas pu ouvrir de nouvelle conversation Claude.",
+                          "I couldn't open a new Claude conversation.")
 
     avant = claude_app.etat(fenetre)
     if not claude_app.poser(fenetre, question):
-        return Response.error("Je n'ai pas trouvé où écrire dans l'application Claude.")
+        return ctx.erreur("Je n'ai pas trouvé où écrire dans l'application Claude.",
+                          "I couldn't find where to type in the Claude app.")
 
     reponse = claude_app.attendre_la_reponse(fenetre, avant)
     if not reponse:
-        return Response.error(
+        return ctx.erreur(
             "Claude n'a rien répondu dans le temps imparti. "
-            "La réponse arrive peut-être encore à l'écran."
+            "La réponse arrive peut-être encore à l'écran.",
+            "Claude didn't answer in time. The answer may still be arriving on screen.",
         )
     if len(reponse) > LONGUEUR_PARLEE:
         coupe = reponse[:LONGUEUR_PARLEE].rsplit(" ", 1)[0]
-        return Response(text=coupe + "… La suite est à l'écran.")
+        return ctx.reponse(coupe + "… La suite est à l'écran.",
+                           coupe + "… The rest is on screen.")
     return Response(text=reponse)
 
 
@@ -138,7 +145,7 @@ def claude_code_tache(ctx: CommandContext) -> Response:
 
     tache = (ctx.group("tache") or "").strip()
     if not tache:
-        return Response.error("Que dois-je lui demander ?")
+        return ctx.erreur("Que dois-je lui demander ?", "What should I ask it?")
     # Le provider est construit ici plutôt que lu dans la configuration : la
     # phrase dit « Claude Code », c'est donc lui qu'on veut, même si un autre
     # provider est choisi par défaut. `enabled` reste l'interrupteur général.
@@ -170,24 +177,28 @@ def claude_cowork(ctx: CommandContext) -> Response:
     """Ouvre une session Cowork et y dicte la tâche."""
     tache = (ctx.group("tache") or "").strip()
     if not tache:
-        return Response.error("Quelle tâche dois-je lancer ?")
+        return ctx.erreur("Quelle tâche dois-je lancer ?", "Which task should I start?")
 
     fenetre = claude_app.fenetre()
     if not claude_app.reveiller(fenetre):
-        return Response.error("L'application Claude ne répond pas.")
+        return ctx.erreur("L'application Claude ne répond pas.",
+                          "The Claude app isn't responding.")
 
     # Une session neuve, sinon la tâche part dans la conversation affichée --
     # et le sélecteur Chat/Cowork n'existe que sur une page vierge.
     if not claude_app.activer(fenetre, "New"):
-        return Response.error("Je n'ai pas pu ouvrir de nouvelle session Claude.")
+        return ctx.erreur("Je n'ai pas pu ouvrir de nouvelle session Claude.",
+                          "I couldn't open a new Claude session.")
     if not claude_app.activer(fenetre, "Cowork"):
-        return Response.error(
-            "Je ne trouve pas le mode Cowork. Il n'apparaît que sur une page vierge."
+        return ctx.erreur(
+            "Je ne trouve pas le mode Cowork. Il n'apparaît que sur une page vierge.",
+            "I can't find Cowork mode. It only shows up on a blank page.",
         )
     if not claude_app.poser(fenetre, tache):
-        return Response.error("Je n'ai pas trouvé où écrire dans l'application Claude.")
+        return ctx.erreur("Je n'ai pas trouvé où écrire dans l'application Claude.",
+                          "I couldn't find where to type in the Claude app.")
     # On ne lit pas la reponse : une tache Cowork dure, et l ecran la montre.
-    return Response(text="C'est parti dans Cowork.", speak=False)
+    return ctx.reponse("C'est parti dans Cowork.", "Off it goes in Cowork.", speak=False)
 
 
 @command(
@@ -228,18 +239,22 @@ def claude_section(ctx: CommandContext) -> Response:
 
     demande = text_utils.normalize(ctx.group("section")).strip()
     if demande not in SECTIONS:
-        return Response.error("Je ne connais pas cette partie de Claude.")
-    libelle, nom_parle = SECTIONS[demande]
+        return ctx.erreur("Je ne connais pas cette partie de Claude.",
+                          "I don't know that part of Claude.")
+    libelle, nom_fr, nom_en = SECTIONS[demande]
 
     fenetre = claude_app.fenetre()
     if not claude_app.reveiller(fenetre):
-        return Response.error("L'application Claude ne répond pas.")
+        return ctx.erreur("L'application Claude ne répond pas.",
+                          "The Claude app isn't responding.")
 
     cible = claude_app.bouton(fenetre, libelle)
     if cible is None:
-        return Response.error(
-            "Je ne trouve pas « " + libelle + " » dans l'application Claude."
+        return ctx.erreur(
+            "Je ne trouve pas « " + libelle + " » dans l'application Claude.",
+            "I can't find \"" + libelle + "\" in the Claude app.",
         )
     if not interaction.cliquer(cible):
-        return Response.error("Je n'ai pas réussi à ouvrir " + nom_parle + ".")
-    return Response(text="J'ouvre " + nom_parle + ".", speak=False)
+        return ctx.erreur("Je n'ai pas réussi à ouvrir " + nom_fr + ".",
+                          "I couldn't open " + nom_en + ".")
+    return ctx.reponse("J'ouvre " + nom_fr + ".", "Opening " + nom_en + ".", speak=False)
