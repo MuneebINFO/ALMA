@@ -31,6 +31,7 @@ class Utterance:
     norm: str
     tokens: list[str] = field(default_factory=list)
     source: str = SOURCE_TEXT
+    lang: str = "fr"
 
     @classmethod
     def parse(cls, text: str, source: str = SOURCE_TEXT, wake_words=None) -> "Utterance":
@@ -46,7 +47,10 @@ class Utterance:
         )
         lead = len(norm_full) - len(norm_full.lstrip())
         raw = raw_full[lead : lead + len(norm)]
-        return cls(raw=raw, norm=norm, tokens=text_utils.tokenize(norm), source=source)
+        return cls(
+            raw=raw, norm=norm, tokens=text_utils.tokenize(norm), source=source,
+            lang=text_utils.detect_language(norm),
+        )
 
     def is_empty(self) -> bool:
         return not self.norm.strip()
@@ -103,6 +107,11 @@ class CommandContext:
         return self.utterance.source
 
     @property
+    def lang(self) -> str:
+        """« fr » ou « en », devine a partir de la phrase (voir Utterance.parse)."""
+        return self.utterance.lang
+
+    @property
     def config(self):
         """
         Configuration courante. Si aucun assistant n est fourni (tests
@@ -141,6 +150,20 @@ class CommandContext:
     def arg(self) -> str:
         """Premier groupe capture (cas le plus courant)."""
         return self.group(1)
+
+    # -- reponses bilingues -----------------------------------------------------
+    def reponse(self, fr: str, en: str, speak: bool = True, ok: bool = True) -> Response:
+        """
+        Une Response dans la langue de la phrase entendue : `en` si l on a
+        detecte de l anglais, `fr` sinon. C est le point d entree pour TOUTE
+        reponse qui parle a l utilisateur -- une commande dit ce qu elle a
+        fait dans la langue ou on lui a parle, jamais dans l autre.
+        """
+        return Response(text=en if self.lang == "en" else fr, speak=speak, ok=ok)
+
+    def erreur(self, fr: str, en: str) -> Response:
+        """Equivalent de `Response.error(...)`, mais bilingue."""
+        return Response(text=en if self.lang == "en" else fr, ok=False)
 
     # -- interactions ---------------------------------------------------------
     def say(self, text: str) -> None:

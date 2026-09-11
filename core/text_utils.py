@@ -103,6 +103,67 @@ def tokenize(norm: str) -> list[str]:
     return [token for token in re.split(r"\s+", norm) if token]
 
 
+# Mots qui n existent QUE dans une langue -- jamais les mots partages
+# ("second", "music" a une orthographe propre mais "musique" aussi, donc
+# absent ; "sur"/"on" sont ambigus dans les deux langues, donc absents
+# aussi). Le but n est pas la linguistique : juste de departager une phrase
+# COURTE, du genre de celles qu on dicte a Alma.
+_MARQUEURS_FRANCAIS = frozenset((
+    "le", "la", "les", "un", "une", "des", "du", "de", "au", "aux",
+    "est", "suis", "es", "sommes", "etes", "sont", "tu", "vous", "nous",
+    "moi", "toi", "lui", "leur", "notre", "votre", "mon", "ma", "mes",
+    "ton", "ta", "tes", "son", "sa", "ses", "que", "qui", "quoi",
+    "comment", "pourquoi", "combien", "quel", "quelle", "quels", "quelles",
+    "avec", "dans", "sans", "vers", "chez", "tres", "ou", "et", "ca",
+    "ouvre", "ouvrir", "ferme", "fermer", "fais", "faire", "donne",
+    "veux", "voudrais", "peux", "peut", "stp", "merci", "bonjour",
+    "salut", "coucou", "bonsoir", "aujourd", "hui", "demain",
+    "maintenant", "beaucoup", "encore", "toujours", "jamais", "voila",
+    "voici", "cette", "cet", "ces", "etre", "avoir",
+))
+_MARQUEURS_ANGLAIS = frozenset((
+    # Mots-outils
+    "the", "is", "are", "am", "was", "were", "what", "who", "how", "why",
+    "when", "where", "which", "please", "thanks", "thank", "hello", "hi",
+    "hey", "yes", "my", "your", "his", "her", "our", "their", "this",
+    "that", "these", "those", "and", "but", "with", "for", "of", "at",
+    "today", "tomorrow", "now", "very", "also", "still", "never",
+    "always", "maybe", "does", "do", "did", "can", "could", "would",
+    "should", "want", "about", "from", "into", "some", "any", "all",
+    # Verbes d action : ce sont eux qui portent une commande courte, et
+    # aucun n est un mot francais (« minimize » s ecrit « minimise » ici).
+    "open", "close", "tell", "give", "show", "make", "take", "put",
+    "turn", "set", "find", "search", "read", "write", "play", "start",
+    "stop", "run", "ask", "remind", "copy", "paste", "cut", "save",
+    "print", "select", "delete", "clear", "empty", "lock", "sleep",
+    "restart", "reboot", "shut", "scroll", "click", "switch", "forget",
+    "remember", "maximize", "minimize", "resume", "skip", "mute",
+    "unmute", "refresh", "reload", "flip", "roll", "calculate",
+    # Noms et qualificatifs frequents dans une commande, sans equivalent
+    # orthographique francais (« volume », « timer », « note » sont partages,
+    # donc absents).
+    "next", "previous", "last", "new", "song", "tab", "window", "screen",
+    "monitor", "louder", "quieter", "brightness", "battery", "disk",
+    "folder", "file", "clipboard", "desktop", "everything", "history",
+    # Petits mots de direction et de lieu, tous absents du francais.
+    "go", "home", "up", "down", "back", "out", "off", "to", "it",
+    "here", "there",
+))
+
+
+def detect_language(norm: str) -> str:
+    """
+    « fr » ou « en », devine a partir de mots qui n existent que dans une
+    langue. Sur une egalite ou une phrase sans mot reconnu (« screenshot »,
+    un nom propre...), on retombe sur le francais : c est la langue
+    d origine d Alma, et le repli le plus sur.
+    """
+    tokens = set(tokenize(norm))
+    score_fr = len(tokens & _MARQUEURS_FRANCAIS)
+    score_en = len(tokens & _MARQUEURS_ANGLAIS)
+    return "en" if score_en > score_fr else "fr"
+
+
 def similarity(a: str, b: str) -> float:
     """Similarite 0..1 entre deux mots (tolerance aux fautes de frappe)."""
     return difflib.SequenceMatcher(None, a, b).ratio()

@@ -14,9 +14,21 @@ from core.context import CommandContext, Response
 from core.registry import command
 
 
-def greeting_for_now(user_name: str = "") -> str:
-    """Salutation adaptee a l'heure de la journee."""
+def greeting_for_now(user_name: str = "", lang: str = "fr") -> str:
+    """Salutation adaptee a l'heure de la journee, dans la langue demandee."""
     hour = datetime.now().hour
+    if lang == "en":
+        if hour < 6:
+            base = "Good night"
+        elif hour < 12:
+            base = "Good morning"
+        elif hour < 18:
+            base = "Good afternoon"
+        else:
+            base = "Good evening"
+        who = (" " + user_name) if user_name else ""
+        return base + who + ", I'm at your service."
+
     if hour < 6:
         base = "Bonne nuit"
     elif hour < 12:
@@ -39,9 +51,9 @@ def greeting_for_now(user_name: str = "") -> str:
     priority=70,
 )
 def greet(ctx: CommandContext) -> Response:
-    """Repond a une salutation."""
+    """Repond a une salutation, dans la langue employee."""
     user = str(ctx.config.get("general.user_name", "") or "")
-    return Response(text=greeting_for_now(user))
+    return Response(text=greeting_for_now(user, ctx.lang))
 
 
 @command(
@@ -55,11 +67,18 @@ def greet(ctx: CommandContext) -> Response:
 )
 def how_are_you(ctx: CommandContext) -> Response:
     """Reponse predefinie a "comment ca va"."""
-    answers = [
-        "Tous mes systèmes fonctionnent parfaitement, merci. Et vous ?",
-        "En pleine forme, prêt à vous aider.",
-        "Je tourne a plein régime. Que puis-je faire pour vous ?",
-    ]
+    if ctx.lang == "en":
+        answers = [
+            "All my systems are running perfectly, thanks. And you?",
+            "In great shape, ready to help.",
+            "Running at full speed. What can I do for you?",
+        ]
+    else:
+        answers = [
+            "Tous mes systèmes fonctionnent parfaitement, merci. Et vous ?",
+            "En pleine forme, prêt à vous aider.",
+            "Je tourne a plein régime. Que puis-je faire pour vous ?",
+        ]
     return Response(text=random.choice(answers))
 
 
@@ -74,6 +93,9 @@ def how_are_you(ctx: CommandContext) -> Response:
 )
 def thanks(ctx: CommandContext) -> Response:
     """Reponse a un remerciement."""
+    if ctx.lang == "en":
+        return Response(text=random.choice(
+            ["My pleasure.", "You're welcome.", "At your service."]))
     return Response(text=random.choice(["Avec plaisir.", "Je vous en prie.", "À votre service."]))
 
 
@@ -88,11 +110,14 @@ def thanks(ctx: CommandContext) -> Response:
 )
 def who_are_you(ctx: CommandContext) -> Response:
     """Presentation de l'assistant."""
-    name = ctx.config.get("general.assistant_name", "Alma")
-    return Response(
-        text="Je suis " + str(name) + ", votre assistant local. Je fonctionne entièrement sur "
+    name = str(ctx.config.get("general.assistant_name", "Alma"))
+    return ctx.reponse(
+        "Je suis " + name + ", votre assistant local. Je fonctionne entièrement sur "
         "votre ordinateur, sans intelligence artificielle distante ni abonnement. "
-        "Dites « aide » pour connaître mes commandes."
+        "Dites « aide » pour connaître mes commandes.",
+        "I'm " + name + ", your local assistant. I run entirely on your computer, "
+        "with no remote artificial intelligence and no subscription. "
+        "Say \"help\" to see what I can do.",
     )
 
 
@@ -110,7 +135,7 @@ def who_are_you(ctx: CommandContext) -> Response:
 )
 def joke(ctx: CommandContext) -> Response:
     """Raconte une blague tiree d'une liste locale (aucun appel reseau)."""
-    return Response(text=random.choice(JOKES))
+    return Response(text=random.choice(JOKES_EN if ctx.lang == "en" else JOKES))
 
 
 JOKES = [
@@ -130,4 +155,22 @@ JOKES = [
     "Le cache, c'est comme le frigo : on y met des choses et on oublie pourquoi.",
     "J'allais faire une blague sur les récursions, mais j'allais faire une blague "
     "sur les récursions.",
+]
+
+# Les memes, cote anglais : traduire mot a mot tuerait la moitie des chutes,
+# donc ce sont des blagues du meme genre plutot que des traductions.
+JOKES_EN = [
+    "Why do developers hate nature? It has too many bugs.",
+    "A byte walks into a bar and orders a drink. The bartender asks: want a bit?",
+    "Why did the programmer die in the shower? The shampoo said: lather, rinse, repeat.",
+    "There are 10 kinds of people: those who understand binary, and those who don't.",
+    "What does a drowning computer scientist shout? F1! F1!",
+    "Why do divers always fall backwards off the boat? Because otherwise "
+    "they'd fall into it.",
+    "What did one computer say to the other? See you on the network.",
+    "A SQL query walks into a bar, goes up to two tables and asks: may I join you?",
+    "Why are ghosts such bad liars? Because you can see right through them.",
+    "Cache is like the fridge: you put things in and forget why.",
+    "I was going to tell a joke about recursion, but I was going to tell a joke "
+    "about recursion.",
 ]
