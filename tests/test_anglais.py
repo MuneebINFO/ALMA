@@ -304,6 +304,19 @@ def test_claude_en_anglais(phrase, attendu, groupe, valeur):
     assert trouve.group(groupe).strip().lower() == valeur
 
 
+@pytest.mark.parametrize("phrase,attendu", [
+    ("hello", "greet"),
+    ("hi", "greet"),
+    ("how are you", "how_are_you"),
+    ("thank you", "thanks"),
+    ("who are you", "who_are_you"),
+    ("tell me a joke", "joke"),
+    ("make me laugh", "joke"),
+])
+def test_smalltalk_en_anglais(router, phrase, attendu):
+    assert route(router, phrase) == attendu, phrase
+
+
 def test_calcul_en_anglais_donne_le_bon_resultat():
     from commands.calcul import en_expression, evaluer
 

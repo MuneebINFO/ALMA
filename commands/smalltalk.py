@@ -100,11 +100,12 @@ def who_are_you(ctx: CommandContext) -> Response:
     name="joke",
     informatif=True,
     patterns=[r"(?:raconte|dis|donne)\s*(?:moi)?\s*(?:une|un)?\s*(?:blague|histoire\s+drole|joke)",
-              r"^(?:blague|joke)$", r"fais\s+moi\s+rire"],
-    keywords=[["blague"], ["joke"]],
+              r"^(?:blague|joke)$", r"fais\s+moi\s+rire",
+              r"(?:tell|give)\s*(?:me)?\s*a\s+joke", r"make\s+me\s+laugh"],
+    keywords=[["blague"], ["joke"], ["tell", "joke"]],
     category="Conversation",
     description="Raconter une blague",
-    examples=["raconte-moi une blague"],
+    examples=["raconte-moi une blague", "tell me a joke"],
     priority=88,
 )
 def joke(ctx: CommandContext) -> Response:
