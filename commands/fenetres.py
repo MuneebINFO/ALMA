@@ -11,10 +11,13 @@ from core.context import CommandContext, Response
 from core.registry import command
 
 
-def _raccourci(libelle: str, *touches) -> Response:
+def _raccourci(ctx: CommandContext, libelle: str, label: str, *touches) -> Response:
+    """`libelle` en francais, `label` en anglais : on repond dans la langue
+    de la demande."""
     if win_utils.raccourci(*touches):
-        return Response(text=libelle, speak=False)
-    return Response.error("Je n'ai pas pu envoyer ce raccourci.")
+        return ctx.reponse(libelle, label, speak=False)
+    return ctx.erreur("Je n'ai pas pu envoyer ce raccourci.",
+                      "I couldn't send that shortcut.")
 
 
 # --------------------------------------------------------------------------
@@ -138,10 +141,12 @@ def fermer_onglet_numero(ctx: CommandContext) -> Response:
     ecran = ctx.match.groupdict().get("ecran") if ctx.match else None
     fenetre = _navigateur_vise(ctx, int(ecran) if ecran else None)
     if fenetre is None:
-        return Response.error("Je ne vois aucun navigateur ouvert.")
+        return ctx.erreur("Je ne vois aucun navigateur ouvert.",
+                          "I don't see any browser open.")
     onglets = _onglets_gauche_a_droite(fenetre)
     if not onglets:
-        return Response.error("Je ne vois aucun onglet dans ce navigateur.")
+        return ctx.erreur("Je ne vois aucun onglet dans ce navigateur.",
+                          "I don't see any tabs in that browser.")
 
     brut = text_utils.normalize(ctx.group("n") or "").strip()
     if brut in ("dernier", "derniere"):
@@ -150,17 +155,23 @@ def fermer_onglet_numero(ctx: CommandContext) -> Response:
         brut = re.sub(r"^(\d+)\s*e$", r"\1", brut)      # « 3e » -> « 3 »
         numero = deduction.nombre_entendu(brut, maximum=max(9, len(onglets)))
     if numero is None:
-        return Response.error("Quel onglet dois-je fermer ? Donnez son numéro.")
+        return ctx.erreur("Quel onglet dois-je fermer ? Donnez son numéro.",
+                          "Which tab should I close? Give me its number.")
     if not 1 <= numero <= len(onglets):
         pluriel = "s" if len(onglets) > 1 else ""
-        return Response.error(
-            "Il n'y a que " + str(len(onglets)) + " onglet" + pluriel
-            + " : pas d'onglet " + str(numero) + "."
+        combien, rang = str(len(onglets)), str(numero)
+        return ctx.erreur(
+            "Il n'y a que " + combien + " onglet" + pluriel
+            + " : pas d'onglet " + rang + ".",
+            "There are only " + combien + " tab" + pluriel
+            + ": there's no tab " + rang + ".",
         )
 
     if _fermer_onglet(onglets[numero - 1]):
-        return Response(text="Onglet " + str(numero) + " fermé.", speak=False)
-    return Response.error("Je n'ai pas réussi à fermer cet onglet.")
+        return ctx.reponse("Onglet " + str(numero) + " fermé.",
+                           "Tab " + str(numero) + " closed.", speak=False)
+    return ctx.erreur("Je n'ai pas réussi à fermer cet onglet.",
+                      "I couldn't close that tab.")
 
 
 @command(
@@ -175,7 +186,7 @@ def fermer_onglet_numero(ctx: CommandContext) -> Response:
     priority=93,
 )
 def nouvel_onglet(ctx: CommandContext) -> Response:
-    return _raccourci("Nouvel onglet.", "ctrl", "t")
+    return _raccourci(ctx, "Nouvel onglet.", "New tab.", "ctrl", "t")
 
 
 @command(
@@ -190,7 +201,7 @@ def nouvel_onglet(ctx: CommandContext) -> Response:
     priority=93,
 )
 def fermer_onglet(ctx: CommandContext) -> Response:
-    return _raccourci("Onglet fermé.", "ctrl", "w")
+    return _raccourci(ctx, "Onglet fermé.", "Tab closed.", "ctrl", "w")
 
 
 @command(
@@ -205,7 +216,7 @@ def fermer_onglet(ctx: CommandContext) -> Response:
     priority=94,
 )
 def rouvrir_onglet(ctx: CommandContext) -> Response:
-    return _raccourci("Onglet rouvert.", "ctrl", "shift", "t")
+    return _raccourci(ctx, "Onglet rouvert.", "Tab reopened.", "ctrl", "shift", "t")
 
 
 @command(
@@ -219,7 +230,7 @@ def rouvrir_onglet(ctx: CommandContext) -> Response:
     priority=95,
 )
 def onglet_suivant(ctx: CommandContext) -> Response:
-    return _raccourci("Onglet suivant.", "ctrl", "tab")
+    return _raccourci(ctx, "Onglet suivant.", "Next tab.", "ctrl", "tab")
 
 
 @command(
@@ -233,7 +244,7 @@ def onglet_suivant(ctx: CommandContext) -> Response:
     priority=95,
 )
 def onglet_precedent(ctx: CommandContext) -> Response:
-    return _raccourci("Onglet précédent.", "ctrl", "shift", "tab")
+    return _raccourci(ctx, "Onglet précédent.", "Previous tab.", "ctrl", "shift", "tab")
 
 
 @command(
@@ -247,7 +258,7 @@ def onglet_precedent(ctx: CommandContext) -> Response:
     priority=90,
 )
 def rafraichir(ctx: CommandContext) -> Response:
-    return _raccourci("Page rechargée.", "f5")
+    return _raccourci(ctx, "Page rechargée.", "Page reloaded.", "f5")
 
 
 @command(
@@ -262,7 +273,7 @@ def rafraichir(ctx: CommandContext) -> Response:
     priority=95,
 )
 def page_precedente(ctx: CommandContext) -> Response:
-    return _raccourci("Page précédente.", "alt", "gauche")
+    return _raccourci(ctx, "Page précédente.", "Previous page.", "alt", "gauche")
 
 
 @command(
@@ -276,7 +287,7 @@ def page_precedente(ctx: CommandContext) -> Response:
     priority=95,
 )
 def page_suivante(ctx: CommandContext) -> Response:
-    return _raccourci("Page suivante.", "alt", "droite")
+    return _raccourci(ctx, "Page suivante.", "Next page.", "alt", "droite")
 
 
 @command(
@@ -291,7 +302,7 @@ def page_suivante(ctx: CommandContext) -> Response:
     priority=91,
 )
 def zoom_avant(ctx: CommandContext) -> Response:
-    return _raccourci("Zoom avant.", "ctrl", "plus")
+    return _raccourci(ctx, "Zoom avant.", "Zoomed in.", "ctrl", "plus")
 
 
 @command(
@@ -306,7 +317,7 @@ def zoom_avant(ctx: CommandContext) -> Response:
     priority=91,
 )
 def zoom_arriere(ctx: CommandContext) -> Response:
-    return _raccourci("Zoom arrière.", "ctrl", "moins")
+    return _raccourci(ctx, "Zoom arrière.", "Zoomed out.", "ctrl", "moins")
 
 
 @command(
@@ -322,7 +333,7 @@ def zoom_arriere(ctx: CommandContext) -> Response:
     priority=93,
 )
 def zoom_normal(ctx: CommandContext) -> Response:
-    return _raccourci("Zoom réinitialisé.", "ctrl", "zero")
+    return _raccourci(ctx, "Zoom réinitialisé.", "Zoom reset.", "ctrl", "zero")
 
 
 @command(
@@ -337,7 +348,7 @@ def zoom_normal(ctx: CommandContext) -> Response:
     priority=96,
 )
 def plein_ecran(ctx: CommandContext) -> Response:
-    return _raccourci("Plein écran.", "f11")
+    return _raccourci(ctx, "Plein écran.", "Full screen.", "f11")
 
 
 @command(
@@ -352,7 +363,7 @@ def plein_ecran(ctx: CommandContext) -> Response:
     priority=94,
 )
 def minimiser(ctx: CommandContext) -> Response:
-    return _raccourci("Fenêtre réduite.", "win", "bas")
+    return _raccourci(ctx, "Fenêtre réduite.", "Window minimised.", "win", "bas")
 
 
 @command(
@@ -366,7 +377,7 @@ def minimiser(ctx: CommandContext) -> Response:
     priority=94,
 )
 def agrandir_fenetre(ctx: CommandContext) -> Response:
-    return _raccourci("Fenêtre agrandie.", "win", "haut")
+    return _raccourci(ctx, "Fenêtre agrandie.", "Window maximised.", "win", "haut")
 
 
 @command(
@@ -380,7 +391,7 @@ def agrandir_fenetre(ctx: CommandContext) -> Response:
     priority=94,
 )
 def fermer_fenetre(ctx: CommandContext) -> Response:
-    return _raccourci("Fenêtre fermée.", "alt", "f4")
+    return _raccourci(ctx, "Fenêtre fermée.", "Window closed.", "alt", "f4")
 
 
 @command(
@@ -395,7 +406,7 @@ def fermer_fenetre(ctx: CommandContext) -> Response:
     priority=94,
 )
 def changer_fenetre(ctx: CommandContext) -> Response:
-    return _raccourci("Fenêtre suivante.", "alt", "tab")
+    return _raccourci(ctx, "Fenêtre suivante.", "Next window.", "alt", "tab")
 
 
 @command(
@@ -410,7 +421,7 @@ def changer_fenetre(ctx: CommandContext) -> Response:
     priority=96,
 )
 def afficher_bureau(ctx: CommandContext) -> Response:
-    return _raccourci("Bureau affiché.", "win", "d")
+    return _raccourci(ctx, "Bureau affiché.", "Desktop shown.", "win", "d")
 
 
 @command(
@@ -427,8 +438,10 @@ def afficher_bureau(ctx: CommandContext) -> Response:
 def capture_zone(ctx: CommandContext) -> Response:
     """Ouvre l'outil de capture de Windows pour sélectionner une région."""
     if win_utils.raccourci("win", "shift", "s"):
-        return Response(text="Sélectionnez la zone à capturer.", speak=False)
-    return Response.error("Je n'ai pas pu ouvrir l'outil de capture.")
+        return ctx.reponse("Sélectionnez la zone à capturer.",
+                           "Select the area to capture.", speak=False)
+    return ctx.erreur("Je n'ai pas pu ouvrir l'outil de capture.",
+                      "I couldn't open the snipping tool.")
 
 
 # Ce qui, devant « sur l ecran N », n est qu une facon de s adresser a Alma et
@@ -503,18 +516,23 @@ def choisir_ecran(ctx: CommandContext) -> Response:
     index = numero_ecran(ctx)
     ecrans = desktop.ecrans()
     if index is None:
-        return Response.error(
-            "Quel écran ? Vous en avez " + str(len(ecrans)) + ". Dites « écran 1 » ou « écran 2 »."
+        return ctx.erreur(
+            "Quel écran ? Vous en avez " + str(len(ecrans)) + ". Dites « écran 1 » ou « écran 2 ».",
+            "Which screen? You have " + str(len(ecrans)) + '. Say "screen 1" or "screen 2".',
         )
     try:
         change = ctx.assistant.definir_ecran(index)
     except ValueError:
-        return Response.error(
-            "Je ne vois que " + str(len(ecrans)) + " écran(s), pas d'écran " + str(index) + "."
+        return ctx.erreur(
+            "Je ne vois que " + str(len(ecrans)) + " écran(s), pas d'écran " + str(index) + ".",
+            "I only see " + str(len(ecrans)) + " screen(s), there's no screen "
+            + str(index) + ".",
         )
     if not change:
-        return Response(text="Déjà sur l'écran " + str(index) + ".", speak=False)
-    return Response(text="Écran " + str(index) + ".", speak=False)
+        return ctx.reponse("Déjà sur l'écran " + str(index) + ".",
+                           "Already on screen " + str(index) + ".", speak=False)
+    return ctx.reponse("Écran " + str(index) + ".", "Screen " + str(index) + ".",
+                       speak=False)
 
 
 @command(
@@ -539,7 +557,11 @@ def quel_ecran(ctx: CommandContext) -> Response:
     ecrans = desktop.ecrans()
     index = ctx.assistant.ecran_actif
     detail = ""
+    taille = ""
     for ecran in ecrans:
         if ecran.index == index:
-            detail = " (" + str(ecran.largeur) + " sur " + str(ecran.hauteur) + ")"
-    return Response(text="Je travaille sur l'écran " + str(index) + detail + ".")
+            taille = str(ecran.largeur) + (" by " if ctx.lang == "en" else " sur ") \
+                + str(ecran.hauteur)
+    detail = (" (" + taille + ")") if taille else ""
+    return ctx.reponse("Je travaille sur l'écran " + str(index) + detail + ".",
+                       "I'm working on screen " + str(index) + detail + ".")

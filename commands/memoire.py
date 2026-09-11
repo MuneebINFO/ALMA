@@ -80,16 +80,16 @@ def memoire_retenir(ctx: CommandContext) -> Response:
     """Enregistre un fait que l'assistant devra retrouver plus tard."""
     fait = _sans_conjonction(ctx.group("fait"))
     if not fait or len(_mots_utiles(fait)) == 0:
-        return Response.error("Que dois-je retenir ?")
+        return ctx.erreur("Que dois-je retenir ?", "What should I remember?")
 
     connus = ctx.storage.souvenirs.load()
     normalise = text_utils.normalize(fait).strip()
     for souvenir in connus:
         if text_utils.normalize(str(souvenir.get("text", ""))).strip() == normalise:
-            return Response(text="Je le savais déjà.", speak=False)
+            return ctx.reponse("Je le savais déjà.", "I already knew that.", speak=False)
 
     ctx.storage.souvenirs.append({"text": fait, "source": ctx.source})
-    return Response(text="C'est retenu : " + fait, speak=False)
+    return ctx.reponse("C'est retenu : " + fait, "Noted: " + fait, speak=False)
 
 
 @command(
@@ -112,9 +112,11 @@ def memoire_retenir(ctx: CommandContext) -> Response:
 )
 def memoire_rappeler(ctx: CommandContext) -> Response:
     """Restitue ce qui a été retenu, sur un sujet ou en entier."""
+    anglais = ctx.lang == "en"
     souvenirs = ctx.storage.souvenirs.load()
     if not souvenirs:
-        return Response(text="Je ne retiens rien pour l'instant.")
+        return ctx.reponse("Je ne retiens rien pour l'instant.",
+                           "I'm not holding on to anything yet.")
 
     sujet = (ctx.group("sujet") or "").strip(" .?")
     mots = _mots_utiles(sujet)
@@ -122,14 +124,15 @@ def memoire_rappeler(ctx: CommandContext) -> Response:
         classes = [(s, _pertinence(s, mots)) for s in souvenirs]
         retenus = [s for s, score in sorted(classes, key=lambda c: -c[1]) if score]
         if not retenus:
-            return Response(text="Je ne retiens rien sur « " + sujet + " ».")
-        entete = "Sur « " + sujet + " » : "
+            return ctx.reponse("Je ne retiens rien sur « " + sujet + " ».",
+                               "I don't remember anything about \"" + sujet + "\".")
+        entete = ("About \"" + sujet + "\": ") if anglais else ("Sur « " + sujet + " » : ")
     else:
         retenus = souvenirs
-        entete = "Je retiens : "
+        entete = "Here's what I remember: " if anglais else "Je retiens : "
 
     if len(retenus) > 5:
-        entete = entete + str(len(retenus)) + " choses, dont "
+        entete += str(len(retenus)) + (" things, including " if anglais else " choses, dont ")
         retenus = retenus[:5]
     return Response(text=entete + " ; ".join(str(s.get("text", "")) for s in retenus) + ".")
 
@@ -153,18 +156,19 @@ def memoire_oublier(ctx: CommandContext) -> Response:
     sujet = (ctx.group("sujet") or "").strip(" .")
     souvenirs = ctx.storage.souvenirs.load()
     if not souvenirs:
-        return Response(text="Je ne retiens rien.", speak=False)
+        return ctx.reponse("Je ne retiens rien.", "I'm not remembering anything.",
+                           speak=False)
 
     if text_utils.normalize(sujet).strip() in (
         "tout", "tous mes souvenirs", "mes souvenirs",
         "everything", "all my memories", "my memories",
     ):
         ctx.storage.souvenirs.clear()
-        return Response(text="J'ai tout oublié.", speak=False)
+        return ctx.reponse("J'ai tout oublié.", "I've forgotten everything.", speak=False)
 
     mots = _mots_utiles(sujet)
     if not mots:
-        return Response.error("Qu'est-ce que je dois oublier ?")
+        return ctx.erreur("Qu'est-ce que je dois oublier ?", "What should I forget?")
     # On n efface que ce qui parle VRAIMENT du sujet. « ma soeur s appelle
     # Yasmine » et « mon frere s appelle Karim » partagent « appelle » : un
     # seul mot en commun ferait disparaitre le second avec le premier. On
@@ -173,9 +177,12 @@ def memoire_oublier(ctx: CommandContext) -> Response:
     gardes = [s for s in souvenirs if _pertinence(s, mots) < seuil]
     efface = len(souvenirs) - len(gardes)
     if not efface:
-        return Response(text="Je ne retiens rien sur « " + sujet + " ».", speak=False)
+        return ctx.reponse("Je ne retiens rien sur « " + sujet + " ».",
+                           "I don't remember anything about \"" + sujet + "\".",
+                           speak=False)
     ctx.storage.souvenirs.save(gardes)
-    return Response(
-        text="Oublié" + ("" if efface == 1 else " (" + str(efface) + " souvenirs)") + ".",
+    return ctx.reponse(
+        "Oublié" + ("" if efface == 1 else " (" + str(efface) + " souvenirs)") + ".",
+        "Forgotten" + ("" if efface == 1 else " (" + str(efface) + " memories)") + ".",
         speak=False,
     )
