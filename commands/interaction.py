@@ -22,6 +22,11 @@ ORDINAUX = {
     "deuxieme": 2, "second": 2, "seconde": 2, "2": 2,
     "troisieme": 3, "3": 3, "quatrieme": 4, "4": 4, "cinquieme": 5, "5": 5,
     "dernier": -1, "derniere": -1,
+    # Memes ordinaux, en anglais.
+    "first": 1, "1st": 1,
+    "2nd": 2,
+    "third": 3, "3rd": 3, "fourth": 4, "4th": 4, "fifth": 5, "5th": 5,
+    "last": -1,
 }
 
 
@@ -51,6 +56,25 @@ TYPES_PAR_MOT = {
     "compte": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE,
                interaction.ITEM_LISTE, interaction.BOUTON),
     "proposition": (interaction.LIEN, interaction.GROUPE, interaction.ITEM_LISTE),
+    # Memes natures, en anglais.
+    "button": (interaction.BOUTON,),
+    "buttons": (interaction.BOUTON,),
+    "link": (interaction.LIEN,),
+    "thumbnail": (interaction.IMAGE,),
+    "tab": (interaction.ONGLET,),
+    "checkbox": (interaction.CASE,),
+    "field": (interaction.CHAMP,),
+    "movie": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE, interaction.ITEM_LISTE),
+    "show": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE, interaction.ITEM_LISTE),
+    "song": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE),
+    "title": (interaction.LIEN, interaction.GROUPE),
+    "result": (interaction.LIEN, interaction.GROUPE, interaction.ITEM_LISTE),
+    "profile": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE,
+                interaction.ITEM_LISTE, interaction.BOUTON),
+    "account": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE,
+                interaction.ITEM_LISTE, interaction.BOUTON),
+    "suggestion": (interaction.LIEN, interaction.GROUPE, interaction.ITEM_LISTE),
+    "item": (interaction.LIEN, interaction.GROUPE, interaction.IMAGE, interaction.ITEM_LISTE),
 }
 
 # Les interfaces sont souvent en anglais, meme quand on parle francais :
@@ -172,7 +196,7 @@ def direction_demandee(ctx: CommandContext) -> int:
     keywords=[["scroll"], ["defile"]],
     category="Navigation",
     description="Faire défiler la page (vers le bas par défaut)",
-    examples=["scrolle", "fais défiler vers le haut"],
+    examples=["scrolle", "fais défiler vers le haut", "scroll down"],
     priority=92,
 )
 def defiler(ctx: CommandContext) -> Response:
@@ -226,10 +250,14 @@ def _ordinal_demande(ctx: CommandContext):
         r"(?:sur\s+)?(?:la|le|l)\s+(?P<rang>premier|premiere|deuxieme|second|seconde|troisieme|"
         r"quatrieme|cinquieme|dernier|derniere)\s+(?P<quoi>video|film|resultat|lien|"
         r"proposition|image|element|serie|episode)",
+        # « click on the first video », « open the last result »
+        r"^(?:click|tap|select|open|play|watch)\s+(?:on\s+)?(?:the\s+)?"
+        r"(?P<rang>first|second|third|fourth|fifth|last)\s+"
+        r"(?P<quoi>video|movie|result|link|suggestion|image|item|show|episode)",
     ],
     category="Navigation",
     description="Cliquer sur le premier, deuxième... élément affiché",
-    examples=["clique sur la première vidéo"],
+    examples=["clique sur la première vidéo", "click on the first video"],
     priority=94,
 )
 def cliquer_ordinal(ctx: CommandContext) -> Response:
@@ -289,10 +317,18 @@ def cliquer_ordinal(ctx: CommandContext) -> Response:
         r"serie|episode|clip|chanson|musique|titre|resultat|proposition|profil|"
         r"compte)?\s*"
         r"(?P<label>.+)$",
+        # « click on Subscribe », « click the play button », « tap on Abonnements »
+        r"^(?:click|tap|select|choose)\s+(?:on\s+)?"
+        r"(?:the\s+|a\s+)?"
+        r"(?P<type>button|buttons|link|image|thumbnail|tab|checkbox|field|video|movie|"
+        r"show|episode|clip|song|title|result|suggestion|profile|"
+        r"account)?\s*"
+        r"(?P<label>.+)$",
     ],
     category="Navigation",
     description="Cliquer sur un élément visible, en le nommant",
-    examples=["clique sur Abonnements", "clique sur le bouton lecture"],
+    examples=["clique sur Abonnements", "clique sur le bouton lecture",
+              "click on Subscribe"],
     priority=91,
 )
 def cliquer_sur(ctx: CommandContext) -> Response:

@@ -156,3 +156,18 @@ def test_websites_en_anglais(router, phrase, attendu):
 ])
 def test_system_en_anglais(router, phrase, attendu):
     assert route(router, phrase) == attendu, phrase
+
+
+# --------------------------------------------------------------------------
+# commands/interaction.py -- défilement et clic
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("phrase,attendu", [
+    ("scroll down", "defiler"),
+    ("scroll up", "defiler"),
+    ("click on the first video", "cliquer_ordinal"),
+    ("open the last result", "cliquer_ordinal"),
+    ("click on Subscribe", "cliquer_sur"),
+    ("click the play button", "cliquer_sur"),
+])
+def test_interaction_en_anglais(router, phrase, attendu):
+    assert route(router, phrase) == attendu, phrase
