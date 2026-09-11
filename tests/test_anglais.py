@@ -21,6 +21,43 @@ def route(router, phrase):
 
 
 # --------------------------------------------------------------------------
+# La langue de la phrase : c'est elle qui décide de la langue de la réponse
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("phrase,langue", [
+    # Français
+    ("ouvre Chrome", "fr"),
+    ("ferme la fenêtre", "fr"),
+    ("quelle heure est-il", "fr"),
+    ("chanson suivante", "fr"),
+    ("retourne à l'accueil", "fr"),
+    ("rappelle-moi dans 10 minutes de sortir le gâteau", "fr"),
+    ("va sur l'écran 2", "fr"),
+    ("raconte-moi une blague", "fr"),
+    # Anglais
+    ("open Chrome", "en"),
+    ("close the window", "en"),
+    ("what time is it", "en"),
+    ("next song", "en"),
+    ("go home", "en"),
+    ("remind me in 10 minutes to take out the cake", "en"),
+    ("switch to screen 2", "en"),
+    ("tell me a joke", "en"),
+])
+def test_la_langue_de_la_phrase_est_reconnue(phrase, langue):
+    assert Utterance.parse(phrase, wake_words=["alma"]).lang == langue, phrase
+
+
+def test_sans_indice_on_reste_en_francais():
+    """
+    Un mot seul et partagé par les deux langues (« screenshot », un nom
+    propre) ne tranche rien : ALMA est un assistant français d'abord, donc
+    c'est le français qui l'emporte plutôt qu'un pari.
+    """
+    assert Utterance.parse("screenshot", wake_words=["alma"]).lang == "fr"
+    assert Utterance.parse("Spotify", wake_words=["alma"]).lang == "fr"
+
+
+# --------------------------------------------------------------------------
 # commands/fenetres.py -- onglets, fenêtres, écrans
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize("phrase,attendu", [
