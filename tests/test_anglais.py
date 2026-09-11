@@ -84,3 +84,25 @@ def test_fenetres_en_anglais(router, phrase, attendu):
 ])
 def test_apps_en_anglais(router, phrase, attendu):
     assert route(router, phrase) == attendu, phrase
+
+
+# --------------------------------------------------------------------------
+# commands/media.py -- lecture, pause, musique
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("phrase,attendu", [
+    ("pause the video on screen 2", "media_pause_ecran"),
+    ("resume playback on screen 2", "media_reprise_ecran"),
+    ("pause everything", "media_pause_tout"),
+    ("what's playing", "media_what_is_playing"),
+    ("play", "media_play_pause"),
+    ("pause", "media_play_pause"),
+    ("next song", "media_next"),
+    ("skip", "media_next"),
+    ("previous song", "media_previous"),
+    ("play some music", "play_music"),
+    ("play the video", "media_lecture"),
+    ("pause the video", "media_mettre_en_pause"),
+    ("stop the music", "media_mettre_en_pause"),
+])
+def test_media_en_anglais(router, phrase, attendu):
+    assert route(router, phrase) == attendu, phrase

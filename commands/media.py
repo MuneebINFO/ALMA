@@ -36,8 +36,8 @@ ORDINAUX = {
     "fourth": 4, "4th": 4,
 }
 
-VERBES_PAUSE = r"(?:pause|met[s]?\s+en\s+pause|mettre\s+en\s+pause|stoppe|stopper|arrete|arreter|coupe|couper|suspend|suspendre|freeze|gele)"
-VERBES_REPRISE = r"(?:reprend|reprends|reprendre|relance|relancer|continue|continuer|remet[s]?|redemarre|play|joue|reprise)"
+VERBES_PAUSE = r"(?:pause|met[s]?\s+en\s+pause|mettre\s+en\s+pause|stoppe|stopper|arrete|arreter|coupe|couper|suspend|suspendre|freeze|gele|stop|hold)"
+VERBES_REPRISE = r"(?:reprend|reprends|reprendre|relance|relancer|continue|continuer|remet[s]?|redemarre|play|joue|reprise|resume|restart)"
 
 
 def music_folder(config) -> Path:
@@ -145,7 +145,8 @@ def fenetre_regardee(ctx: CommandContext, index_ecran: int):
     keywords=[["pause", "ecran"], ["stoppe", "ecran"], ["arrete", "ecran"]],
     category="Musique",
     description="Mettre en pause ce qui joue sur un écran précis",
-    examples=["mets pause sur l'écran 2", "arrête la vidéo sur le deuxième écran"],
+    examples=["mets pause sur l'écran 2", "arrête la vidéo sur le deuxième écran",
+              "pause the video on screen 2"],
     priority=97,
 )
 def media_pause_ecran(ctx: CommandContext) -> Response:
@@ -173,7 +174,7 @@ def media_pause_ecran(ctx: CommandContext) -> Response:
     keywords=[["reprends", "ecran"], ["relance", "ecran"]],
     category="Musique",
     description="Reprendre la lecture sur un écran précis",
-    examples=["reprends la lecture sur l'écran 2"],
+    examples=["reprends la lecture sur l'écran 2", "resume playback on screen 2"],
     priority=97,
 )
 def media_reprise_ecran(ctx: CommandContext) -> Response:
@@ -188,14 +189,16 @@ def media_reprise_ecran(ctx: CommandContext) -> Response:
 @command(
     name="media_pause_tout",
     patterns=[
-        VERBES_PAUSE + r"\s+(?:tout|tous|la\s+lecture|toutes\s+les\s+videos|partout)",
-        r"^(?:pause|silence)\s+(?:generale?|partout|tout)$",
+        VERBES_PAUSE + r"\s+(?:tout|tous|la\s+lecture|toutes\s+les\s+videos|partout|"
+        r"everything|all|everywhere)",
+        r"^(?:pause|silence)\s+(?:generale?|partout|tout|everywhere)$",
         r"(?:met[s]?|mettre)\s+tout\s+en\s+pause",
+        r"^pause\s+everything$",
     ],
-    keywords=[["pause", "tout"], ["arrete", "tout"]],
+    keywords=[["pause", "tout"], ["arrete", "tout"], ["pause", "everything"]],
     category="Musique",
     description="Mettre en pause tous les lecteurs à la fois",
-    examples=["mets tout en pause", "pause partout"],
+    examples=["mets tout en pause", "pause partout", "pause everything"],
     priority=96,
 )
 def media_pause_tout(ctx: CommandContext) -> Response:
@@ -215,11 +218,13 @@ def media_pause_tout(ctx: CommandContext) -> Response:
         r"quelle?\s+(?:musique|chanson|video)\s+(?:joue|passe|est\s+en\s+cours)|"
         r"c\s+est\s+quoi\s+(?:cette|la)\s+(?:musique|chanson))",
         r"^(?:qu\s+est\s+ce\s+qui\s+passe)$",
+        r"what\s*(?:'s|\s+is)\s+playing",
+        r"what\s+(?:song|music|video)\s+is\s+(?:this|playing)",
     ],
-    keywords=[["quoi", "joue"], ["quelle", "musique"]],
+    keywords=[["quoi", "joue"], ["quelle", "musique"], ["what", "playing"]],
     category="Musique",
     description="Dire ce qui est en cours de lecture",
-    examples=["qu'est-ce qui joue"],
+    examples=["qu'est-ce qui joue", "what's playing"],
     priority=95,
 )
 def media_what_is_playing(ctx: CommandContext) -> Response:
@@ -278,7 +283,7 @@ def media_play_pause(ctx: CommandContext) -> Response:
     keywords=[["musique", "suivante"], ["chanson", "suivante"], ["suivant"], ["skip"]],
     category="Musique",
     description="Passer au morceau suivant",
-    examples=["chanson suivante", "suivant"],
+    examples=["chanson suivante", "suivant", "next song", "skip"],
     priority=87,
 )
 def media_next(ctx: CommandContext) -> Response:
@@ -304,7 +309,7 @@ def media_next(ctx: CommandContext) -> Response:
     keywords=[["musique", "precedente"], ["chanson", "precedente"], ["precedent"]],
     category="Musique",
     description="Revenir au morceau précédent",
-    examples=["chanson précédente"],
+    examples=["chanson précédente", "previous song"],
     priority=87,
 )
 def media_previous(ctx: CommandContext) -> Response:
@@ -324,11 +329,13 @@ def media_previous(ctx: CommandContext) -> Response:
         r"(?:de\s+la\s+|un\s+peu\s+de\s+|la\s+|du\s+)?musique$",
         r"^(?:musique|de\s+la\s+musique|un\s+peu\s+de\s+musique)$",
         r"(?:j\s+ai\s+envie\s+de|on\s+met)\s+(?:de\s+la\s+)?musique",
+        r"^(?:play|put\s+on)\s+(?:some\s+)?music$", r"^music$",
     ],
-    keywords=[["joue", "musique"], ["lance", "musique"], ["mets", "musique"]],
+    keywords=[["joue", "musique"], ["lance", "musique"], ["mets", "musique"],
+              ["play", "music"]],
     category="Musique",
     description="Lancer la musique (dossier local, sinon Spotify)",
-    examples=["mets de la musique"],
+    examples=["mets de la musique", "play some music"],
     priority=89,
 )
 def play_music(ctx: CommandContext) -> Response:
@@ -362,7 +369,8 @@ def play_music(ctx: CommandContext) -> Response:
 # Ce sur quoi peut porter une demande de lecture ou de pause.
 # « son » est volontairement absent : « remets le son » veut dire retablir
 # le volume, pas relancer la lecture.
-OBJET_LECTURE = r"(?:video|videos|film|musique|chanson|lecture|serie|episode|podcast)"
+OBJET_LECTURE = (r"(?:video|videos|film|musique|chanson|lecture|serie|episode|podcast|"
+                 r"movie|music|song|playback|series)")
 
 
 @command(
@@ -375,12 +383,14 @@ OBJET_LECTURE = r"(?:video|videos|film|musique|chanson|lecture|serie|episode|pod
         r"(?:la\s+|le\s+|l\s+)?" + OBJET_LECTURE + r"$",
         r"^(?:met[s]?|mettre)\s+(?:la\s+|le\s+)?" + OBJET_LECTURE + r"\s+en\s+(?:marche|lecture|route)$",
         r"^(?:appuie|appuyer)\s+sur\s+(?:le\s+bouton\s+)?(?:play|lecture)$",
+        r"^(?:play|resume|restart)\s+(?:the\s+)?" + OBJET_LECTURE + r"$",
+        r"^press\s+play$",
     ],
     # Pas de mots-cles de secours ici : « lance » + « video » captureraient
     # « lance la video Interstellar », qui designe une video precise.
     category="Musique",
     description="Lancer la lecture de la vidéo ou de la musique",
-    examples=["lance la vidéo", "reprends la lecture"],
+    examples=["lance la vidéo", "reprends la lecture", "play the video"],
     priority=93,
 )
 def media_lecture(ctx: CommandContext) -> Response:
@@ -404,11 +414,13 @@ def media_lecture(ctx: CommandContext) -> Response:
         # position, ce qu un arret pur et simple perdait.
         r"^(?:arrete|arreter|stoppe|stopper|coupe|suspend[s]?)\s+"
         r"(?:la\s+|le\s+|l\s+)?" + OBJET_LECTURE + r"$",
+        r"^pause\s+(?:the\s+)?" + OBJET_LECTURE + r"$",
+        r"^(?:stop|hold)\s+(?:the\s+)?" + OBJET_LECTURE + r"$",
     ],
-    keywords=[["pause", "video"], ["pause", "musique"]],
+    keywords=[["pause", "video"], ["pause", "musique"], ["pause", "the", "video"]],
     category="Musique",
     description="Mettre la vidéo ou la musique en pause",
-    examples=["mets pause à la vidéo", "mets la vidéo en pause"],
+    examples=["mets pause à la vidéo", "mets la vidéo en pause", "pause the video"],
     priority=93,
 )
 def media_mettre_en_pause(ctx: CommandContext) -> Response:
