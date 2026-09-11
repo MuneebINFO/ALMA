@@ -157,8 +157,10 @@ def calculer(ctx: CommandContext) -> Response:
     expression = en_expression(ctx.arg)
     resultat = evaluer(expression)
     if resultat is None:
-        return Response.error("Je n'ai pas su calculer cela.")
-    return Response(text="Ça fait " + formater(resultat) + ".")
+        return ctx.erreur("Je n'ai pas su calculer cela.",
+                          "I couldn't work that one out.")
+    return ctx.reponse("Ça fait " + formater(resultat) + ".",
+                       "That's " + formater(resultat) + ".")
 
 
 @command(
@@ -173,7 +175,9 @@ def calculer(ctx: CommandContext) -> Response:
     priority=95,
 )
 def pile_ou_face(ctx: CommandContext) -> Response:
-    return Response(text=random.choice(("Pile.", "Face.")))
+    pile = random.choice((True, False))
+    return ctx.reponse("Pile." if pile else "Face.",
+                       "Heads." if pile else "Tails.")
 
 
 @command(
@@ -197,7 +201,8 @@ def lancer_de(ctx: CommandContext) -> Response:
         if token.isdigit() and 2 <= int(token) <= 1000:
             faces = int(token)
             break
-    return Response(text="J'ai obtenu " + str(random.randint(1, faces)) + ".")
+    tirage = str(random.randint(1, faces))
+    return ctx.reponse("J'ai obtenu " + tirage + ".", "I rolled " + tirage + ".")
 
 
 @command(
