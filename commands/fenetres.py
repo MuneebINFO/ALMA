@@ -541,8 +541,9 @@ def choisir_ecran(ctx: CommandContext) -> Response:
     patterns=[
         r"(?:sur\s+)?quel\s+ecran\s+(?:es\s+tu|tu\s+es|suis\s+je|on\s+est|travailles\s+tu)",
         r"^(?:quel\s+est\s+l\s+ecran|ecran\s+actuel|quel\s+ecran)\s*\??$",
-        r"which\s+screen\s+(?:are\s+you\s+on|do\s+you\s+work\s+on)",
-        r"^(?:what|which)\s+(?:is\s+the\s+)?(?:current\s+)?screen\s*\??$",
+        r"(?:what|which)\s+(?:screen|monitor)\s+(?:are\s+you\s+on|"
+        r"are\s+we\s+on|am\s+i\s+on|do\s+you\s+work\s+on)",
+        r"^(?:what|which)\s+(?:is\s+the\s+)?(?:current\s+)?(?:screen|monitor)\s*\??$",
     ],
     keywords=[["quel", "ecran"], ["which", "screen"]],
     category="Fenêtres",

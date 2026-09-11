@@ -109,15 +109,13 @@ class Router:
             result = resolution.command.handler(ctx)
         except Exception as exc:
             log.exception("Erreur dans la commande %s", resolution.command.name)
-            return (
-                Response.error(
-                    "Une erreur est survenue en exécutant la commande "
-                    + resolution.command.name
-                    + " : "
-                    + str(exc)
-                ),
-                resolution,
-            )
+            if utterance.lang == "en":
+                texte = ("Something went wrong while running the command "
+                         + resolution.command.name + ": " + str(exc))
+            else:
+                texte = ("Une erreur est survenue en exécutant la commande "
+                         + resolution.command.name + " : " + str(exc))
+            return Response.error(texte), resolution
         if result is None:
             return Response(text="", speak=False), resolution
         if isinstance(result, str):

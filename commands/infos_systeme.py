@@ -129,7 +129,8 @@ def adresse_ip(ctx: CommandContext) -> Response:
 )
 def vider_corbeille(ctx: CommandContext) -> Response:
     """Suppression definitive : confirmation obligatoire."""
-    if not ctx.confirm("Vider définitivement la corbeille ?"):
+    if not ctx.confirm("Vider définitivement la corbeille ?",
+                       "Empty the recycle bin for good?"):
         return ctx.reponse("Corbeille conservée.", "Recycle bin left alone.")
     ok, sortie = win_utils.run_command([
         "powershell", "-NoProfile", "-Command", "Clear-RecycleBin -Force -ErrorAction Stop"

@@ -84,7 +84,8 @@ def claude_demander(ctx: CommandContext) -> Response:
     # La question part dans une conversation NEUVE, et on demande d'abord.
     # Sans cela elle atterrit dans ce qui est affiché — une session Claude Code
     # en cours de travail, par exemple — et s'y mélange à autre chose.
-    if not ctx.confirm("J'ouvre une nouvelle conversation Claude ?"):
+    if not ctx.confirm("J'ouvre une nouvelle conversation Claude ?",
+                       "Shall I open a new Claude conversation?"):
         return ctx.reponse("Très bien, je n'ouvre rien.",
                            "All right, I won't open anything.", speak=False)
     # Le chat d'abord : « New » depuis la section Code créerait une session de

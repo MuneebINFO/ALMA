@@ -86,20 +86,6 @@ def ask_claude(ctx: CommandContext) -> Response:
     )
 
 
-@command(
-    name="search_wikipedia",
-    informatif=True,
-    patterns=[
-        r"^" + SEARCH_VERBS + r"\s+(.+?)\s+sur\s+wikipedia$",
-        r"^wikipedia\s+(.+)$",
-        r"^(?:qui\s+est|qu\s+est\s+ce\s+que|qu\s+est\s+ce\s+qu|c\s+est\s+quoi|parle\s+moi\s+de|definition\s+de)\s+(.+)$",
-        r"^(?:who\s+is|what\s+is|tell\s+me\s+about|definition\s+of)\s+(.+)$",
-    ],
-    category="Recherche",
-    description="Lire un résumé Wikipedia",
-    examples=["cherche Alan Turing sur Wikipedia", "qui est Marie Curie"],
-    priority=90,
-)
 def _wikipedia_summary(query: str, lang: str = "fr", timeout: int = 8) -> tuple[str, str]:
     """
     Résumé Wikipedia via l API REST officielle (gratuite, sans cle).
@@ -156,12 +142,27 @@ def _wikipedia_summary_legacy(query: str, lang: str = "fr") -> str:
         return ""
 
 
+@command(
+    name="search_wikipedia",
+    informatif=True,
+    patterns=[
+        r"^" + SEARCH_VERBS + r"\s+(.+?)\s+sur\s+wikipedia$",
+        r"^wikipedia\s+(.+)$",
+        r"^(?:qui\s+est|qu\s+est\s+ce\s+que|qu\s+est\s+ce\s+qu|c\s+est\s+quoi|parle\s+moi\s+de|definition\s+de)\s+(.+)$",
+        r"^(?:who\s+is|what\s+is|tell\s+me\s+about|definition\s+of)\s+(.+)$",
+    ],
+    category="Recherche",
+    description="Lire un résumé Wikipedia",
+    examples=["cherche Alan Turing sur Wikipedia", "qui est Marie Curie",
+              "who is Marie Curie"],
+    priority=90,
+)
 def search_wikipedia(ctx: CommandContext) -> Response:
     """Recupere un résumé Wikipedia et l affiche (et le lit en mode voix)."""
     query = ctx.arg
     if not query:
         return ctx.erreur("Sur quel sujet ?", "On what subject?")
-    lang = str(ctx.config.get("general.language", "fr"))[:2]
+    lang = ctx.lang
     page_url = "https://" + lang + ".wikipedia.org/wiki/Special:Search?search=" + quote_plus(query)
 
     try:
@@ -193,7 +194,7 @@ def search_wikipedia(ctx: CommandContext) -> Response:
     name="translate",
     informatif=True,
     patterns=[
-        r"^(?:traduis|traduire|traduit|translate)\s+(.+?)\s+(?:en|in|vers|to)\s+([a-z]+)$",
+        r"^(?:traduis|traduire|traduit|translate)\s+(.+?)\s+(?:en|in|into|vers|to)\s+([a-z]+)$",
         r"^(?:traduis|traduire|traduit|translate)\s+(.+)$",
     ],
     category="Recherche",
@@ -209,8 +210,11 @@ def translate(ctx: CommandContext) -> Response:
     target_word = ctx.group(2).lower() if ctx.match and ctx.match.lastindex and ctx.match.lastindex >= 2 else ""
     target = LANGUAGES.get(target_word, "")
     if not target:
-        # Pas de langue précisee : on vise l anglais par defaut.
-        target = "en" if str(ctx.config.get("general.language", "fr")).startswith("fr") else "fr"
+        # Pas de langue precisee : on vise l AUTRE langue que celle parlee.
+        # Demander « traduis bonjour » en francais vise l anglais, et
+        # "translate hello" vise le francais -- sinon on traduirait une
+        # phrase vers sa propre langue.
+        target = "fr" if ctx.lang == "en" else "en"
     url = (
         "https://translate.google.com/?sl=auto&tl=" + target
         + "&text=" + quote_plus(text) + "&op=translate"
@@ -225,13 +229,16 @@ def translate(ctx: CommandContext) -> Response:
     name="search_google",
     patterns=[
         r"^" + SEARCH_VERBS + r"\s+(.+?)\s+sur\s+(?:google|internet|le\s+web)$",
-        r"^google\s+(.+)$",
-        r"^" + SEARCH_VERBS + r"\s+(.+)$",
+        r"^" + SEARCH_VERBS + r"\s+(?:for\s+)?(.+?)\s+on\s+(?:google|the\s+web|the\s+internet)$",
+        r"^google\s+(?:for\s+)?(.+)$",
+        r"^(?:search|look\s+up)\s+google\s+(?:for\s+)?(.+)$",
+        r"^" + SEARCH_VERBS + r"\s+(?:for\s+)?(.+)$",
         r"^(?:recherche\s+google|search)\s*:?\s*(.+)$",
     ],
     category="Recherche",
     description="Rechercher sur Google",
-    examples=["cherche des idées de cadeaux", "google météo Bruxelles"],
+    examples=["cherche des idées de cadeaux", "google météo Bruxelles",
+              "search Google for gift ideas"],
     priority=80,
 )
 def search_google(ctx: CommandContext) -> Response:
@@ -247,12 +254,15 @@ def search_google(ctx: CommandContext) -> Response:
 @command(
     name="search_images",
     patterns=[
-        r"^" + SEARCH_VERBS + r"\s+(?:des\s+|une\s+|les\s+)?(?:images?|photos?)\s+(?:de\s+|d\s+|of\s+)?(.+)$",
-        r"^(?:montre|montrer|show)\s+(?:moi\s+|me\s+)?(?:des\s+)?(?:images?|photos?)\s+(?:de\s+|d\s+|of\s+)?(.+)$",
+        r"^" + SEARCH_VERBS + r"\s+(?:des\s+|une\s+|les\s+|some\s+)?"
+        r"(?:images?|photos?|pictures?|pics?)\s+(?:de\s+|d\s+|of\s+)?(.+)$",
+        r"^(?:montre|montrer|show)\s+(?:moi\s+|me\s+)?(?:des\s+|some\s+)?"
+        r"(?:images?|photos?|pictures?|pics?)\s+(?:de\s+|d\s+|of\s+)?(.+)$",
     ],
     category="Recherche",
     description="Rechercher des images",
-    examples=["cherche des images de montagne", "montre moi des photos de chats"],
+    examples=["cherche des images de montagne", "montre moi des photos de chats",
+              "show me pictures of mountains"],
     priority=93,
 )
 def search_images(ctx: CommandContext) -> Response:
