@@ -171,3 +171,24 @@ def test_system_en_anglais(router, phrase, attendu):
 ])
 def test_interaction_en_anglais(router, phrase, attendu):
     assert route(router, phrase) == attendu, phrase
+
+
+# --------------------------------------------------------------------------
+# commands/clavier.py -- copier, coller, annuler...
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("phrase,attendu", [
+    ("copy", "copier"),
+    ("paste", "coller"),
+    ("cut", "couper_selection"),
+    ("undo", "annuler"),
+    ("redo", "refaire"),
+    ("select all", "tout_selectionner"),
+    ("save", "enregistrer"),
+    ("print", "imprimer"),
+    ("search in page", "rechercher_dans_page"),
+    ("write hello world", "dicter"),
+    ("confirm", "valider"),
+    ("escape", "echapper"),
+])
+def test_clavier_en_anglais(router, phrase, attendu):
+    assert route(router, phrase) == attendu, phrase

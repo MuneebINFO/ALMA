@@ -22,11 +22,12 @@ def _raccourci(ctx: CommandContext, libelle: str, *touches) -> Response:
 @command(
     name="copier",
     patterns=[r"^(?:copie|copier|copie\s+ca|copiez)$",
-              r"^(?:copie|copier)\s+(?:la\s+)?(?:selection|ligne|ceci|cela|ca)$"],
-    keywords=[["copie", "selection"]],
+              r"^(?:copie|copier)\s+(?:la\s+)?(?:selection|ligne|ceci|cela|ca)$",
+              r"^copy$", r"^copy\s+(?:the\s+)?(?:selection|this|that)$"],
+    keywords=[["copie", "selection"], ["copy"]],
     category="Édition",
     description="Copier la sélection",
-    examples=["copie la sélection"],
+    examples=["copie la sélection", "copy"],
     priority=88,
 )
 def copier(ctx: CommandContext) -> Response:
@@ -37,11 +38,12 @@ def copier(ctx: CommandContext) -> Response:
 @command(
     name="coller",
     patterns=[r"^(?:colle|coller|colle\s+ca|collez)$",
-              r"^(?:colle|coller)\s+(?:le\s+|la\s+)?(?:texte|presse\s*papiers?|ceci|cela|ca)$"],
-    keywords=[["colle"]],
+              r"^(?:colle|coller)\s+(?:le\s+|la\s+)?(?:texte|presse\s*papiers?|ceci|cela|ca)$",
+              r"^paste$", r"^paste\s+(?:the\s+)?(?:text|clipboard|this|that)?$"],
+    keywords=[["colle"], ["paste"]],
     category="Édition",
     description="Coller le presse-papiers",
-    examples=["colle"],
+    examples=["colle", "paste"],
     priority=88,
 )
 def coller(ctx: CommandContext) -> Response:
@@ -51,10 +53,12 @@ def coller(ctx: CommandContext) -> Response:
 
 @command(
     name="couper_selection",
-    patterns=[r"^(?:coupe|couper)\s+(?:la\s+)?(?:selection|le\s+texte|ceci|cela)$"],
+    patterns=[r"^(?:coupe|couper)\s+(?:la\s+)?(?:selection|le\s+texte|ceci|cela)$",
+              r"^cut$", r"^cut\s+(?:the\s+)?(?:selection|text|this|that)$"],
+    keywords=[["cut", "selection"]],
     category="Édition",
     description="Couper la sélection",
-    examples=["coupe la sélection"],
+    examples=["coupe la sélection", "cut"],
     priority=90,
 )
 def couper_selection(ctx: CommandContext) -> Response:
@@ -70,7 +74,7 @@ def couper_selection(ctx: CommandContext) -> Response:
     keywords=[["annule", "action"], ["undo"]],
     category="Édition",
     description="Annuler la dernière action",
-    examples=["annule la dernière action"],
+    examples=["annule la dernière action", "undo"],
     priority=86,
 )
 def annuler(ctx: CommandContext) -> Response:
@@ -85,7 +89,7 @@ def annuler(ctx: CommandContext) -> Response:
     keywords=[["retablis"], ["redo"]],
     category="Édition",
     description="Rétablir l'action annulée",
-    examples=["rétablis"],
+    examples=["rétablis", "redo"],
     priority=86,
 )
 def refaire(ctx: CommandContext) -> Response:
@@ -96,11 +100,12 @@ def refaire(ctx: CommandContext) -> Response:
 @command(
     name="tout_selectionner",
     patterns=[r"(?:selectionne|selectionner|prend[s]?)\s+tout$",
-              r"^tout\s+selectionner$"],
-    keywords=[["selectionne", "tout"]],
+              r"^tout\s+selectionner$",
+              r"^select\s+all$"],
+    keywords=[["selectionne", "tout"], ["select", "all"]],
     category="Édition",
     description="Tout sélectionner",
-    examples=["sélectionne tout"],
+    examples=["sélectionne tout", "select all"],
     priority=92,
 )
 def tout_selectionner(ctx: CommandContext) -> Response:
@@ -110,11 +115,12 @@ def tout_selectionner(ctx: CommandContext) -> Response:
 
 @command(
     name="enregistrer",
-    patterns=[r"^(?:enregistre|enregistrer|sauvegarde|sauvegarder|sauve)\s*(?:le\s+fichier|ca|ceci)?$"],
-    keywords=[["enregistre"], ["sauvegarde"]],
+    patterns=[r"^(?:enregistre|enregistrer|sauvegarde|sauvegarder|sauve)\s*(?:le\s+fichier|ca|ceci)?$",
+              r"^save$", r"^save\s+(?:the\s+)?(?:file|this)?$"],
+    keywords=[["enregistre"], ["sauvegarde"], ["save"]],
     category="Édition",
     description="Enregistrer le document",
-    examples=["enregistre"],
+    examples=["enregistre", "save"],
     priority=88,
 )
 def enregistrer(ctx: CommandContext) -> Response:
@@ -124,11 +130,12 @@ def enregistrer(ctx: CommandContext) -> Response:
 
 @command(
     name="imprimer",
-    patterns=[r"^(?:imprime|imprimer)\s*(?:ca|le\s+document|la\s+page)?$"],
-    keywords=[["imprime"]],
+    patterns=[r"^(?:imprime|imprimer)\s*(?:ca|le\s+document|la\s+page)?$",
+              r"^print$", r"^print\s+(?:this|the\s+(?:document|page))?$"],
+    keywords=[["imprime"], ["print"]],
     category="Édition",
     description="Ouvrir la boîte d'impression",
-    examples=["imprime la page"],
+    examples=["imprime la page", "print"],
     priority=88,
 )
 def imprimer(ctx: CommandContext) -> Response:
@@ -139,10 +146,12 @@ def imprimer(ctx: CommandContext) -> Response:
 @command(
     name="rechercher_dans_page",
     patterns=[r"^(?:recherche|rechercher|cherche|trouve)\s+dans\s+(?:la\s+)?page\s*(.*)$",
-              r"^(?:ctrl\s+f|recherche\s+sur\s+la\s+page)$"],
+              r"^(?:ctrl\s+f|recherche\s+sur\s+la\s+page)$",
+              r"^(?:search|find)\s+(?:in|on)\s+(?:the\s+)?page\s*(?:for\s+)?(.*)$",
+              r"^ctrl\s+f$"],
     category="Édition",
     description="Rechercher dans la page affichée",
-    examples=["cherche dans la page"],
+    examples=["cherche dans la page", "search in page"],
     priority=94,
 )
 def rechercher_dans_page(ctx: CommandContext) -> Response:
@@ -161,10 +170,11 @@ def rechercher_dans_page(ctx: CommandContext) -> Response:
 
 @command(
     name="dicter",
-    patterns=[r"^(?:ecris|ecrire|tape|taper|saisis|note\s+ceci\s*:)\s+(.+)$"],
+    patterns=[r"^(?:ecris|ecrire|tape|taper|saisis|note\s+ceci\s*:)\s+(.+)$",
+              r"^(?:write|type)\s+(.+)$"],
     category="Édition",
     description="Écrire un texte dans l'application active",
-    examples=["écris bonjour tout le monde"],
+    examples=["écris bonjour tout le monde", "write hello world"],
     priority=87,
 )
 def dicter(ctx: CommandContext) -> Response:
@@ -179,10 +189,11 @@ def dicter(ctx: CommandContext) -> Response:
 
 @command(
     name="valider",
-    patterns=[r"^(?:valide|valider|entree|confirme|ok\s+valide|appuie\s+sur\s+entree)$"],
+    patterns=[r"^(?:valide|valider|entree|confirme|ok\s+valide|appuie\s+sur\s+entree)$",
+              r"^(?:confirm|enter|press\s+enter)$"],
     category="Édition",
     description="Appuyer sur Entrée",
-    examples=["valide"],
+    examples=["valide", "confirm"],
     priority=88,
 )
 def valider(ctx: CommandContext) -> Response:
@@ -192,10 +203,11 @@ def valider(ctx: CommandContext) -> Response:
 
 @command(
     name="echapper",
-    patterns=[r"^(?:echap|echappe|annule\s+ca|ferme\s+ca|quitte\s+ca)$"],
+    patterns=[r"^(?:echap|echappe|annule\s+ca|ferme\s+ca|quitte\s+ca)$",
+              r"^(?:escape|cancel\s+this|close\s+this)$"],
     category="Édition",
     description="Appuyer sur Échap",
-    examples=["échap"],
+    examples=["échap", "escape"],
     priority=88,
 )
 def echapper(ctx: CommandContext) -> Response:
