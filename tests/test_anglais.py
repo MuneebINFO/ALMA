@@ -106,3 +106,22 @@ def test_apps_en_anglais(router, phrase, attendu):
 ])
 def test_media_en_anglais(router, phrase, attendu):
     assert route(router, phrase) == attendu, phrase
+
+
+# --------------------------------------------------------------------------
+# commands/websites.py -- sites web, recherche, titres
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("phrase,attendu", [
+    ("open YouTube", "open_website"),
+    ("go to YouTube", "open_website"),
+    ("switch to Netflix", "open_website"),
+    ("open example.com", "open_raw_url"),
+    ("list websites", "list_websites"),
+    ("open YouTube in a new tab", "ouvrir_site_nouvel_onglet"),
+    ("go home", "retour_accueil"),
+    ("play Fast and Furious on Netflix", "site_search"),
+    ("watch the show The Flash", "lancer_titre"),
+    ("play the movie Interstellar on Netflix", "lancer_titre"),
+])
+def test_websites_en_anglais(router, phrase, attendu):
+    assert route(router, phrase) == attendu, phrase

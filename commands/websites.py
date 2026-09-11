@@ -210,10 +210,14 @@ def _nouvel_onglet(ctx: CommandContext, url: str) -> bool:
         r"^(?:affiche|montre|reprends|remets|ramene)\s*(?:moi)?\s+(?:l\s+)?(?:onglet|page|site)\s+(.+)$",
         r"^(?:onglet|page)\s+(.+)$",
         r"^(?:reviens|retourne)\s+(?:sur|a)\s+(.+)$",
+        # « go to YouTube », « switch to Netflix », « back to Netflix »
+        r"^(?:go|switch|come\s+back)\s+(?:to|back\s+to)\s+(.+)$",
+        r"^(?:show|tab)\s+(.+)$",
     ],
     category="Sites web",
     description="Ouvrir un site web (YouTube, Gmail, GitHub, Netflix...)",
-    examples=["ouvre YouTube", "va sur l'onglet YouTube", "bascule sur Netflix"],
+    examples=["ouvre YouTube", "va sur l'onglet YouTube", "bascule sur Netflix",
+              "go to YouTube"],
     priority=55,
     guard=_is_known_site,
 )
@@ -246,7 +250,7 @@ def open_website(ctx: CommandContext) -> Response:
     patterns=[r"^" + OPEN_VERBS + r"\s+(?:le\s+site\s+)?((?:https?\s*:\s*)?[a-z0-9-]+\s+(?:com|fr|be|org|net|io|dev)(?:\s|$).*)$"],
     category="Sites web",
     description="Ouvrir une adresse web dictée (exemple.com)",
-    examples=["ouvre exemple.com"],
+    examples=["ouvre exemple.com", "open example.com"],
     priority=58,
 )
 def open_raw_url(ctx: CommandContext) -> Response:
@@ -268,7 +272,7 @@ def open_raw_url(ctx: CommandContext) -> Response:
     patterns=[r"(quels?|liste|list).*(sites?|websites?)"],
     category="Sites web",
     description="Lister les sites que je sais ouvrir",
-    examples=["quels sites connais-tu"],
+    examples=["quels sites connais-tu", "list websites"],
     priority=70,
 )
 def list_websites(ctx: CommandContext) -> Response:
@@ -395,16 +399,18 @@ def _site_connu(ctx: CommandContext) -> bool:
     name="site_search",
     patterns=[
         # « va sur Netflix et mets Fast and Furious »
-        r"^(?:va|vas|aller|ouvre|ouvrir|lance|lancer|passe)\s+(?:sur|a|dans|vers)?\s*"
-        r"(?P<site>.+?)\s+(?:et|puis|pour)\s+" + VERBES_CONTENU + r"\s+(?P<query>.+)$",
-        # « mets Fast and Furious sur Netflix »
-        r"^" + VERBES_CONTENU + r"\s+(?P<query>.+)\s+sur\s+(?P<site>[\w\s+]+)$",
-        # « sur Netflix, mets Fast and Furious »
-        r"^sur\s+(?P<site>.+?)\s*,?\s+" + VERBES_CONTENU + r"\s+(?P<query>.+)$",
+        r"^(?:va|vas|aller|ouvre|ouvrir|lance|lancer|passe|go|switch)\s+"
+        r"(?:sur|a|dans|vers|to)?\s*"
+        r"(?P<site>.+?)\s+(?:et|puis|pour|and|then)\s+" + VERBES_CONTENU + r"\s+(?P<query>.+)$",
+        # « mets Fast and Furious sur Netflix », « play Fast and Furious on Netflix »
+        r"^" + VERBES_CONTENU + r"\s+(?P<query>.+)\s+(?:sur|on)\s+(?P<site>[\w\s+]+)$",
+        # « sur Netflix, mets Fast and Furious », « on Netflix, play X »
+        r"^(?:sur|on)\s+(?P<site>.+?)\s*,?\s+" + VERBES_CONTENU + r"\s+(?P<query>.+)$",
     ],
     category="Sites web",
     description="Ouvrir un site et y lancer une recherche",
-    examples=["va sur Netflix et mets Fast and Furious", "mets lofi hip hop sur YouTube"],
+    examples=["va sur Netflix et mets Fast and Furious", "mets lofi hip hop sur YouTube",
+              "play Fast and Furious on Netflix"],
     priority=97,
     guard=_site_connu,
 )
@@ -434,11 +440,12 @@ def _site_en_contexte(ctx: CommandContext) -> bool:
     name="site_search_contextuel",
     patterns=[
         r"^(?:cherche|chercher|recherche|rechercher|trouve|trouver|met[s]?|joue|jouer|"
-        r"lance|lancer|regarde|regarder|affiche|montre)\s+(?:moi\s+)?(.+)$",
+        r"lance|lancer|regarde|regarder|affiche|montre|"
+        r"search|find|play|watch|show)\s+(?:moi\s+|for\s+)?(.+)$",
     ],
     category="Sites web",
     description="Poursuivre sur le site en cours (« va sur YouTube » puis « recherche Damso »)",
-    examples=["recherche Damso"],
+    examples=["recherche Damso", "search Damso"],
     priority=85,
     guard=_site_en_contexte,
     contextuel=True,
@@ -473,10 +480,12 @@ def _site_pour_nouvel_onglet(ctx: CommandContext) -> bool:
         r"^(?:ouvre|ouvrir|lance|lancer)\s+(?:moi\s+)?(?:un\s+|dans\s+un\s+)?"
         r"nouvel?\s+onglet\s+(.+)$",
         r"^(?:ouvre|ouvrir)\s+(.+?)\s+dans\s+un\s+nouvel?\s+onglet$",
+        r"^open\s+(.+?)\s+in\s+a\s+new\s+tab$",
+        r"^open\s+(?:a\s+)?new\s+tab\s+(.+)$",
     ],
     category="Sites web",
     description="Ouvrir un site dans un nouvel onglet",
-    examples=["ouvre un nouvel onglet YouTube"],
+    examples=["ouvre un nouvel onglet YouTube", "open YouTube in a new tab"],
     priority=98,
     guard=_site_pour_nouvel_onglet,
 )
@@ -552,11 +561,15 @@ def site_du_titre(config, titre: str):
         r"(?:\s+(?:de\s+|du\s+|d\s+)?(?P<site>.+))?$",
         r"^(?:retourne|retour|reviens|revenir)\s+(?:a\s+)?(?:la\s+)?"
         r"page\s+(?:principale|d\s+accueil)$",
+        # « go home », « go back to the home page of Netflix », « home page »
+        r"^(?:go\s+(?:back\s+)?(?:to\s+)?)?(?:the\s+)?home(?:\s+page)?"
+        r"(?:\s+(?:of|for)\s+(?P<site>.+))?$",
     ],
-    keywords=[["retour", "accueil"], ["reviens", "accueil"], ["page", "accueil"]],
+    keywords=[["retour", "accueil"], ["reviens", "accueil"], ["page", "accueil"],
+              ["home", "page"]],
     category="Sites web",
     description="Revenir à la page d'accueil du site",
-    examples=["retourne à l'accueil", "reviens à l'accueil de Netflix"],
+    examples=["retourne à l'accueil", "reviens à l'accueil de Netflix", "go home"],
     priority=94,
 )
 def retour_accueil(ctx: CommandContext) -> Response:
@@ -612,14 +625,17 @@ def retour_accueil(ctx: CommandContext) -> Response:
 # doigt de l utilisateur -- c est l ecran ou l on appuie sur « Lecture » qui
 # est vise, pas le film lance a son insu.
 NATURES = (r"(?:serie|series|film|films|saison|episode|episodes|documentaire|"
-           r"anime|animes|dessin\s+anime|emission|spectacle|match|programme)")
+           r"anime|animes|dessin\s+anime|emission|spectacle|match|programme|"
+           r"show|shows|movie|movies|season|documentary|cartoon)")
 
 VERBES_LANCER = (r"(?:met[s]?|mettre|lance|lancer|joue|jouer|regarde|regarder|"
-                 r"ouvre|ouvrir|trouve|trouver|cherche|chercher|affiche|afficher)")
+                 r"ouvre|ouvrir|trouve|trouver|cherche|chercher|affiche|afficher|"
+                 r"play|watch|find|search|open|put\s+on)")
 
 # Ce qui prouve qu on est arrive sur la fiche d un titre.
 MOTS_LECTURE = ("lecture", "play", "lire", "reprendre", "regarder maintenant",
-                "bande-annonce", "bande annonce", "episodes", "saison")
+                "bande-annonce", "bande annonce", "episodes", "saison",
+                "watch now", "resume", "trailer", "season")
 
 ATTENTE_RESULTATS = 12.0     # les catalogues sont lents a repondre
 ATTENTE_FICHE = 6.0
@@ -771,14 +787,16 @@ def _fiche_ouverte(cibles) -> bool:
     name="lancer_titre",
     patterns=[
         r"^" + VERBES_LANCER + r"\s+(?:moi\s+)?"
-        r"(?:la\s+|le\s+|l\s+|les\s+|un\s+|une\s+|des\s+)?"
+        r"(?:la\s+|le\s+|l\s+|les\s+|un\s+|une\s+|des\s+|the\s+|a\s+)?"
         + NATURES
-        + r"\s+(?P<titre>.+?)(?:\s+sur\s+(?P<site>[\w\s+.-]+))?$",
+        + r"\s+(?P<titre>.+?)(?:\s+(?:sur|on)\s+(?P<site>[\w\s+.-]+))?$",
     ],
-    keywords=[["mets", "serie"], ["mets", "film"], ["lance", "serie"], ["lance", "film"]],
+    keywords=[["mets", "serie"], ["mets", "film"], ["lance", "serie"], ["lance", "film"],
+              ["play", "movie"], ["watch", "show"]],
     category="Sites web",
     description="Chercher un film ou une série et ouvrir sa fiche",
-    examples=["mets la série The Flash", "lance le film Interstellar sur Netflix"],
+    examples=["mets la série The Flash", "lance le film Interstellar sur Netflix",
+              "watch the show The Flash", "play the movie Interstellar on Netflix"],
     priority=98,
     guard=_est_un_titre,
 )
