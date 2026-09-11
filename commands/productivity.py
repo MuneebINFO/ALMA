@@ -30,9 +30,9 @@ def add_note(ctx: CommandContext) -> Response:
     """Ajoute une note dans data/notes.json."""
     content = ctx.arg
     if not content:
-        return Response.error("Que dois-je noter ?")
+        return ctx.erreur("Que dois-je noter ?", "What should I note down?")
     ctx.storage.notes.append({"text": content, "source": ctx.source})
-    return Response(text="C'est noté : " + content)
+    return ctx.reponse("C'est noté : " + content, "Noted: " + content)
 
 
 @command(
@@ -55,8 +55,11 @@ def read_notes(ctx: CommandContext) -> Response:
     """Affiche les notes et lit les plus recentes a voix haute."""
     notes = ctx.storage.notes.load()
     if not notes:
-        return Response(text="Vous n'avez aucune note enregistrée.")
-    lines = ["Vos notes (" + str(len(notes)) + ") :"]
+        return ctx.reponse("Vous n'avez aucune note enregistrée.",
+                           "You don't have any notes saved.")
+    anglais = ctx.lang == "en"
+    lines = [("Your notes (" + str(len(notes)) + "):") if anglais
+             else ("Vos notes (" + str(len(notes)) + ") :")]
     for note in notes:
         date = str(note.get("created_at", ""))[:16].replace("T", " ")
         lines.append("  #" + str(note.get("id")) + "  [" + date + "]  " + str(note.get("text", "")))
@@ -64,7 +67,9 @@ def read_notes(ctx: CommandContext) -> Response:
 
     latest = notes[-3:]
     spoken = " ; ".join(str(n.get("text", "")) for n in latest)
-    prefix = "Voici vos dernières notes : " if len(notes) > 3 else "Vos notes : "
+    recentes = len(notes) > 3
+    prefix = (("Here are your latest notes: " if recentes else "Your notes: ") if anglais
+              else ("Voici vos dernières notes : " if recentes else "Vos notes : "))
     return Response(text=prefix + spoken)
 
 
@@ -81,8 +86,10 @@ def delete_note(ctx: CommandContext) -> Response:
     """Supprime une note précise."""
     note_id = int(ctx.arg or 0)
     if ctx.storage.notes.remove(note_id):
-        return Response(text="Note " + str(note_id) + " supprimée.")
-    return Response.error("Je n'ai pas trouvé de note numéro " + str(note_id) + ".")
+        return ctx.reponse("Note " + str(note_id) + " supprimée.",
+                           "Note " + str(note_id) + " deleted.")
+    return ctx.erreur("Je n'ai pas trouvé de note numéro " + str(note_id) + ".",
+                      "I couldn't find a note numbered " + str(note_id) + ".")
 
 
 @command(
@@ -97,9 +104,10 @@ def delete_note(ctx: CommandContext) -> Response:
 def clear_notes(ctx: CommandContext) -> Response:
     """Vide le carnet de notes apres confirmation."""
     if not ctx.confirm("Supprimer definitivement toutes vos notes ?"):
-        return Response(text="Vos notes sont conservées.")
+        return ctx.reponse("Vos notes sont conservées.", "Your notes are kept.")
     count = ctx.storage.notes.clear()
-    return Response(text=str(count) + " notes supprimées.")
+    return ctx.reponse(str(count) + " notes supprimées.",
+                       str(count) + " notes deleted.")
 
 
 @command(
@@ -121,12 +129,16 @@ def set_reminder(ctx: CommandContext) -> Response:
     label = ctx.arg
     duration = parse_duration(ctx.tokens)
     if duration is None:
-        return Response.error(
-            "Je n'ai pas compris le délai. Essayez : rappelle-moi dans 10 minutes de ..."
+        return ctx.erreur(
+            "Je n'ai pas compris le délai. Essayez : rappelle-moi dans 10 minutes de ...",
+            "I didn't catch the delay. Try: \"remind me in 10 minutes to ...\"",
         )
     due = datetime.now() + duration
     ctx.assistant.scheduler.schedule(label, due, kind="rappel")
-    return Response(text="Rappel programmé pour " + due.strftime("%H:%M") + " : " + label + ".")
+    return ctx.reponse(
+        "Rappel programmé pour " + due.strftime("%H:%M") + " : " + label + ".",
+        "Reminder set for " + due.strftime("%I:%M %p").lstrip("0") + ": " + label + ".",
+    )
 
 
 @command(
@@ -147,12 +159,19 @@ def set_timer(ctx: CommandContext) -> Response:
     """Lance un minuteur simple."""
     duration = parse_duration(ctx.tokens)
     if duration is None:
-        return Response.error("Quelle durée ? Exemple : lance un minuteur de 5 minutes.")
+        return ctx.erreur(
+            "Quelle durée ? Exemple : lance un minuteur de 5 minutes.",
+            'How long? For example: "start a timer for 5 minutes".',
+        )
     due = datetime.now() + duration
     minutes = duration.total_seconds() / 60
     label = ("%g minute" % minutes) + ("s" if minutes >= 2 else "")
     ctx.assistant.scheduler.schedule(label, due, kind="minuteur")
-    return Response(text="Minuteur de " + label + " lancé. Fin à " + due.strftime("%H:%M") + ".")
+    return ctx.reponse(
+        "Minuteur de " + label + " lancé. Fin à " + due.strftime("%H:%M") + ".",
+        label.capitalize() + " timer started. Ends at "
+        + due.strftime("%I:%M %p").lstrip("0") + ".",
+    )
 
 
 @command(
@@ -173,13 +192,14 @@ def list_reminders(ctx: CommandContext) -> Response:
     """Affiche les rappels encore actifs."""
     pending = ctx.assistant.scheduler.pending()
     if not pending:
-        return Response(text="Aucun rappel en attente.")
-    lines = ["Rappels en attente :"]
+        return ctx.reponse("Aucun rappel en attente.", "No reminders pending.")
+    lines = ["Pending reminders:" if ctx.lang == "en" else "Rappels en attente :"]
     for item in pending:
         heure = str(item.get("due", ""))[11:16]
         lines.append("  " + heure + "  " + str(item.get("label", "")))
     ctx.assistant.io.write("\n".join(lines))
-    return Response(text="Vous avez " + str(len(pending)) + " rappel en attente.")
+    return ctx.reponse("Vous avez " + str(len(pending)) + " rappel en attente.",
+                       "You have " + str(len(pending)) + " reminder(s) pending.")
 
 
 @command(
@@ -194,7 +214,8 @@ def list_reminders(ctx: CommandContext) -> Response:
 def cancel_reminders(ctx: CommandContext) -> Response:
     """Annule tous les rappels en attente."""
     count = ctx.assistant.scheduler.cancel_all()
-    return Response(text=str(count) + " rappel annulé.")
+    return ctx.reponse(str(count) + " rappel annulé.",
+                       str(count) + " reminder(s) cancelled.")
 
 
 @command(
@@ -216,10 +237,11 @@ def read_clipboard(ctx: CommandContext) -> Response:
     """Lit le presse-papiers."""
     content = win_utils.get_clipboard()
     if not content.strip():
-        return Response(text="Le presse-papiers est vide.")
+        return ctx.reponse("Le presse-papiers est vide.", "The clipboard is empty.")
     ctx.assistant.io.write("Presse-papiers :\n" + content)
     preview = content.strip().replace("\n", " ")[:200]
-    return Response(text="Le presse-papiers contient : " + preview)
+    return ctx.reponse("Le presse-papiers contient : " + preview,
+                       "The clipboard contains: " + preview)
 
 
 @command(
@@ -239,7 +261,9 @@ def write_clipboard(ctx: CommandContext) -> Response:
     """Ecrit un texte dans le presse-papiers."""
     content = ctx.arg
     if not content:
-        return Response.error("Que dois-je copier ?")
+        return ctx.erreur("Que dois-je copier ?", "What should I copy?")
     if win_utils.set_clipboard(content):
-        return Response(text="Copié dans le presse-papiers : " + content)
-    return Response.error("Je n'ai pas pu écrire dans le presse-papiers.")
+        return ctx.reponse("Copié dans le presse-papiers : " + content,
+                           "Copied to the clipboard: " + content)
+    return ctx.erreur("Je n'ai pas pu écrire dans le presse-papiers.",
+                      "I couldn't write to the clipboard.")
