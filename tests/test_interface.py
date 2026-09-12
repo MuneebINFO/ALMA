@@ -167,3 +167,96 @@ def test_on_peut_sortir_du_plein_ecran():
 def test_l_orbe_n_a_plus_de_taille_fixe():
     """Garde-fou : une constante de taille reviendrait à figer l'orbe."""
     assert "TAILLE = " not in source()
+
+
+# --------------------------------------------------------------------------
+# Se rendormir sans avoir à le dire
+# --------------------------------------------------------------------------
+# Le « stop » vocal reste le chemin principal, mais il dépend de la
+# transcription d'un ordre d'un seul mot -- celui que la reconnaissance rate
+# le plus. Il faut donc un geste qui marche à tous les coups.
+def test_l_orbe_se_clique():
+    texte = source()
+    assert 'self.orbe.bind("<Button-1>", self.basculer_veille)' in texte
+    assert 'self.orbe.configure(cursor="hand2")' in texte
+
+
+def test_la_barre_d_espace_rendort():
+    bascule = source()
+    debut = bascule.index("def _sur_touche(")
+    assert 'evenement.keysym == "space"' in bascule[debut:debut + 600]
+
+
+def test_echap_sort_d_abord_du_plein_ecran():
+    """
+    Sans barre de titre, Échap est la seule prise sur la fenêtre : elle
+    garde ce rôle en priorité, et ne rendort qu'une fois hors plein écran.
+    """
+    texte = source()
+    corps = texte[texte.index("def _sur_echap("):texte.index("def endormir(")]
+    assert corps.index("self._plein_ecran(False)") < corps.index("self.endormir()")
+
+
+class MoteurFactice:
+    def __init__(self, arme=True):
+        self.arme = arme
+
+    def armer(self):
+        self.arme = True
+
+    def desarmer(self):
+        self.arme = False
+
+
+class AssistantFactice:
+    def __init__(self):
+        self.gestes = []
+
+    def interrompre(self):
+        self.gestes.append("interrompre")
+        return False
+
+    def interrompre_parole(self):
+        self.gestes.append("parole")
+
+    def oublier_contexte(self):
+        self.gestes.append("contexte")
+
+
+def application_factice(arme=True, micro=True):
+    """Juste ce qu'il faut pour exercer la mise en veille, sans Tkinter."""
+    import queue
+    import threading
+
+    from gui import AlmaApp
+
+    faux = AlmaApp.__new__(AlmaApp)
+    faux.moteur = MoteurFactice(arme)
+    faux.assistant = AssistantFactice()
+    faux.evenements = queue.Queue()
+    faux.ecoute_active = threading.Event()
+    if micro:
+        faux.ecoute_active.set()
+    return faux
+
+
+def test_endormir_coupe_tout_et_oublie_le_contexte():
+    faux = application_factice()
+    faux.endormir()
+    assert faux.moteur.arme is False
+    assert faux.assistant.gestes == ["interrompre", "parole", "contexte"]
+
+
+def test_le_clic_sur_l_orbe_reveille_aussi():
+    """Le même geste dans les deux sens, sans prononcer le nom."""
+    faux = application_factice(arme=False)
+    faux.basculer_veille()
+    assert faux.moteur.arme is True
+    faux.basculer_veille()
+    assert faux.moteur.arme is False
+
+
+def test_le_clic_ne_reveille_pas_un_micro_coupe():
+    faux = application_factice(arme=False, micro=False)
+    faux.basculer_veille()
+    assert faux.moteur.arme is False

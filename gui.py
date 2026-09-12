@@ -19,8 +19,10 @@ L historique des echanges existe mais ne s affiche pas : un bouton le fait
 GLISSER depuis la droite, et l orbe retrecit en consequence pendant le
 mouvement. Le bouton indique au passage combien de messages ont ete manques.
 
-Raccourcis : Echap rend la fenetre ordinaire, F11 la remet en plein ecran,
-M coupe ou rallume le micro, F1 montre l aide.
+Raccourcis : Echap rend la fenetre ordinaire puis, une fois hors plein
+ecran, remet Alma en veille. F11 revient au plein ecran, M coupe ou rallume
+le micro, F1 montre l aide, la barre d espace rendort ou reveille -- comme un
+clic sur l orbe.
 """
 
 from __future__ import annotations
@@ -460,7 +462,7 @@ class AlmaApp:
         self._plein_ecran(True)
         # De quoi en sortir : sans barre de titre, il n y aurait plus aucune
         # prise sur la fenetre.
-        root.bind("<Escape>", lambda _e: self._plein_ecran(False))
+        root.bind("<Escape>", self._sur_echap)
         root.bind("<F11>", lambda _e: self._plein_ecran(not self.plein_ecran))
         # Le clavier remplace les boutons retires : aucun champ de saisie
         # n existe dans cette fenetre, rien d autre ne capte ces touches.
@@ -507,6 +509,10 @@ class AlmaApp:
 
         self.orbe = Orbe(self.colonne)
         self.orbe.pack(fill="both", expand=True, padx=20, pady=6)
+        # Un clic dessus reveille ou rendort : c est la sortie de secours
+        # quand le micro ne comprend pas le « stop » qu on lui dit.
+        self.orbe.configure(cursor="hand2")
+        self.orbe.bind("<Button-1>", self.basculer_veille)
 
         self.etiquette_statut = tk.Label(self.colonne, text="Démarrage...",
                                          font=police_statut, bg=FOND, fg=TEXTE_DOUX)
@@ -656,11 +662,53 @@ class AlmaApp:
         threading.Thread(target=self._executer, args=("aide", "text"), daemon=True).start()
 
     def _sur_touche(self, evenement) -> None:
-        """M coupe ou reessaie le micro, F1 montre l'aide."""
+        """M coupe ou reessaie le micro, F1 montre l'aide, Espace rendort."""
         if evenement.keysym == "F1":
             self.montrer_aide()
+        elif evenement.keysym == "space":
+            self.basculer_veille()
         elif (evenement.char or "").lower() == "m":
             self.basculer_micro()
+
+    def _sur_echap(self, _evenement=None) -> None:
+        """
+        Échap rend la main.
+
+        D'abord le plein écran — sans barre de titre, c'est la seule prise
+        qu'on ait sur la fenêtre. Ensuite seulement, la touche remet Alma en
+        veille, comme la barre d'espace et le clic sur l'orbe.
+        """
+        if self.plein_ecran:
+            self._plein_ecran(False)
+            return
+        self.endormir()
+
+    # -- mise en veille -------------------------------------------------------
+    def endormir(self) -> None:
+        """
+        Remet Alma en veille tout de suite, sans passer par la voix.
+
+        Le chemin vocal (« stop », « mets-toi en veille », « go to sleep »)
+        reste le principal, mais il dépend de la transcription d'un ordre
+        très court — celui que la reconnaissance rate le plus souvent. Un
+        clic, une touche : il faut que ça marche à tous les coups.
+        """
+        self.assistant.interrompre()
+        self.assistant.interrompre_parole()
+        self.moteur.desarmer()
+        self.assistant.oublier_contexte()
+        self.evenements.put(("entendu", ""))
+        self.evenements.put(("statut", (self._etat_repos(), "")))
+
+    def basculer_veille(self, _evenement=None) -> None:
+        """Le même geste dans les deux sens : réveiller, ou rendormir."""
+        if not self.ecoute_active.is_set():
+            return                      # micro coupé : rien à réveiller
+        if self.moteur.arme:
+            self.endormir()
+            return
+        self.moteur.armer()
+        self.evenements.put(("statut", ("arme", "")))
 
     # -- pont assistant / interface -------------------------------------------
     def _brancher_sorties(self) -> None:
@@ -890,7 +938,10 @@ class AlmaApp:
         self.evenements.put((
             "journal",
             (self.nom, "Je suis à l'écoute. Dites « " + self.nom + " » pour m'activer, "
-                       "ou « " + self.nom + " » suivi directement de votre demande."),
+                       "ou « " + self.nom + " » suivi directement de votre demande. "
+                       "Pour me remettre en veille : « stop », « " + self.nom
+                       + ", mets-toi en veille », « go to sleep » — ou un clic "
+                         "sur l'orbe."),
         ))
         if seuil <= 0:
             self.evenements.put(("erreur", "Seuil de détection nul : le micro ne capte rien."))
@@ -940,7 +991,10 @@ class AlmaApp:
                     self.evenements.put(("journal", (self.nom, "J'arrête.")))
                     self.evenements.put(("statut", ("arme", "")))
                     continue
-                reponse = wake.accuse_fin()
+                from core import text_utils
+
+                reponse = wake.accuse_fin(text_utils.detect_language(
+                    text_utils.normalize(texte)))
                 self.assistant.oublier_contexte()
                 self.evenements.put(("journal", ("Vous", texte)))
                 self.evenements.put(("journal", (self.nom, reponse)))
