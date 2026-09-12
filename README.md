@@ -340,14 +340,17 @@ The two usual causes:
    `pip install PyAudio` fails there with `portaudio.h: No such file` — on
    Windows a prebuilt wheel installs with nothing to compile.
 2. **The microphone gain is low.** Many built-in microphones capture very
-   quietly. The threshold is adaptive (derived from the measured background
-   noise), but you can lower it:
+   quietly — a quiet room measures around 0.00002 on the reference machine.
+   The threshold is adaptive (derived from the measured background noise and
+   from the loudest recent quiet moment), but you can lower its floor:
    ```yaml
    voice:
-     min_threshold: 0.002   # default 0.004; lower is more sensitive
+     min_threshold: 0.0004  # this is the default; lower is more sensitive
      noise_factor: 3.5      # margin above background noise
    ```
-   Also raise the input volume in Windows Settings > System > Sound.
+   Run `python diagnostic_micro.py` first: it measures your microphone and
+   tells you the value to write. Also raise the input volume in Windows
+   Settings > System > Sound.
 
 ---
 

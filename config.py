@@ -86,12 +86,12 @@ DEFAULTS: dict = {
         "stt_language": "fr-FR",
         "vosk_model_path": "",
         # Plancher de detection de la voix. Volontairement bas : une piece
-        # calme se mesure autour de 0,00003, et un plancher trop haut oblige
-        # a crier -- surtout quand un media joue, car l annulation d echo de
-        # la carte son attenue la voix en meme temps que les haut-parleurs.
-        # Montez-le si l assistant se declenche tout seul, et voyez
-        # « python diagnostic_micro.py » pour mesurer votre micro.
-        "min_threshold": 0.0015,
+        # calme se mesure autour de 0,00002, et un plancher trop haut oblige
+        # a parler fort -- surtout quand un media joue, car l annulation
+        # d echo de la carte son attenue la voix en meme temps que les
+        # haut-parleurs. Montez-le si l assistant se declenche tout seul, et
+        # voyez « python diagnostic_micro.py » pour mesurer votre micro.
+        "min_threshold": 0.0004,
         "noise_factor": 3.5,
         # Duree pendant laquelle Alma reste receptif apres un « Alma » seul.
         "armed_seconds": 60,

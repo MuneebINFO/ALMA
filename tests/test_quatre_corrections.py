@@ -184,23 +184,36 @@ def test_les_commandes_informatives_sont_declarees():
 # 4. Le seuil de detection
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize("bruit,pic,attendu", [
-    # Pièce calme, mesurée sur la machine de référence.
-    (0.00003, 0.00038, 0.0015),
-    # Un média joue : la carte son en efface le bruit, mais atténue la voix.
-    (0.00001, 0.00106, 0.0017),
+    # Pièce calme, mesurée sur la machine de référence : le bruit de fond
+    # tient à 0,00002 et le pic d'une seconde de silence à 0,0004. C'est le
+    # plancher qui commande, et il doit rester bas -- c'est lui qui obligeait
+    # à parler fort quand il valait 0,0015.
+    (0.00003, 0.00038, 0.000608),
+    # Un média joue : la carte son efface le bruit, mais atténue la voix.
+    (0.00001, 0.00106, 0.001696),
     # Bureau animé : c'est le pic mesuré qui commande, pas un multiplicateur.
     (0.00200, 0.00600, 0.0096),
 ])
 def test_le_seuil_suit_le_bruit_reellement_mesure(bruit, pic, attendu):
     ecouteur = LevelMeterListener()
-    ecouteur.pic_calibration = pic
-    assert round(ecouteur._appliquer_seuil(bruit), 4) == round(attendu, 4)
+    ecouteur.pic_ambiant = pic
+    assert round(ecouteur._appliquer_seuil(bruit), 6) == round(attendu, 6)
+
+
+def test_le_plancher_reste_au_ras_du_silence_mesure():
+    """
+    Le symptôme signalé : « je dois parler fort pour qu'il entende ». Le
+    plancher valait cent fois le bruit réellement mesuré sur ce micro, donc
+    il fallait le franchir à la voix forte. Il doit rester proche du silence.
+    """
+    SILENCE_MESURE = 0.00002        # micro intégré, pièce calme
+    assert LevelMeterListener.PLANCHER <= SILENCE_MESURE * 30
 
 
 def test_le_seuil_est_plafonne():
     """Au-delà, il faudrait crier : mieux vaut quelques déclenchements à vide."""
     ecouteur = LevelMeterListener()
-    ecouteur.pic_calibration = 1.0
+    ecouteur.pic_ambiant = 1.0
     assert ecouteur._appliquer_seuil(0.5) == LevelMeterListener.SEUIL_MAX
 
 

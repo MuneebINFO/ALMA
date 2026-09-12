@@ -242,3 +242,65 @@ def test_une_phrase_longue_garde_lattente_complete(monkeypatch):
 def test_le_seuil_de_brievete_est_bien_place():
     assert stt.SILENCE_BREF < stt.SILENCE_SECONDS
     assert 0.5 <= stt.SILENCE_BREF <= 0.8
+
+
+# --------------------------------------------------------------------------
+# Le seuil ne reste pas coince en haut
+# --------------------------------------------------------------------------
+def bloc(niveau: float) -> bytes:
+    """Un bloc audio dont le RMS vaut a peu pres `niveau` (0..1)."""
+    import struct
+
+    echantillon = max(-32767, min(32767, int(niveau * 32768)))
+    return struct.pack("<h", echantillon) * CHUNK
+
+
+def test_la_calibration_ecarte_le_claquement(monkeypatch):
+    """
+    Le bloc le plus fort d'une seconde de « silence » est rarement le bruit
+    de la pièce : c'est une touche de clavier, un craquement de chaise. Le
+    retenir tel quel fixait le seuil à 1,6 fois ce bruit-là pour toute la
+    session -- et il fallait parler fort pour le franchir.
+    """
+    calme = [bloc(0.00002)] * 17 + [bloc(0.02)]        # dix-huit blocs, un claquement
+    flux = FluxScripte(calme)
+    ecouteur = LevelMeterListener()
+    monkeypatch.setattr(ecouteur, "flux", lambda: flux)
+    monkeypatch.setattr(ecouteur, "_rattraper", lambda f: [])
+
+    ecouteur.calibrate(1.2)
+    assert ecouteur.pic_ambiant < 0.001, "le claquement a été pris pour le bruit ambiant"
+    assert ecouteur.threshold == ecouteur.plancher
+
+
+def test_un_pic_transitoire_finit_par_redescendre(monkeypatch):
+    """
+    Et s'il passe quand même -- il a duré plus d'un cinquième de la mesure --
+    il doit s'effacer tout seul. Une porte qui claque ne rend pas sourd pour
+    le reste de la session.
+    """
+    ecouteur = LevelMeterListener()
+    ecouteur.pic_ambiant = 0.02
+    ecouteur._appliquer_seuil(0.00002)
+    assert ecouteur.threshold > 0.03, "au départ : sourd"
+
+    flux = FluxScripte([])          # que du silence, indéfiniment
+    monkeypatch.setattr(ecouteur, "flux", lambda: flux)
+    monkeypatch.setattr(ecouteur, "_rattraper", lambda f: [])
+    for _ in range(13):             # treize attentes de 8 s : moins de 2 min
+        ecouteur.listen(timeout=8.0, phrase_limit=0.5)
+
+    assert ecouteur.threshold == ecouteur.plancher, (
+        "le seuil est resté en haut : %.5f" % ecouteur.threshold)
+
+
+def test_un_bruit_qui_dure_tient_le_seuil_en_haut(monkeypatch):
+    """Le pendant : la décroissance ne doit pas rendre sourd au vrai bruit."""
+    ecouteur = LevelMeterListener()
+    flux = FluxScripte([bloc(0.003)] * 400)
+    monkeypatch.setattr(ecouteur, "flux", lambda: flux)
+    monkeypatch.setattr(ecouteur, "_rattraper", lambda f: [])
+    ecouteur.pic_ambiant = 0.003
+    ecouteur._appliquer_seuil(0.003)
+    ecouteur.listen(timeout=8.0, phrase_limit=0.5)
+    assert ecouteur.threshold > 0.004, "un bruit continu doit tenir le seuil au-dessus"
