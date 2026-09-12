@@ -95,6 +95,11 @@ DEFAULTS: dict = {
         "noise_factor": 3.5,
         # Duree pendant laquelle Alma reste receptif apres un « Alma » seul.
         "armed_seconds": 60,
+        # Tournures supplementaires qui remettent Alma en veille, en plus de
+        # celles qu il connait deja (« stop », « c'est bon », « go to sleep »,
+        # et leurs variantes). A remplir si une facon de dire vous revient
+        # sans etre reconnue.
+        "sleep_words": [],
         "energy_threshold": 300,
         "pause_threshold": 0.8,
         "timeout": 6,

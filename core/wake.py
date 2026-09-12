@@ -39,15 +39,51 @@ ACCUSES = (
     "À votre service.",
 )
 
-# Mots qui ferment la session d ecoute avant la fin du compte a rebours.
+# Ce qui remet l assistant en veille avant la fin du compte a rebours.
+#
+# Ecrit sous forme NORMALISEE : sans accent, et l apostrophe devenue espace
+# (« c'est bon » -> « c est bon »). Les deux langues, parce qu on ne pense
+# pas a changer de langue pour dire « stop ».
 MOTS_FIN_SESSION = {
-    "stop", "stoppe", "arrete", "arrete toi", "c est bon", "laisse tomber",
-    "annule", "rien", "merci c est tout", "termine", "fini", "silence",
-    "ca suffit", "assez",
+    # Francais
+    "stop", "stoppe", "arrete", "arrete toi", "arretez", "c est bon",
+    "c est tout", "laisse tomber", "annule", "rien", "termine", "fini",
+    "silence", "chut", "ca suffit", "suffit", "assez", "tais toi",
+    "dors", "va dormir", "en veille", "mets toi en veille",
+    "retourne en veille", "remets toi en veille", "repos",
+    # Anglais
+    "stop it", "that s all", "that s it", "that s enough", "enough",
+    "never mind", "nevermind", "forget it", "cancel", "quiet", "be quiet",
+    "shut up", "sleep", "go to sleep", "go back to sleep", "back to sleep",
+    "stand by", "standby", "dismiss", "done", "nothing", "drop it",
 }
+
+# Mots qu on peut retirer d un ordre court sans en changer le sens :
+# politesse, hesitations, interjections, marqueurs d accord.
+#
+# C est ce qui manquait le plus : « stop » tout seul etait reconnu, mais
+# « ok stop », « stop s'il te plait », « bon stop merci » -- c est-a-dire ce
+# qu on dit vraiment -- ne l etaient pas. Les articles et les possessifs
+# n y figurent PAS : « arrete la musique » doit rester une commande, pas une
+# mise en veille.
+MOTS_EFFACABLES = {
+    "euh", "heu", "hum", "hmm", "ben", "bah", "alors", "donc", "bon", "bien",
+    "s", "il", "te", "vous", "plait", "stp", "please", "merci", "thanks",
+    "thank", "you", "ok", "okay", "oui", "yes", "non", "no", "et", "puis",
+    "maintenant", "now", "juste", "just",
+}
+
+# Ressemblance exigee quand l expression n est pas reconnue mot pour mot.
+# « stope », « arretes », « sleeps » : la transcription d un mot isole est
+# rarement parfaite, et c est justement le cas le plus frequent ici.
+SEUIL_FIN_SESSION = 0.82
+# En dessous, le flou attrape n importe quoi (« top » ressemble a « stop »
+# a 86%). On exige alors le mot exact.
+LONGUEUR_MINIMALE_FLOUE = 4
 
 # Repliques de fin de session.
 ACCUSES_FIN = ("Très bien.", "D'accord.", "Je me remets en veille.")
+ACCUSES_FIN_EN = ("All right.", "Okay.", "Going back to sleep.")
 
 # Etats renvoyes par l analyse.
 IGNORE = "ignore"
@@ -163,6 +199,19 @@ class MoteurEcoute:
             if norme:
                 self.variantes.add(norme)
         self.seuil = seuil_similarite(self.mot_appel)
+        # Comme pour le nom : si une tournure revient sans etre reconnue,
+        # elle s ajoute dans voice.sleep_words, sans toucher au code.
+        self.mots_fin = set(MOTS_FIN_SESSION)
+        for extra in (lire("voice.sleep_words", ()) or ()):
+            norme = " ".join(text_utils.tokenize(text_utils.normalize(str(extra))))
+            if norme:
+                self.mots_fin.add(norme)
+        # Les memes, passes au meme filtre que la phrase entendue : « that s
+        # all » se reduit a « that all », et « thanks that's all » aussi.
+        self.mots_fin_reduits = {
+            " ".join(self._reduire(text_utils.tokenize(mot))) for mot in self.mots_fin
+        }
+        self.mots_fin_reduits.discard("")
         self._arme_jusqu_a = 0.0
 
     # -- reconnaissance du nom ------------------------------------------------
@@ -240,10 +289,47 @@ class MoteurEcoute:
     def secondes_restantes(self) -> float:
         return max(0.0, self._arme_jusqu_a - time.monotonic())
 
+    def _reduire(self, tokens: list) -> list:
+        """
+        Ce qui reste d un ordre court : sans politesse, sans le nom, et sans
+        les repetitions que produit la transcription (« stop stop »).
+        """
+        utiles = [t for t in tokens
+                  if t not in MOTS_EFFACABLES and not self.est_mot_appel(t)]
+        return [t for i, t in enumerate(utiles) if i == 0 or t != utiles[i - 1]]
+
     def est_fin_de_session(self, texte: str) -> bool:
-        """La phrase demande-t-elle de refermer la session d ecoute ?"""
-        norme = " ".join(text_utils.tokenize(text_utils.normalize(texte)))
-        return norme in MOTS_FIN_SESSION
+        """
+        La phrase demande-t-elle de remettre l assistant en veille ?
+
+        Trois passes, de la plus stricte a la plus tolerante : la phrase
+        telle quelle, puis ce qu il en reste une fois la politesse retiree
+        (« stop » se dit rarement tout seul), puis la ressemblance, pour le
+        mot isole que la transcription a ecorche.
+
+        Ce qui reste doit valoir l expression ENTIERE : « arrete la musique »
+        n est pas « arrete », et doit partir vers la commande.
+        """
+        tokens = text_utils.tokenize(text_utils.normalize(texte))
+        brut = [t for i, t in enumerate(tokens) if i == 0 or t != tokens[i - 1]]
+        if " ".join(brut) in self.mots_fin:
+            return True
+
+        utiles = self._reduire(tokens)
+        if not utiles:
+            return False
+        norme = " ".join(utiles)
+        if norme in self.mots_fin_reduits:
+            return True
+
+        # Un mot isole, mal transcrit : « stope », « arretes », « sleeps ».
+        if len(utiles) > 1 or len(norme) < LONGUEUR_MINIMALE_FLOUE:
+            return False
+        return any(
+            text_utils.similarity(norme, mot) >= SEUIL_FIN_SESSION
+            for mot in self.mots_fin_reduits
+            if " " not in mot and len(mot) >= LONGUEUR_MINIMALE_FLOUE
+        )
 
     def analyser(self, texte: str) -> Analyse:
         """
@@ -259,6 +345,16 @@ class MoteurEcoute:
 
         appel, reste = self.separer_mot_appel(texte)
 
+        # La mise en veille se decide AVANT tout le reste. « Alma, stop » est
+        # la facon la plus naturelle de le dire, et c est precisement celle
+        # qui relancait une session au lieu de la fermer.
+        #
+        # Sans le nom, il faut qu une session soit ouverte : un « stop » lance
+        # a quelqu un d autre dans la piece ne doit rien declencher.
+        if (appel or self.arme) and self.est_fin_de_session(reste if appel else texte):
+            self.desarmer()
+            return Analyse(FIN_SESSION, "", appel)
+
         if appel and reste:
             self.armer()
             return Analyse(REVEIL_COMMANDE, reste, True)
@@ -266,10 +362,6 @@ class MoteurEcoute:
             self.armer()
             return Analyse(REVEIL_SEUL, "", True)
         if self.arme:
-            # « stop » ferme la session immediatement.
-            if self.est_fin_de_session(texte):
-                self.desarmer()
-                return Analyse(FIN_SESSION, "", False)
             self.armer()           # on reparle : le compte a rebours repart
             return Analyse(COMMANDE, texte, False)
         return Analyse(IGNORE, texte, False)
@@ -288,6 +380,6 @@ def _fin_du_mot(norm: str, tokens: list, index: int) -> int:
     return curseur
 
 
-def accuse_fin() -> str:
+def accuse_fin(langue: str = "fr") -> str:
     """Replique quand la session se referme sur demande."""
-    return random.choice(ACCUSES_FIN)
+    return random.choice(ACCUSES_FIN_EN if langue == "en" else ACCUSES_FIN)

@@ -243,9 +243,30 @@ radius, so the orb grows with the window instead of floating in the middle of
 a large empty screen. On launch the window fades in and the orb gives a short
 flare that settles by itself.
 
-Keyboard: Escape gives you an ordinary window back, F11 returns to full
-screen, **M** cuts or restores the microphone, **F1** shows the help. There is
-no button for the last two — the help is also reachable by voice.
+Keyboard: Escape gives you an ordinary window back and, once out of full
+screen, puts ALMA back to sleep; F11 returns to full screen; **space** sleeps
+or wakes (so does a **click on the orb**); **M** cuts or restores the
+microphone; **F1** shows the help. There is no button for the last two — the
+help is also reachable by voice.
+
+### Going back to sleep
+
+Once woken, ALMA stays listening for a while so you can chain requests without
+repeating its name. To close the session immediately, say **stop** — or any of
+the natural ways of saying it, in either language: *"Alma, stop"*, *"ok stop"*,
+*"stop please"*, *"c'est bon"*, *"laisse tomber"*, *"ça suffit"*,
+*"mets-toi en veille"*, *"that's all"*, *"never mind"*, *"go to sleep"*,
+*"shut up"*.
+
+A one-word order is what speech recognition gets wrong most often, so prefer a
+longer phrase — *"mets-toi en veille"*, *"go to sleep"* — when a bare *stop*
+does not come through. And when it still does not: click the orb, or press
+space. If a phrasing keeps coming back unrecognised, add it once and for all:
+
+```yaml
+voice:
+  sleep_words: ["basta", "on arrête là"]
+```
 
 Seven layers, back to front: a diffuse halo; orbiting dust that gives depth;
 a wave ring deformed by the **history** of microphone levels, so the wave

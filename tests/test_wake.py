@@ -306,3 +306,89 @@ def test_la_tolerance_se_desactive(config, mot_proche):
     strict = MoteurEcoute(config_nommee(config, wake_tolerate_alone=False))
     assert strict.analyser(mot_proche).etat == IGNORE
     assert strict.analyser("Alma").etat == REVEIL_SEUL
+
+
+# --------------------------------------------------------------------------
+# La mise en veille : ce qu'on dit vraiment, pas la forme du dictionnaire
+# --------------------------------------------------------------------------
+# Le symptôme signalé : « quand je dis stop, il comprend rarement ». Le mot
+# nu était bien reconnu -- mais personne ne dit « stop » nu. La comparaison
+# portait sur la phrase entière, caractère pour caractère, alors qu'un ordre
+# d'un seul mot est justement ce que la reconnaissance vocale rate le plus.
+@pytest.mark.parametrize("phrase", [
+    # Ce qui marchait déjà
+    "stop", "arrête", "silence", "c'est bon", "laisse tomber", "annule",
+    "ça suffit", "arrête-toi",
+    # Le nom devant ou derrière : la forme la plus naturelle, et celle qui
+    # RELANÇAIT une session au lieu de la fermer.
+    "Alma stop", "stop Alma", "Alma, arrête",
+    # La politesse et les hésitations autour de l'ordre
+    "ok stop", "bon stop", "stop merci", "stop s'il te plaît",
+    "arrête s'il te plaît", "c'est bon merci", "non c'est bon",
+    # Ce que la transcription rend d'un mot répété ou écorché
+    "stop stop", "stoppe", "Stop.", "stop !",
+    # Dire explicitement d'aller dormir : trois syllabes plutôt qu'une,
+    # donc bien mieux transcrit qu'un « stop » sec.
+    "mets-toi en veille", "retourne en veille", "va dormir", "dors",
+    # Anglais
+    "stop it", "stop please", "that's all", "that's enough", "enough",
+    "never mind", "forget it", "cancel", "quiet", "shut up",
+    "go to sleep", "go back to sleep", "sleep", "done", "nothing",
+    "thanks that's all",
+])
+def test_toutes_les_facons_de_dire_stop(moteur, phrase):
+    moteur.analyser("Alma")
+    assert moteur.analyser(phrase).etat == FIN_SESSION, phrase
+    assert moteur.arme is False, phrase
+
+
+@pytest.mark.parametrize("phrase", [
+    # Un ordre de mise en veille qui porte sur autre chose reste une commande.
+    "arrête la musique", "arrête la vidéo", "arrête le minuteur",
+    "annule mes rappels", "annule l'extinction", "stoppe la vidéo",
+    "silence total", "c'est quoi cette musique", "c'est parti",
+    "tais-toi un peu plus fort",
+    "stop the video", "stop the music", "cancel all my reminders",
+    "cancel the shutdown", "put the computer to sleep", "quiet the music",
+    "that's all I need to know", "forget everything", "nothing is playing",
+    "shut down the computer",
+])
+def test_une_vraie_commande_ne_ferme_pas_la_session(moteur, phrase):
+    """Le risque symétrique : tout prendre pour un « stop »."""
+    moteur.analyser("Alma")
+    assert moteur.analyser(phrase).etat != FIN_SESSION, phrase
+    assert moteur.arme is True, phrase
+
+
+def test_alma_stop_ferme_meme_sans_session_ouverte(moteur):
+    """
+    Avec le nom, pas besoin d'une session ouverte : « Alma, stop » veut dire
+    « tais-toi », jamais « exécute la commande stop ».
+    """
+    assert moteur.arme is False
+    assert moteur.analyser("Alma stop").etat == FIN_SESSION
+
+
+def test_un_stop_lance_a_quelquun_dautre_reste_ignore(moteur):
+    """Sans le nom et sans session, « stop » ne concerne pas l'assistant."""
+    assert moteur.analyser("stop").etat == IGNORE
+    assert moteur.analyser("go to sleep").etat == IGNORE
+
+
+def test_le_vocabulaire_de_veille_se_complete_par_la_configuration(config):
+    """Une tournure qui vous revient s'ajoute sans toucher au code."""
+    donnees = copy.deepcopy(config.data)
+    donnees["voice"]["sleep_words"] = ["basta", "roupille"]
+    moteur = MoteurEcoute(Config(donnees))
+    moteur.analyser("Alma")
+    assert moteur.analyser("basta").etat == FIN_SESSION
+    moteur.analyser("Alma")
+    assert moteur.analyser("roupille").etat == FIN_SESSION
+
+
+def test_la_replique_de_fin_suit_la_langue():
+    from core.wake import ACCUSES_FIN, ACCUSES_FIN_EN, accuse_fin
+
+    assert accuse_fin("en") in ACCUSES_FIN_EN
+    assert accuse_fin("fr") in ACCUSES_FIN
+    assert accuse_fin() in ACCUSES_FIN
