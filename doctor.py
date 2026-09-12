@@ -162,7 +162,7 @@ def verifier_micro(config) -> None:
     )
     seuil = ecouteur.calibrate(1.0)
     ecouteur.fermer()
-    info("bruit ambiant %.5f, pic %.5f" % (ecouteur.ambient, ecouteur.pic_calibration))
+    info("bruit ambiant %.5f, pic %.5f" % (ecouteur.ambient, ecouteur.pic_ambiant))
     if seuil >= LevelMeterListener.SEUIL_MAX:
         manque("Seuil au plafond (%.4f) : il faudrait crier" % seuil,
                "La pièce est bruyante, ou le micro capte un souffle constant.")

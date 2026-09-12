@@ -118,13 +118,13 @@ def main() -> int:
         print("    2. Rapprochez-vous du micro.")
         print("    3. Sinon, abaissez le seuil dans config.yaml :")
         print("         voice:")
-        print("           min_threshold: %.5f" % max(0.0008, pic * 0.35))
+        print("           min_threshold: %.5f" % max(0.0002, pic * 0.35))
         return 1
     if proportion < 5:
         print("  LIMITE : la voix passe le seuil, mais rarement.")
         print("  Abaissez un peu le seuil dans config.yaml :")
         print("         voice:")
-        print("           min_threshold: %.5f" % max(0.0008, pic * 0.30))
+        print("           min_threshold: %.5f" % max(0.0002, pic * 0.30))
         return 0
 
     print("  SUCCÈS : votre voix est détectée correctement.")
