@@ -41,6 +41,31 @@ class FakeIO:
 
 
 @pytest.fixture(autouse=True)
+def aucune_trace_sur_la_machine(monkeypatch):
+    """
+    Aucun test ne doit LAISSER quoi que ce soit derriere lui.
+
+    Une suite qui exerce l'assistant de bout en bout execute VRAIMENT les
+    commandes : « search Google for gift ideas » ouvrait un onglet, « copy X
+    to the clipboard » ecrasait le presse-papiers, « take a screenshot »
+    remplissait un dossier -- a chaque lancement, sur la machine de qui
+    lance les tests, pendant qu'il travaille.
+
+    On coupe donc les sorties a la racine, pour TOUS les tests. Ce qui est
+    verifie -- le routage, la reponse, la langue -- n'en depend pas ; un test
+    qui a besoin de la vraie fonction la remplace lui-meme.
+    """
+    from commands import websites
+    from core import win_utils
+
+    monkeypatch.setattr(websites, "open_url", lambda *a, **k: True)
+    monkeypatch.setattr(win_utils, "set_clipboard", lambda *a, **k: True)
+    monkeypatch.setattr(win_utils, "launch", lambda *a, **k: (False, "test"))
+    monkeypatch.setattr(win_utils, "take_screenshot",
+                        lambda *a, **k: (True, "capture_de_test.png"))
+
+
+@pytest.fixture(autouse=True)
 def application_claude_fermee(monkeypatch):
     """
     Par defaut, l application Claude est vue comme fermee.
