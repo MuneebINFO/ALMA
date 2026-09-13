@@ -80,6 +80,20 @@ ETATS = {
 }
 
 
+def sigle(nom: str) -> str:
+    """
+    « ALMA » -> « A.L.M.A » : le monogramme affiche sous la barre du haut.
+
+    Il etait ecrit en dur, ce qui allait tant que l assistant ne pouvait pas
+    etre renomme. Un nom deja pointe ou deja espace est laisse tel quel :
+    l utilisateur a alors ecrit ce qu il voulait voir.
+    """
+    nom = (nom or "").strip()
+    if not nom or "." in nom or " " in nom:
+        return nom.upper()
+    return ".".join(nom.upper())
+
+
 def melanger(couleur_a: str, couleur_b: str, facteur: float) -> str:
     """Interpole deux couleurs (sert aux transitions douces et au halo)."""
     a = couleur_a.lstrip("#")
@@ -440,6 +454,9 @@ class AlmaApp:
         # ainsi consulter le contexte (« recherche Damso » apres « va sur
         # YouTube »), et le mode texte en profite aussi.
         self.moteur = assistant.moteur
+        # Renommer l assistant change ce que la fenetre affiche : le titre,
+        # le sigle, le statut. Le coeur previent, l interface se remet a jour.
+        assistant.signal_personnalisation = self._personnalisation_changee
 
         root.title(assistant.name)
         root.configure(bg=FOND)
@@ -503,7 +520,8 @@ class AlmaApp:
         self.colonne = tk.Frame(self.corps, bg=FOND)
         self.colonne.pack(side="left", fill="both", expand=True)
 
-        self.etiquette_sigle = tk.Label(self.colonne, text="A.L.M.A", font=police_sigle,
+        self.etiquette_sigle = tk.Label(self.colonne, text=sigle(self.nom),
+                                        font=police_sigle,
                                         bg=FOND, fg=TEXTE)
         self.etiquette_sigle.pack(pady=(6, 0))
 
@@ -787,6 +805,10 @@ class AlmaApp:
                     self.journaliser(qui, texte, "moi" if qui == "Vous" else "assistant")
                 elif type_evenement == "erreur":
                     self.journaliser(self.nom, charge, "erreur")
+                elif type_evenement == "renomme":
+                    self.root.title(charge)
+                    self.etiquette_sigle.configure(text=sigle(charge))
+                    self.definir_statut(self._etat_repos(), "")
                 elif type_evenement == "quitter":
                     self.quitter()
                     return
@@ -865,6 +887,17 @@ class AlmaApp:
             self.evenements.put(("quitter", None))
             return
         self.evenements.put(("statut", (self._etat_repos(), "")))
+
+    def _personnalisation_changee(self) -> None:
+        """
+        Un reglage vient de changer sous nos pieds.
+
+        Appele depuis le thread audio : rien n est touche directement ici --
+        Tkinter n est pilotable que depuis son thread principal -- tout passe
+        par la file d evenements, comme le reste.
+        """
+        self.nom = self.assistant.name
+        self.evenements.put(("renomme", self.nom))
 
     def _etat_repos(self) -> str:
         """Etat affiche entre deux commandes."""

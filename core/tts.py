@@ -309,6 +309,27 @@ class TextToSpeech:
         self.texte_en_cours = ""
         return interrompu
 
+    def reconfigurer(self) -> bool:
+        """
+        Reprend la voix et le debit dans la configuration, a chaud.
+
+        « prends une voix d homme » doit s entendre dans la phrase qui suit,
+        pas au prochain lancement. La voix neuronale se change en place : le
+        nom du timbre n est qu un parametre de la requete suivante.
+
+        La voix LOCALE (SAPI5), elle, appartient au thread de lecture et ne
+        peut pas etre reglee depuis ici sans le figer ; elle suivra au
+        redemarrage. Retourne True si le changement est deja effectif.
+        """
+        if self._neuronale is None:
+            return False
+        from core.voice_neural import VOIX_PAR_DEFAUT
+
+        self._neuronale.voix = str(
+            self._reglage("voice.neural_voice", VOIX_PAR_DEFAUT) or VOIX_PAR_DEFAUT)
+        self._neuronale.vitesse = str(self._reglage("voice.neural_rate", "+0%") or "+0%")
+        return True
+
     def list_voices(self) -> list:
         """Voix SAPI5 installees (la voix neuronale, elle, se choisit par nom)."""
         self._ready.wait(INIT_TIMEOUT)

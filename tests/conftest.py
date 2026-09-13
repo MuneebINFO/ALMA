@@ -89,6 +89,10 @@ def assistant(tmp_path, config):
     test_config.set("paths.notes", str(tmp_path / "notes.json"))
     test_config.set("paths.reminders", str(tmp_path / "reminders.json"))
     test_config.set("paths.history", str(tmp_path / "history.json"))
+    test_config.set("paths.memory", str(tmp_path / "souvenirs.json"))
+    # Les personnalisations aussi : un test qui renomme l'assistant ne doit
+    # pas renommer celui de la personne qui lance la suite.
+    test_config.set("paths.preferences", str(tmp_path / "preferences.json"))
 
     class SilentTTS:
         """Double de test : meme interface que TextToSpeech, sans moteur reel."""

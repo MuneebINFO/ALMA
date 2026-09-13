@@ -153,7 +153,17 @@ def test_les_commandes_voisines_ne_sont_pas_captees(assistant, phrase, attendu):
     assert resolution.command.name == attendu, phrase
 
 
-def test_les_souvenirs_restent_sur_la_machine(assistant):
-    """Un fichier en clair, relisible sans passer par Alma."""
-    assert assistant.storage.souvenirs.path.name == "souvenirs.json"
-    assert "data" in str(assistant.storage.souvenirs.path).replace("\\", "/")
+def test_les_souvenirs_restent_sur_la_machine():
+    """
+    Un fichier en clair, relisible sans passer par Alma.
+
+    La vérification porte sur la configuration PAR DÉFAUT, et non sur celle
+    de la suite de tests : cette dernière écrit dans un dossier temporaire,
+    justement pour ne pas toucher aux souvenirs de qui lance les tests.
+    """
+    from config import load_config
+    from core.storage import Storage
+
+    chemin = Storage(load_config()).souvenirs.path
+    assert chemin.name == "souvenirs.json"
+    assert "data" in str(chemin).replace("\\", "/")

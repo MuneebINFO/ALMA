@@ -205,7 +205,46 @@ That memory lives exactly as long as the session. Once it expires, "recherche
 Damso" is an ordinary web search again — so a request made an hour later never
 lands on the wrong site by accident.
 
-### Renaming the assistant
+### Personalization — what ALMA remembers about you
+
+Everything below is said in one sentence, in either language, and **survives a
+restart**. Nothing needs a file to be opened. What ALMA learned about you lives
+in `data/preferences.json`, written by these commands and applied over
+`config.yaml` — a separate file precisely so that rewriting it never destroys
+the comments in the one you wrote by hand.
+
+| What | Say | Or |
+|---|---|---|
+| **Its name** | *appelle-toi Jarvis* | *call yourself Jarvis* |
+| **Your name** | *appelle-moi Muneeb* | *call me Muneeb* |
+| **The language** | *parle-moi en anglais* | *switch to English* |
+| **Speak or stay quiet** | *ne parle plus* / *parle à voix haute* | *stop talking* / *speak out loud* |
+| **Its voice** | *prends une voix d'homme* | *use a female voice* |
+| **Its pace** | *parle plus vite* / *moins vite* | *speak faster* / *slower* |
+| **Confirmations** | *ne me demande plus confirmation* | *always ask for confirmation* |
+| **How long it stays awake** | *reste éveillé 2 minutes* | *stay awake for 30 seconds* |
+| **Microphone sensitivity** | *sois plus sensible* / *tu m'entends mal* | *be less sensitive* |
+| **Your city** (for the weather) | *j'habite à Bruxelles* | *my city is Brussels* |
+| **Your music folder** | *ma musique est dans D:/Musique* | *my music is in D:/Music* |
+| **Review it all** | *quelles sont mes préférences* | *what are my preferences* |
+| **Forget it all** | *oublie mes préférences* | *reset your settings* |
+
+Two things deserve a note.
+
+**Renaming changes the wake word too.** An assistant called Jarvis that only
+answers to "Alma" has not really changed its name, so both move together — and
+immediately, not at the next launch: the listening engine is reconfigured in
+place, the window title and the monogram follow. A name shorter than three
+letters is refused; it would be confused with half the dictionary.
+
+**Turning confirmations off says what it costs.** It covers shutting the
+computer down and emptying the recycle bin, and you do not come back from an
+emptied recycle bin.
+
+Asking rather than telling works too: *tu t'appelles comment ?* answers with the
+name instead of renaming anything.
+
+### Renaming by hand
 
 The wake word comes **entirely from configuration** — no code to touch:
 
