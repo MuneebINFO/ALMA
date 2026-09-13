@@ -132,10 +132,27 @@ def reglages_pour(cle: str, reponse: str, config) -> dict:
     Retourne un dictionnaire vide quand il n y a rien a retenir : une
     reponse vide, ou la valeur qui etait deja en place. Le nom de
     l assistant depend de la langue deja choisie -- d ou le `config`.
+
+    On n ecrit QUE ce qui change. Sans cela, valider le nom pre-rempli ou
+    passer la question de la voix inscrivait la valeur par defaut dans les
+    preferences : elle apparaissait ensuite dans « mes preferences » comme
+    un choix, alors que personne n avait rien choisi.
     """
+    return {chemin: valeur
+            for chemin, valeur in _reglages_bruts(cle, reponse, config).items()
+            if valeur != config.get(chemin)}
+
+
+def _reglages_bruts(cle: str, reponse: str, config) -> dict:
+    """Ce que la reponse designe, avant d avoir retire ce qui ne bouge pas."""
     from core import text_utils
 
     reponse = " ".join(str(reponse or "").split())
+    question = PAR_CLE.get(cle)
+    # Passer une question fermee ne veut pas dire « prends le premier
+    # choix » : cela veut dire « laisse comme c est ».
+    if question is not None and not question.libre and not reponse:
+        return {}
 
     if cle == "langue":
         langue = reponse if reponse in ("fr", "en") else "fr"

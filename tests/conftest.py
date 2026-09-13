@@ -83,16 +83,25 @@ def application_claude_fermee(monkeypatch):
     monkeypatch.setattr("core.claude_app.fenetre", lambda: None)
 
 
+# Un chemin de preferences qui n existe pas : c est ainsi qu on obtient la
+# configuration D ORIGINE, sans ce que l utilisateur de la machine a
+# personnalise. Sans cela, un poste ou Alma s appelle Jarvis et connait le
+# prenom de son proprietaire ferait echouer des tests qui n ont rien a voir.
+SANS_PREFERENCES = Path(__file__).resolve().parent / "aucune_preference.json"
+
+
 def config_de_test(path=None):
     """
-    La configuration, fallback IA coupe.
+    La configuration d origine, fallback IA coupe.
 
-    La machine de developpement a le droit d activer la delegation a Claude
-    Code dans son config.yaml. Les tests, eux, ne doivent lancer aucun
-    sous-processus : ils repartent donc toujours d un fallback eteint. Les
-    tests qui veulent l inverse le rallument eux-memes.
+    Deux choses dont les tests ne doivent pas dependre : la machine de
+    developpement a le droit d activer la delegation a Claude Code dans son
+    config.yaml -- les tests, eux, ne lancent aucun sous-processus -- et son
+    proprietaire a le droit d avoir personnalise Alma. On repart donc d un
+    fallback eteint et d aucune preference. Les tests qui veulent l inverse
+    les remettent eux-memes.
     """
-    config = load_config(path) if path else load_config()
+    config = load_config(path, preferences_file=SANS_PREFERENCES)
     config.set("ai_fallback.enabled", False)
     return config
 
