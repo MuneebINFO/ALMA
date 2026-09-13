@@ -63,6 +63,12 @@ def aucune_trace_sur_la_machine(monkeypatch):
     monkeypatch.setattr(win_utils, "launch", lambda *a, **k: (False, "test"))
     monkeypatch.setattr(win_utils, "take_screenshot",
                         lambda *a, **k: (True, "capture_de_test.png"))
+    # La langue de repli est un etat de module, regle par l'assistant. Sans
+    # cette remise a zero, un test qui passe Alma en anglais changerait la
+    # langue des suivants, selon l'ordre d'execution.
+    from core import text_utils
+
+    monkeypatch.setattr(text_utils, "LANGUE_PAR_DEFAUT", "fr")
 
 
 @pytest.fixture(autouse=True)

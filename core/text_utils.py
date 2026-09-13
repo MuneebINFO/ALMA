@@ -157,20 +157,38 @@ _MARQUEURS_ANGLAIS = frozenset((
     "raise", "increase", "decrease", "quit", "loud", "mouse", "keyboard",
     "weather", "time", "temperature", "bye", "goodbye", "name",
     "pictures", "pics", "anything", "nothing", "something",
+    "call", "yourself", "faster", "slower", "sensitive", "preferences",
+    "settings", "reset", "default", "awake", "loud",
 ))
+
+# Langue supposee quand la phrase ne porte AUCUN indice : « call me Sarah »
+# n a pas un mot exclusif a l anglais, et « screenshot » pas davantage au
+# francais. C est alors la langue choisie a l installation qui tranche --
+# sans quoi un utilisateur anglophone se ferait repondre en francais une
+# phrase sur trois. L assistant la regle au demarrage et a chaque
+# changement (voir Assistant._appliquer).
+LANGUE_PAR_DEFAUT = "fr"
+
+
+def definir_langue_par_defaut(langue: str) -> None:
+    """Fixe la langue de repli. Tout sauf « en » vaut francais."""
+    global LANGUE_PAR_DEFAUT
+    LANGUE_PAR_DEFAUT = "en" if str(langue or "")[:2] == "en" else "fr"
 
 
 def detect_language(norm: str) -> str:
     """
     « fr » ou « en », devine a partir de mots qui n existent que dans une
     langue. Sur une egalite ou une phrase sans mot reconnu (« screenshot »,
-    un nom propre...), on retombe sur le francais : c est la langue
-    d origine d Alma, et le repli le plus sur.
+    un nom propre...), on retombe sur LANGUE_PAR_DEFAUT -- la langue choisie
+    a l installation, le francais tant que rien n a ete choisi.
     """
     tokens = set(tokenize(norm))
     score_fr = len(tokens & _MARQUEURS_FRANCAIS)
     score_en = len(tokens & _MARQUEURS_ANGLAIS)
-    return "en" if score_en > score_fr else "fr"
+    if score_en != score_fr:
+        return "en" if score_en > score_fr else "fr"
+    return LANGUE_PAR_DEFAUT
 
 
 def similarity(a: str, b: str) -> float:

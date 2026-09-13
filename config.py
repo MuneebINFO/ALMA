@@ -68,6 +68,10 @@ DEFAULTS: dict = {
         # mot proche du nom est prononce seul autour de vous.
         "wake_tolerate_alone": True,
         "confirm_dangerous_actions": True,
+        # Le premier lancement pose quatre questions (voir
+        # core/premier_lancement.py) puis leve ce drapeau. Remettez-le a
+        # false pour les reposer.
+        "setup_done": False,
     },
     "voice": {
         "enabled": False,            # mode texte par defaut pour main.py

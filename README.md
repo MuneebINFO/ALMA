@@ -205,6 +205,26 @@ That memory lives exactly as long as the session. Once it expires, "recherche
 Damso" is an ordinary web search again — so a request made an hour later never
 lands on the wrong site by accident.
 
+### First launch — four questions, once
+
+The first time ALMA opens, it knows nothing about you, so it asks. Four
+questions, in the window itself, before the microphone starts — otherwise it
+would answer the answers:
+
+1. **Which language do you speak?** Asked in both, since it does not know yet.
+   The three questions that follow are then asked in the language you chose.
+2. **What should I call you?** Your first name, used to greet you.
+3. **What would you like to call me?** The name you will say to wake it.
+4. **Which voice?** A female or a male one.
+
+Each answer applies immediately and is written down as you go, so a setup
+interrupted halfway keeps what you already chose. Every question can be
+skipped — the default stays — and the whole thing never comes back. In text
+mode (`python main.py`) the same four questions are asked at the prompt, from
+the same list: there is only one set of questions in the code.
+
+Everything chosen there is changed later by asking, and so is everything else:
+
 ### Personalization — what ALMA remembers about you
 
 Everything below is said in one sentence, in either language, and **survives a

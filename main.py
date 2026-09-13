@@ -110,6 +110,14 @@ def main(argv=None) -> int:
     else:
         print("[mode texte] Tapez votre demande. « aide » pour la liste, « quitte » pour sortir.")
 
+    # Le premier lancement passe avant tout le reste : sans lui, Alma ne sait
+    # ni comment vous appeler, ni comment vous l appelez.
+    from core import premier_lancement
+
+    if premier_lancement.est_necessaire(config):
+        premier_lancement.poser_en_texte(
+            assistant, lambda invite: assistant.io.read(invite), print)
+
     assistant.run()
     return 0
 

@@ -11,6 +11,7 @@ import logging
 import time
 
 from config import deriver_mots_appel, load_config
+from core import text_utils
 from core.context import SOURCE_TEXT, Response, Utterance
 from core.registry import load_commands
 from core.router import Router
@@ -43,6 +44,8 @@ class Assistant:
         # Session d ecoute : partagee par le mode texte et le mode voix, pour
         # que les commandes puissent savoir si un echange est en cours.
         self.moteur = MoteurEcoute(self.config)
+        # La langue de repli, pour les phrases sans le moindre indice.
+        text_utils.definir_langue_par_defaut(self.config.get("general.language", "fr"))
         # Memoire de court terme : le site ou l application dont on vient de
         # parler, afin que « recherche Damso » suive « va sur YouTube ».
         self.contexte: dict = {}
@@ -134,6 +137,9 @@ class Assistant:
                       "voice.sleep_words"}:
             deriver_mots_appel(self.config.data)
             self.moteur.reconfigurer(self.config)
+        if "general.language" in chemins:
+            text_utils.definir_langue_par_defaut(
+                self.config.get("general.language", "fr"))
         if chemins & {"voice.neural_voice", "voice.neural_rate", "voice.rate"}:
             try:
                 self.tts.reconfigurer()
