@@ -57,6 +57,8 @@ CATALOGUE = (
     Reglage("general.wake_word", "le mot qui me réveille", "the word that wakes me",
             visible=False),
     Reglage("general.user_name", "votre nom", "your name"),
+    Reglage("general.setup_done", "la configuration initiale",
+            "the initial setup", visible=False),
     # -- langue et voix ------------------------------------------------------
     Reglage("general.language", "la langue", "the language"),
     Reglage("voice.stt_language", "la langue que j'écoute", "the language I listen for",

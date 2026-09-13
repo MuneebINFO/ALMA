@@ -463,6 +463,9 @@ class AlmaApp:
         root.minsize(620, 480)
         self.historique_visible = False
         self.non_lus = 0
+        # Panneau du premier lancement : absent tant qu il n y a rien a demander.
+        self.installation = None
+        self._suite_installation = None
         self._largeur_panneau = 0
         self._animation_historique = None
 
@@ -888,6 +891,128 @@ class AlmaApp:
             return
         self.evenements.put(("statut", (self._etat_repos(), "")))
 
+    # -- premier lancement ----------------------------------------------------
+    def installation_necessaire(self) -> bool:
+        """Reste-t-il les quatre questions du premier lancement a poser ?"""
+        from core import premier_lancement
+
+        return premier_lancement.est_necessaire(self.assistant.config)
+
+    def montrer_installation(self, quand_fini) -> None:
+        """
+        Pose les questions du premier lancement, dans la fenetre elle-meme.
+
+        Pas une boite de dialogue : c est le premier contact avec
+        l application, et il doit lui ressembler. L orbe attend derriere,
+        l ecoute ne demarre qu une fois fini -- sinon Alma repondrait aux
+        reponses qu on lui donne.
+        """
+        from core import premier_lancement
+
+        self._suite_installation = quand_fini
+        self._questions = list(premier_lancement.QUESTIONS)
+        self._index_question = 0
+        self.colonne.pack_forget()
+        self.installation = tk.Frame(self.corps, bg=FOND)
+        self.installation.pack(fill="both", expand=True)
+        self._poser_question()
+
+    def _langue_installation(self) -> str:
+        return str(self.assistant.config.get("general.language", "fr"))[:2]
+
+    def _poser_question(self) -> None:
+        """Dessine la question courante, ou termine s il n en reste plus."""
+        for enfant in self.installation.winfo_children():
+            enfant.destroy()
+        if self._index_question >= len(self._questions):
+            self._finir_installation()
+            return
+
+        question = self._questions[self._index_question]
+        langue = self._langue_installation()
+        anglais = langue == "en"
+
+        cadre = tk.Frame(self.installation, bg=FOND)
+        cadre.place(relx=0.5, rely=0.5, anchor="center")
+
+        tk.Label(cadre,
+                 text=("Step " if anglais else "Étape ")
+                      + str(self._index_question + 1) + " / " + str(len(self._questions)),
+                 font=tkfont.Font(family="Segoe UI", size=10),
+                 bg=FOND, fg=TEXTE_DOUX).pack(pady=(0, 18))
+        tk.Label(cadre, text=question.titre(langue),
+                 font=tkfont.Font(family="Segoe UI", size=24), bg=FOND, fg=TEXTE,
+                 wraplength=760, justify="center").pack()
+        if question.aide(langue):
+            tk.Label(cadre, text=question.aide(langue),
+                     font=tkfont.Font(family="Segoe UI", size=12), bg=FOND,
+                     fg=TEXTE_DOUX, wraplength=620,
+                     justify="center").pack(pady=(12, 0))
+
+        choix = tk.Frame(cadre, bg=FOND)
+        choix.pack(pady=(30, 0))
+        if question.libre:
+            saisie = tk.Entry(choix, font=tkfont.Font(family="Segoe UI", size=18),
+                              bg=FOND_CARTE, fg=TEXTE, insertbackground=TEXTE,
+                              bd=0, relief="flat", justify="center", width=22)
+            saisie.pack(ipady=10, pady=(0, 16))
+            if question.defaut:
+                saisie.insert(0, question.defaut)
+                saisie.select_range(0, "end")
+            saisie.focus_set()
+
+            def valider(_evenement=None, champ=saisie) -> None:
+                self._repondre(champ.get())
+
+            saisie.bind("<Return>", valider)
+            self._bouton(choix, "Continue" if anglais else "Continuer",
+                         valider).pack()
+        else:
+            for possible in question.choix:
+                self._bouton(
+                    choix, possible.libelle(langue),
+                    lambda valeur=possible.valeur: self._repondre(valeur),
+                ).pack(pady=5, fill="x")
+
+        # Discret, mais present : personne ne doit rester coince ici.
+        passer = tk.Label(cadre, text="Skip" if anglais else "Passer",
+                          font=tkfont.Font(family="Segoe UI", size=10,
+                                           underline=True),
+                          bg=FOND, fg=TEXTE_DOUX, cursor="hand2")
+        passer.pack(pady=(26, 0))
+        passer.bind("<Button-1>", lambda _e: self._repondre(""))
+
+    def _repondre(self, reponse: str) -> None:
+        """Retient la reponse et passe a la suivante."""
+        from core import premier_lancement
+
+        question = self._questions[self._index_question]
+        premier_lancement.repondre(self.assistant, question.cle, reponse)
+        self._index_question += 1
+        self._poser_question()
+
+    def _finir_installation(self) -> None:
+        """Range le panneau, rend la main a l orbe, et lance l ecoute."""
+        from core import premier_lancement
+
+        premier_lancement.terminer(self.assistant)
+        self.installation.destroy()
+        self.installation = None
+        # `before` n accepte pas None : le panneau d historique n est POSE que
+        # lorsqu il est visible, et c est seulement alors qu il faut passer
+        # devant lui.
+        if self.historique_visible:
+            self.colonne.pack(side="left", fill="both", expand=True,
+                              before=self.panneau)
+        else:
+            self.colonne.pack(side="left", fill="both", expand=True)
+        self.journaliser(self.assistant.name,
+                         premier_lancement.bienvenue(self.assistant.name,
+                                                     self._langue_installation()))
+        if self._suite_installation is not None:
+            suite, self._suite_installation = self._suite_installation, None
+            suite()
+
     def _personnalisation_changee(self) -> None:
         """
         Un reglage vient de changer sous nos pieds.
@@ -1148,8 +1273,14 @@ def main(argv=None) -> int:
         else:
             app.definir_statut("arret")
 
-    # L ecoute demarre automatiquement : l application est vocale par nature.
-    root.after(300, demarrer)
+    # Au tout premier lancement, les quatre questions passent avant le micro :
+    # sans elles Alma repondrait aux reponses, et il ne saurait toujours pas
+    # comment s appeler.
+    if app.installation_necessaire():
+        root.after(300, lambda: app.montrer_installation(demarrer))
+    else:
+        # L ecoute demarre automatiquement : l application est vocale par nature.
+        root.after(300, demarrer)
     root.mainloop()
     return 0
 
