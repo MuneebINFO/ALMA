@@ -24,6 +24,7 @@ MODULES = (
     "media",
     "memoire",
     "misc",
+    "preferences",
     "productivity",
     "search",
     "smalltalk",

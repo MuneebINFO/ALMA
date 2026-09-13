@@ -10,13 +10,14 @@ from __future__ import annotations
 import logging
 import time
 
-from config import load_config
+from config import deriver_mots_appel, load_config
 from core.context import SOURCE_TEXT, Response, Utterance
 from core.registry import load_commands
 from core.router import Router
 from core.wake import MoteurEcoute
 from core.scheduler import Scheduler
 from core.storage import Storage
+from core.preferences import CATALOGUE, Preferences
 from core.tts import TextToSpeech
 
 log = logging.getLogger(__name__)
@@ -31,6 +32,10 @@ class Assistant:
     def __init__(self, config=None, io=None, tts=None, stt=None) -> None:
         self.config = config if config is not None else load_config()
         self.storage = Storage(self.config)
+        # Ce qu Alma a retenu de vous. Deja APPLIQUE a la configuration par
+        # load_config ; le magasin sert a ecrire les changements suivants.
+        self.preferences = Preferences(
+            self.config.resolve_path("preferences", "data/preferences.json"))
         self.tts = tts if tts is not None else TextToSpeech(self.config)
         self.stt = stt
         self.router = Router()
@@ -47,6 +52,9 @@ class Assistant:
         self.ecran_actif = 1
         # Branche par l interface pour signaler visuellement un changement.
         self.signal_ecran = None
+        # Branche par l interface : elle affiche le nom de l assistant, et
+        # doit donc etre prevenue quand il change.
+        self.signal_personnalisation = None
         # Poignee de la DERNIERE fenetre non-Alma que l utilisateur a eue
         # devant lui, et poignee de la fenetre d Alma elle-meme. L interface
         # les tient a jour (voir gui.py) : quand Alma est au premier plan --
@@ -84,6 +92,58 @@ class Assistant:
     def speaks(self) -> bool:
         """La lecture a voix haute est-elle activé ?"""
         return bool(self.config.get("voice.speak_responses", True)) and self.tts.available
+
+    # -- personnalisation -----------------------------------------------------
+    def personnaliser(self, valeurs: dict) -> bool:
+        """
+        Applique des reglages MAINTENANT, et les retient pour la prochaine fois.
+
+        Les deux moities comptent autant l une que l autre : sans la premiere,
+        « appelle-toi Jarvis » ne repondrait au nouveau nom qu au prochain
+        lancement ; sans la seconde, il l oublierait en se fermant.
+
+        `valeurs` porte des chemins de configuration (« general.user_name »).
+        Plusieurs a la fois quand un seul ordre en touche plusieurs : se
+        renommer change le nom ET le mot d appel.
+        """
+        for chemin, valeur in valeurs.items():
+            self.config.set(chemin, valeur)
+        retenu = self.preferences.definir_plusieurs(valeurs)
+        self._appliquer(set(valeurs))
+        return retenu
+
+    def oublier_personnalisations(self) -> int:
+        """Efface les personnalisations et recharge la configuration d origine."""
+        combien = self.preferences.tout_oublier()
+        if combien:
+            self.config.data = load_config(
+                preferences_file=self.preferences.chemin).data
+            self._appliquer({reglage.chemin for reglage in CATALOGUE})
+        return combien
+
+    def _appliquer(self, chemins: set) -> None:
+        """
+        Repercute un changement de reglage sur ce qui tourne deja.
+
+        Chaque objet construit a partir de la configuration en garde une
+        COPIE : le moteur d ecoute a son mot d appel, la synthese sa voix.
+        Changer la configuration ne suffit donc pas, il faut les prevenir.
+        """
+        if chemins & {"general.assistant_name", "general.wake_word",
+                      "general.wake_prefixes", "voice.armed_seconds",
+                      "voice.sleep_words"}:
+            deriver_mots_appel(self.config.data)
+            self.moteur.reconfigurer(self.config)
+        if chemins & {"voice.neural_voice", "voice.neural_rate", "voice.rate"}:
+            try:
+                self.tts.reconfigurer()
+            except Exception as exc:          # pragma: no cover - defensif
+                log.debug("Voix inchangée : %s", exc)
+        if self.signal_personnalisation is not None:
+            try:
+                self.signal_personnalisation()
+            except Exception as exc:          # pragma: no cover - defensif
+                log.debug("Interface non prévenue : %s", exc)
 
     # -- memoire de court terme -----------------------------------------------
     @property

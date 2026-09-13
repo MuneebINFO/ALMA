@@ -66,6 +66,34 @@ in pieces (a list, a sentence assembled in a loop) rather than in one call.
   machine doesn't change it, otherwise add the phrase to the net that
   refuses any French-only word in a reply to an English sentence.
 
+## Adding a personalization
+
+A setting the user can change by voice needs four things, and skipping any one
+of them leaves a half-working feature:
+
+1. **An entry in `core/preferences.py`'s `CATALOGUE`.** It is a whitelist: a
+   path that is not listed cannot be written, on purpose — a command must
+   never be able to reach an arbitrary config key. Set `visible=False` for a
+   setting that merely follows another (the wake word follows the name, the
+   listening language follows the chosen language); it is still remembered,
+   just not listed twice.
+2. **A command that calls `ctx.assistant.personnaliser({...})`**, never
+   `config.set` alone. `personnaliser` does both halves — apply now, remember
+   for later — and one without the other is useless: applied but forgotten
+   dies at midnight, remembered but not applied looks broken.
+3. **A live effect, if something already built holds a copy of the value.**
+   Objects read the config once at construction: `MoteurEcoute` keeps its wake
+   word, `TextToSpeech` its voice. `Assistant._appliquer` is where you tell
+   them; add your path to the right group there, and reconfigure **in place**
+   (`moteur.reconfigurer`) rather than rebuilding — the GUI holds a reference
+   to the same object and would never see a replacement.
+4. **Two tests** in `tests/test_reponses_anglaises.py`'s sibling
+   `tests/test_personnalisation.py`: that the phrase routes (both languages),
+   and that the value survives `load_config(preferences_file=...)`.
+
+And the standing rules still apply: English patterns from the start, replies
+through `ctx.reponse(fr, en)`.
+
 ## Running the tests
 
 ```bash

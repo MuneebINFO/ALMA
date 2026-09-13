@@ -875,6 +875,108 @@
       "phrases": [
         "oublie que je suis allergique aux arachides"
       ]
+    },
+    {
+      "action": "Donner un autre nom à l'assistant",
+      "phrases": [
+        "appelle-toi Jarvis",
+        "change ton nom en Jarvis",
+        "ton nom est Jarvis"
+      ]
+    },
+    {
+      "action": "Dire à l'assistant comment vous appeler",
+      "phrases": [
+        "appelle-moi Muneeb",
+        "je m'appelle Muneeb",
+        "mon prénom est Muneeb"
+      ]
+    },
+    {
+      "action": "Choisir la langue des réponses",
+      "phrases": [
+        "parle-moi en anglais",
+        "passe en anglais",
+        "parle-moi en français"
+      ]
+    },
+    {
+      "action": "Ne plus lire les réponses à voix haute",
+      "phrases": [
+        "ne parle plus",
+        "arrête de parler",
+        "mode silencieux"
+      ]
+    },
+    {
+      "action": "Relire les réponses à voix haute",
+      "phrases": [
+        "parle à voix haute",
+        "remets ta voix"
+      ]
+    },
+    {
+      "action": "Choisir une voix d'homme ou de femme",
+      "phrases": [
+        "prends une voix d'homme",
+        "prends une voix de femme"
+      ]
+    },
+    {
+      "action": "Régler la vitesse de la voix",
+      "phrases": [
+        "parle plus vite",
+        "parle moins vite",
+        "parle normalement"
+      ]
+    },
+    {
+      "action": "Demander ou non une confirmation avant une action risquée",
+      "phrases": [
+        "ne me demande plus confirmation",
+        "demande-moi toujours confirmation"
+      ]
+    },
+    {
+      "action": "Régler combien de temps l'assistant reste éveillé",
+      "phrases": [
+        "reste éveillé 2 minutes"
+      ]
+    },
+    {
+      "action": "Rendre le micro plus ou moins sensible",
+      "phrases": [
+        "sois plus sensible",
+        "sois moins sensible",
+        "tu m'entends mal"
+      ]
+    },
+    {
+      "action": "Retenir votre ville, pour la météo",
+      "phrases": [
+        "ma ville c'est Bruxelles",
+        "j'habite à Paris"
+      ]
+    },
+    {
+      "action": "Indiquer où se trouve votre musique",
+      "phrases": [
+        "ma musique est dans D:/Musique"
+      ]
+    },
+    {
+      "action": "Lister ce que l'assistant a retenu de vous",
+      "phrases": [
+        "quelles sont mes préférences",
+        "mes réglages"
+      ]
+    },
+    {
+      "action": "Oublier toutes les personnalisations",
+      "phrases": [
+        "oublie mes préférences",
+        "remets les réglages par défaut"
+      ]
     }
   ]
 }

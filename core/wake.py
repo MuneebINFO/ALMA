@@ -176,7 +176,27 @@ class MoteurEcoute:
     """
 
     def __init__(self, config=None, duree_armement: float | None = None) -> None:
-        self.config = config
+        # Duree imposee par l appelant (tests) : elle doit survivre a une
+        # reconfiguration, sinon un renommage la ferait retomber sur la valeur
+        # de la configuration au milieu d un test.
+        self._duree_forcee = duree_armement
+        self._arme_jusqu_a = 0.0
+        self.reconfigurer(config)
+
+    def reconfigurer(self, config=None) -> None:
+        """
+        Relit toute la configuration, SANS se remplacer.
+
+        Alma peut se renommer en cours de session (« appelle-toi Jarvis ») :
+        le nouveau nom doit repondre tout de suite, pas au prochain
+        lancement. L interface garde une reference sur ce meme objet -- d ou
+        une mise a jour en place plutot qu un nouveau moteur, qu elle ne
+        verrait jamais. L etat d armement, lui, n est pas touche : on ne
+        rendort pas quelqu un parce qu il vient de changer un reglage.
+        """
+        if config is not None:
+            self.config = config
+        config = self.config
         lire = config.get if config is not None else (lambda cle, defaut=None: defaut)
 
         self.mot_appel = text_utils.normalize(
@@ -189,7 +209,7 @@ class MoteurEcoute:
         self.prefixe_obligatoire = bool(lire("general.wake_require_prefix", False))
         self.tolere_seul = bool(lire("general.wake_tolerate_alone", True))
         self.duree_armement = float(
-            duree_armement if duree_armement is not None
+            self._duree_forcee if self._duree_forcee is not None
             else lire("voice.armed_seconds", 12)
         )
 
@@ -212,7 +232,6 @@ class MoteurEcoute:
             " ".join(self._reduire(text_utils.tokenize(mot))) for mot in self.mots_fin
         }
         self.mots_fin_reduits.discard("")
-        self._arme_jusqu_a = 0.0
 
     # -- reconnaissance du nom ------------------------------------------------
     def est_mot_appel(self, mot: str, seul: bool = False) -> bool:

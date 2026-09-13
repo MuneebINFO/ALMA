@@ -39,6 +39,10 @@ ROOT = _dossier_utilisateur()
 DATA_DIR = ROOT / "data"
 SCREENSHOT_DIR = ROOT / "screenshots"
 DEFAULT_CONFIG_FILE = ROOT / "config.yaml"
+# Ce qu Alma a retenu de vous : votre nom, le sien, votre voix... Ecrit par
+# les commandes de personnalisation, jamais a la main -- voir
+# core/preferences.py pour la raison d un fichier separe de config.yaml.
+PREFERENCES_FILE = DATA_DIR / "preferences.json"
 
 DEFAULTS: dict = {
     "general": {
@@ -111,6 +115,9 @@ DEFAULTS: dict = {
         "history": "data/history.json",
         "screenshots": "screenshots",
         "music": "",
+        # Ce qu Alma a retenu de vous (voir core/preferences.py). Ecrit par
+        # les commandes de personnalisation, pas a la main.
+        "preferences": "data/preferences.json",
     },
     "weather": {
         "default_city": "Bruxelles",
@@ -365,6 +372,16 @@ def deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
+def _preferences(fichier=None):
+    """Le magasin des personnalisations (import tardif : cycle d imports)."""
+    from core.preferences import Preferences
+
+    chemin = Path(fichier) if fichier else PREFERENCES_FILE
+    if not chemin.is_absolute():
+        chemin = ROOT / chemin
+    return Preferences(chemin)
+
+
 def _load_dotenv() -> None:
     """Lecture minimaliste d un fichier .env, sans dependance externe."""
     env_file = ROOT / ".env"
@@ -381,12 +398,35 @@ def _load_dotenv() -> None:
         pass
 
 
-def load_config(path: str | Path | None = None) -> Config:
+def deriver_mots_appel(data: dict) -> None:
+    """
+    Recalcule `general.wake_words` a partir du nom et des prefixes.
+
+    Ces mots servent a retirer l appel d une phrase tapee. Ils DERIVENT du
+    nom : un seul endroit a changer pour renommer l assistant. La derivation
+    est une fonction, et non trois lignes au fil du chargement, parce qu Alma
+    peut se renommer en cours de session -- il faut alors la rejouer.
+    """
+    general = data.setdefault("general", {})
+    mot = str(general.get("wake_word", "alma") or "alma").strip().lower()
+    prefixes = general.get("wake_prefixes", []) or []
+    general["wake_words"] = [mot] + [
+        str(prefixe).strip().lower() + " " + mot for prefixe in prefixes
+    ]
+
+
+def load_config(path: str | Path | None = None,
+                preferences_file: str | Path | None = None) -> Config:
     """
     Charge la configuration :
       1. valeurs par defaut (toujours presentes, aucun fichier requis)
       2. config.yaml s il existe (fusion recursive)
-      3. variables d environnement (mode voix uniquement)
+      3. data/preferences.json : ce qu Alma a retenu de l utilisateur
+      4. variables d environnement (mode voix uniquement)
+
+    Les preferences passent APRES config.yaml : elles viennent d un ordre
+    explicite et recent (« appelle-toi Jarvis »), qui doit l emporter sur un
+    reglage ecrit une fois pour toutes.
     """
     config_path = Path(path) if path else DEFAULT_CONFIG_FILE
     data = copy.deepcopy(DEFAULTS)
@@ -405,6 +445,14 @@ def load_config(path: str | Path | None = None) -> Config:
         except Exception as exc:
             print("[config] Lecture de " + str(config_path) + " impossible : " + str(exc))
 
+    fichier_prefs = preferences_file or data.get("paths", {}).get("preferences")
+    for chemin, valeur in _preferences(fichier_prefs).charger().items():
+        parties = chemin.split(".")
+        noeud = data
+        for partie in parties[:-1]:
+            noeud = noeud.setdefault(partie, {})
+        noeud[parties[-1]] = valeur
+
     _load_dotenv()
     # Aucune cle API n est lue ni ecrite ici : la seule porte d entree IA est le
     # CLI Claude Code, qui gere lui-meme son authentification. En particulier,
@@ -412,13 +460,7 @@ def load_config(path: str | Path | None = None) -> Config:
     if os.environ.get("ALMA_VOICE", "").lower() in ("1", "true", "yes", "on"):
         data["voice"]["enabled"] = True
 
-    # Les mots d appel utilises pour nettoyer une phrase tapee sont derives
-    # du nom configure : un seul endroit a changer pour renommer l assistant.
-    mot = str(data["general"].get("wake_word", "alma") or "alma").strip().lower()
-    prefixes = data["general"].get("wake_prefixes", []) or []
-    data["general"]["wake_words"] = [mot] + [
-        str(prefixe).strip().lower() + " " + mot for prefixe in prefixes
-    ]
+    deriver_mots_appel(data)
 
     # parents=True : quand ROOT est %LOCALAPPDATA%\Alma (voir
     # _dossier_utilisateur), ce dossier lui-meme n existe pas encore au

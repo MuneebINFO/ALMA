@@ -128,7 +128,18 @@ def source() -> str:
 
 
 def test_l_acronyme_est_affiche():
-    assert '"A.L.M.A"' in source()
+    """
+    Le monogramme n'est plus écrit en dur : il se déduit du nom, qui peut
+    changer (« appelle-toi Jarvis »).
+    """
+    from gui import sigle
+
+    assert sigle("ALMA") == "A.L.M.A"
+    assert sigle("Jarvis") == "J.A.R.V.I.S"
+    # Un nom déjà pointé ou déjà espacé est laissé tel quel.
+    assert sigle("A.L.M.A") == "A.L.M.A"
+    assert sigle("Mon Assistant") == "MON ASSISTANT"
+    assert "text=sigle(" in source(), "le sigle doit venir du nom, pas d'une constante"
 
 
 def test_le_plein_ecran_est_demande():
