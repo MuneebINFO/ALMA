@@ -267,3 +267,39 @@ def test_le_panneau_se_dessine_dans_les_deux_langues(tk_root, assistant):
               for enfant in cadre.winfo_children()
               if enfant.winfo_class() == "Label"]
     assert any("What should I call you?" in t for t in textes), textes
+
+
+# --------------------------------------------------------------------------
+# On n'inscrit que ce qui a vraiment été choisi
+# --------------------------------------------------------------------------
+def test_passer_une_question_fermee_n_inscrit_rien(assistant):
+    """
+    Passer, ce n'est pas « prends le premier choix » : c'est « laisse comme
+    c'est ». Sinon la valeur par défaut apparaîtrait ensuite dans « mes
+    préférences » comme un choix que personne n'a fait.
+    """
+    poser(assistant, ["", "", "", ""])
+    assert assistant.preferences.charger() == {pl.CLE_TERMINE: True}
+
+
+def test_valider_le_nom_pre_rempli_n_inscrit_rien(assistant):
+    """Le champ propose « ALMA » : le valider ne change rien."""
+    poser(assistant, ["1", "", "ALMA", "1"])
+    assert "general.assistant_name" not in assistant.preferences.charger()
+    assert assistant.name == "ALMA"
+
+
+def test_passer_la_voix_apres_avoir_choisi_l_anglais_garde_la_voix_anglaise(assistant):
+    """Passer ne doit pas ramener la voix française choisie par la langue."""
+    poser(assistant, ["2", "", "", ""])
+    assert assistant.config.get("voice.neural_voice") == "en-US-AriaNeural"
+
+
+def test_seul_ce_qui_change_est_retenu(assistant):
+    poser(assistant, ["2", "Muneeb", "Jarvis", "2"])
+    retenu = set(assistant.preferences.charger())
+    assert retenu == {
+        "general.language", "voice.stt_language", "voice.neural_voice",
+        "general.user_name", "general.assistant_name", "general.wake_word",
+        pl.CLE_TERMINE,
+    }

@@ -9,6 +9,8 @@ fermeture, sinon elle est oubliée le soir même.
 Ce fichier vérifie les deux, pour chaque réglage, dans les deux langues.
 """
 
+from pathlib import Path
+
 import pytest
 
 from config import Config, load_config
@@ -373,3 +375,18 @@ def test_chaque_reglage_du_catalogue_a_ses_deux_libelles():
         assert reglage.libelle("en"), reglage.chemin
         assert reglage.libelle("en") == reglage.libelle_en
     assert len(PAR_CHEMIN) == len(CATALOGUE), "deux réglages sur le même chemin"
+
+
+def test_la_suite_ne_depend_pas_des_preferences_de_la_machine(assistant):
+    """
+    Un poste où ALMA s'appelle Jarvis et connaît le prénom de son
+    propriétaire ne doit pas faire échouer des tests qui n'ont rien à voir.
+    Le piège est réel : `data/preferences.json` est chargé par `load_config`,
+    donc par n'importe quel test qui construit une configuration.
+    """
+    assert assistant.name == "ALMA"
+    assert assistant.config.get("general.user_name") == ""
+    assert assistant.config.get("general.setup_done") is False
+    # Et le magasin de préférences pointe vers le dossier temporaire.
+    reel = (Path(__file__).resolve().parent.parent / "data" / "preferences.json")
+    assert assistant.preferences.chemin != reel
