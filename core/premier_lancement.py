@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from core import preferences as prefs
+from core import text_utils
 
 # Le reglage qui dit que c est fait. Sans lui, la question reviendrait a
 # chaque lancement -- et « passer » ne servirait a rien.
@@ -60,9 +61,18 @@ class Question:
     defaut: str = ""
     # Une question d ECOUTE ne se tape pas : on prononce, et c est ce que la
     # reconnaissance a COMPRIS qui est retenu. `echo_de` nomme la question
-    # dont elle reprend la reponse, pour pouvoir l afficher : « dites
-    # "Jarvis" a voix haute ».
+    # dont elle reprend la reponse.
     echo_de: str = ""
+    # La phrase a prononcer, ou {nom} sera remplace. On ne fait JAMAIS dire le
+    # nom seul : un mot isole est le pire cas pour la reconnaissance vocale,
+    # qui s appuie sur le contexte pour trancher. « Jarvis » seul ne rend
+    # rien ; « tu m entends, Jarvis ? » rend la phrase, dont on extrait le nom.
+    phrase_fr: str = ""
+    phrase_en: str = ""
+
+    def phrase(self, langue: str, nom: str) -> str:
+        modele = self.phrase_en if langue == "en" else self.phrase_fr
+        return modele.replace("{nom}", nom) if modele else nom
 
     def titre(self, langue: str) -> str:
         return self.titre_en if langue == "en" else self.titre_fr
@@ -114,6 +124,8 @@ QUESTIONS = (
         titre_en="Say it out loud.",
         aide_fr="Pour le reconnaître quand vous le direz.",
         aide_en="So I recognise it when you say it.",
+        phrase_fr="Je m'appelle {nom}",
+        phrase_en="My name is {nom}",
     ),
     Question(
         cle="nom_assistant",
@@ -130,6 +142,8 @@ QUESTIONS = (
         titre_en="And call me, out loud.",
         aide_fr="C'est ce mot-là que j'attendrai.",
         aide_en="That's the word I'll be listening for.",
+        phrase_fr="Tu m'entends, {nom} ?",
+        phrase_en="Can you hear me, {nom}?",
     ),
     Question(
         cle="voix",
@@ -173,8 +187,6 @@ def reglages_pour(cle: str, reponse: str, config) -> dict:
 
 def _reglages_bruts(cle: str, reponse: str, config) -> dict:
     """Ce que la reponse designe, avant d avoir retire ce qui ne bouge pas."""
-    from core import text_utils
-
     reponse = " ".join(str(reponse or "").split())
     question = PAR_CLE.get(cle)
     # Passer une question fermee ne veut pas dire « prends le premier
@@ -197,16 +209,14 @@ def _reglages_bruts(cle: str, reponse: str, config) -> dict:
         return {"voice.neural_voice": prefs.voix_pour(langue, genre)}
 
     if cle in ("ecoute_nom_utilisateur", "ecoute_nom_assistant"):
-        entendu = text_utils.normalize(reponse).strip()
-        if not entendu:
-            return {}
         chemin = ("general.user_name_variants"
                   if cle == "ecoute_nom_utilisateur" else "general.wake_variants")
         attendu = text_utils.normalize(
             config.get("general.user_name" if cle == "ecoute_nom_utilisateur"
                        else "general.assistant_name", "") or "").strip()
+        entendu = extraire_nom(reponse, attendu)
         # Entendu exactement comme ecrit : il n y a pas de variante a retenir.
-        if entendu == attendu:
+        if not entendu or entendu == attendu:
             return {}
         deja = list(config.get(chemin, []) or [])
         if entendu in deja:
@@ -226,6 +236,45 @@ def _reglages_bruts(cle: str, reponse: str, config) -> dict:
         return {"general.assistant_name": nom, "general.wake_word": mot}
 
     return {}
+
+
+# Les mots des phrases porteuses, dans les deux langues. Ce qui reste une
+# fois qu on les a retires, c est le nom -- sous la forme ou il nous arrive.
+MOTS_PORTEURS = frozenset((
+    "je", "j", "m", "appelle", "c", "est", "moi", "tu", "m", "entends",
+    "vous", "entendez", "my", "name", "is", "i", "am", "can", "you", "hear",
+    "me", "it", "s",
+))
+
+
+def extraire_nom(phrase_entendue: str, attendu: str) -> str:
+    """
+    Le nom, tire de la phrase qu on vient d entendre.
+
+    On ne fait pas prononcer le nom seul -- la reconnaissance vocale n a
+    alors aucun contexte et ne rend rien -- mais une phrase qui le porte.
+    Reste a en extraire le nom, sachant ce qu il AURAIT du etre.
+
+    Trois passes : ce qu il reste une fois les mots porteurs retires ; parmi
+    eux, celui qui ressemble le plus au nom attendu ; et a defaut ce reste
+    entier -- « Muneeb » revient parfois en DEUX mots (« mon nid »), et n en
+    garder qu un serait retenir une forme que personne ne prononce.
+    """
+    tokens = text_utils.tokenize(text_utils.normalize(phrase_entendue))
+    if not tokens:
+        return ""
+    restants = [t for t in tokens if t not in MOTS_PORTEURS]
+    if len(restants) == 1:
+        return restants[0]
+    candidats = restants or tokens
+    if attendu:
+        meilleur = max(candidats, key=lambda t: text_utils.similarity(t, attendu))
+        # 0,55 : « mounib » (0,67) et « djarvis » (0,92) passent, « mon »
+        # face a « muneeb » (0,44) non -- c est la moitie de « mon nid », et
+        # n en garder qu une moitie retiendrait une forme que personne ne dit.
+        if text_utils.similarity(meilleur, attendu) >= 0.55:
+            return meilleur
+    return " ".join(candidats)
 
 
 def _nom_propre(valeur: str) -> str:

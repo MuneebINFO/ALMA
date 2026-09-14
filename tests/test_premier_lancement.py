@@ -577,3 +577,95 @@ def test_les_consignes_restent_courtes():
             aide = question.aide(langue)
             assert len(aide) <= 90, (question.cle, langue, len(aide), aide)
             assert len(question.titre(langue)) <= 90, (question.cle, langue)
+
+
+def test_la_bille_dessine_ses_cinq_couches(tk_root):
+    """
+    Halo, pointillés, étoiles, anneau d'onde, noyau. Un dessin qui lève ne le
+    ferait qu'à l'écran de quelqu'un qui installe l'application.
+    """
+    from gui import BouleNiveau
+
+    boule = BouleNiveau(tk_root)
+    for niveau in (0.0, 0.4, 1.0):
+        boule.definir_niveau(niveau, actif=niveau > 0.25)
+        boule._battre()
+        formes = boule.find_all()
+        # 40 graduations + 14 étoiles + 2 halos + l'onde + le noyau.
+        assert len(formes) >= BouleNiveau.GRADUATIONS + BouleNiveau.ETOILES, len(formes)
+    boule.arreter()
+
+
+def test_l_onde_suit_l_historique_et_non_le_niveau_courant(tk_root):
+    """
+    Prendre le niveau courant ferait pulser le cercle d'un bloc ; l'historique
+    fait voyager la vague autour de lui.
+    """
+    from gui import BouleNiveau
+
+    boule = BouleNiveau(tk_root)
+    assert len(boule.historique) == BouleNiveau.MEMOIRE
+    boule.definir_niveau(1.0)
+    boule._battre()
+    assert boule.historique[-1] > boule.historique[0], "le plus récent est en fin"
+    assert len(boule.historique) == BouleNiveau.MEMOIRE, "la mémoire est bornée"
+    boule.arreter()
+
+
+def test_les_etoiles_ne_tournent_pas_ensemble(tk_root):
+    """Toutes à la même vitesse, elles formeraient un motif, pas de la poussière."""
+    from gui import BouleNiveau
+
+    boule = BouleNiveau(tk_root)
+    vitesses = {round(e["vitesse"], 6) for e in boule.etoiles}
+    orbites = {round(e["orbite"], 6) for e in boule.etoiles}
+    assert len(vitesses) > 1 and len(orbites) > 1
+    boule.arreter()
+
+
+# --------------------------------------------------------------------------
+# Une phrase, pas un mot
+# --------------------------------------------------------------------------
+# « Il entend mais ne comprend pas » : un mot isolé est le pire cas pour la
+# reconnaissance vocale, qui s'appuie sur le contexte pour trancher.
+@pytest.mark.parametrize("phrase,attendu,heard", [
+    # Ce qui se dit vraiment, et ce qu'on doit en tirer.
+    ("Tu m'entends Jarvis", "jarvis", "jarvis"),
+    ("tu m'entends Djarvis", "jarvis", "djarvis"),
+    ("Can you hear me Garvis", "jarvis", "garvis"),
+    ("Je m'appelle Muneeb", "muneeb", "muneeb"),
+    ("je m'appelle Mounib", "muneeb", "mounib"),
+    ("My name is Mounib", "muneeb", "mounib"),
+    # Entendu en DEUX mots : n'en garder qu'un retiendrait une forme que
+    # personne ne prononce.
+    ("je m'appelle mon nid", "muneeb", "mon nid"),
+    # Rien du tout.
+    ("", "jarvis", ""),
+])
+def test_le_nom_est_tire_de_la_phrase_porteuse(phrase, attendu, heard):
+    assert pl.extraire_nom(phrase, attendu) == heard
+
+
+def test_chaque_etape_ecoutee_fait_dire_une_phrase():
+    """Le nom seul ne se transcrit pas : il faut du contexte autour."""
+    for question in pl.QUESTIONS:
+        if not question.ecoute:
+            continue
+        for langue in ("fr", "en"):
+            dite = question.phrase(langue, "Jarvis")
+            assert "Jarvis" in dite, question.cle
+            assert len(dite.split()) >= 3, (question.cle, dite)
+
+
+def test_la_phrase_a_dire_est_affichee(tk_root, assistant):
+    faux = panneau_factice(tk_root, assistant)
+    faux.stt = type("Micro", (), {
+        "available": True,
+        "preparer": lambda self: True,
+        "listen_live": lambda self, **k: "",
+    })()
+    faux.montrer_installation(lambda: None)
+    faux._repondre("fr")
+    faux._repondre("Muneeb")
+
+    assert any("Je m'appelle Muneeb" in t for t in etiquettes(faux)), etiquettes(faux)

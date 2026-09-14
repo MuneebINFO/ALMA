@@ -445,17 +445,40 @@ class BouleNiveau(tk.Canvas):
     Elle repond a une question simple, et qu on ne peut pas se poser sans
     elle : est-ce que ma voix arrive ? Sans ce retour, « je n ai rien saisi »
     ne dit pas si le micro n a rien entendu ou si la transcription a echoue.
+
+    Cinq couches, du fond vers l avant : un halo diffus, une couronne de
+    POINTILLES graduee qui s allume avec le niveau, une poussiere d ETOILES
+    en orbite, un anneau d onde deforme par l historique des niveaux -- c est
+    lui qui fait voyager la vague autour du cercle au lieu de la faire
+    pulser d un bloc --, et le noyau.
     """
 
     PERIODE_MS = 33
+    GRADUATIONS = 40       # les pointilles de la couronne
+    ETOILES = 14           # la poussiere en orbite
+    MEMOIRE = 24           # niveaux gardes, pour l anneau d onde
 
-    def __init__(self, parent, taille: int = 72) -> None:
+    def __init__(self, parent, taille: int = 96) -> None:
         super().__init__(parent, width=taille, height=taille, bg=FOND,
                          highlightthickness=0, bd=0)
         self.taille = taille
         self.niveau = 0.0          # valeur lissee, celle qui est dessinee
         self.cible = 0.0
         self.actif = False         # une voix franchit le seuil
+        self.phase = 0.0           # rotation lente de la couronne
+        self.historique = [0.0] * self.MEMOIRE
+        # Chaque etoile a son orbite, sa vitesse et son scintillement propres :
+        # toutes identiques, elles formeraient un motif, pas de la poussiere.
+        self.etoiles = [
+            {
+                "angle": random.uniform(0, math.tau),
+                "orbite": random.uniform(0.30, 0.46),
+                "vitesse": random.uniform(-0.010, 0.010),
+                "eclat": random.uniform(0, math.tau),
+                "taille": random.uniform(0.8, 1.8),
+            }
+            for _ in range(self.ETOILES)
+        ]
         self._vivante = True
         self._battre()
 
@@ -473,6 +496,12 @@ class BouleNiveau(tk.Canvas):
         # suivre la voix plutot que de trembler.
         poids = 0.5 if self.cible > self.niveau else 0.12
         self.niveau += (self.cible - self.niveau) * poids
+        self.historique.append(self.niveau)
+        del self.historique[:-self.MEMOIRE]
+        self.phase += 0.012 + self.niveau * 0.05
+        for etoile in self.etoiles:
+            etoile["angle"] += etoile["vitesse"] * (1 + self.niveau * 3)
+            etoile["eclat"] += 0.09
         try:
             self._dessiner()
             self.after(self.PERIODE_MS, self._battre)
@@ -482,17 +511,79 @@ class BouleNiveau(tk.Canvas):
     def _dessiner(self) -> None:
         self.delete("all")
         centre = self.taille / 2
-        base = self.taille * 0.17
-        rayon = base + self.niveau * self.taille * 0.26
         couleur = ETATS["voix"][0] if self.actif else ETATS["veille"][0]
+        base = self.taille * 0.15
+        rayon = base + self.niveau * self.taille * 0.17
 
-        # Un halo, puis le noyau : deux cercles suffisent a faire vivant.
-        halo = rayon + self.taille * 0.14 * (0.4 + self.niveau)
-        self.create_oval(centre - halo, centre - halo, centre + halo, centre + halo,
-                         fill=melanger(FOND, couleur, 0.18 + 0.22 * self.niveau),
-                         outline="")
+        self._halo(centre, rayon, couleur)
+        self._couronne(centre, couleur)
+        self._etoiles(centre, couleur)
+        self._onde(centre, rayon, couleur)
         self.create_oval(centre - rayon, centre - rayon, centre + rayon, centre + rayon,
                          fill=couleur, outline="")
+
+    def _halo(self, centre, rayon, couleur) -> None:
+        """Deux cercles diffus : le volume, avant le detail."""
+        for part, force in ((0.22, 0.30), (0.12, 0.16)):
+            halo = rayon + self.taille * part * (0.5 + self.niveau)
+            self.create_oval(centre - halo, centre - halo, centre + halo, centre + halo,
+                             fill=melanger(FOND, couleur, force * (0.4 + self.niveau)),
+                             outline="")
+
+    def _couronne(self, centre, couleur) -> None:
+        """
+        Les pointilles graduees, en rotation lente.
+
+        Un point sur quatre est plus long : sans ces reperes, la couronne
+        tourne sans qu on voie qu elle tourne.
+        """
+        dedans = self.taille * 0.40
+        for i in range(self.GRADUATIONS):
+            angle = self.phase + i * math.tau / self.GRADUATIONS
+            marque = (i % 4 == 0)
+            longueur = self.taille * (0.055 if marque else 0.028) * (0.5 + self.niveau)
+            # Les graduations s allument par vagues plutot que toutes ensemble.
+            onde = 0.5 + 0.5 * math.sin(angle * 3 - self.phase * 4)
+            force = 0.18 + 0.55 * self.niveau * onde + (0.1 if marque else 0)
+            x1 = centre + math.cos(angle) * dedans
+            y1 = centre + math.sin(angle) * dedans
+            x2 = centre + math.cos(angle) * (dedans + longueur)
+            y2 = centre + math.sin(angle) * (dedans + longueur)
+            self.create_line(x1, y1, x2, y2, width=2 if marque else 1,
+                             fill=melanger(FOND, couleur, min(1.0, force)))
+
+    def _etoiles(self, centre, couleur) -> None:
+        """La poussiere en orbite : chacune scintille pour son compte."""
+        for etoile in self.etoiles:
+            scintille = 0.45 + 0.55 * (0.5 + 0.5 * math.sin(etoile["eclat"]))
+            force = min(1.0, (0.16 + 0.6 * self.niveau) * scintille)
+            rayon_orbite = self.taille * etoile["orbite"] * (1 + self.niveau * 0.10)
+            x = centre + math.cos(etoile["angle"]) * rayon_orbite
+            y = centre + math.sin(etoile["angle"]) * rayon_orbite
+            demi = etoile["taille"] * (0.6 + self.niveau * 0.8)
+            self.create_oval(x - demi, y - demi, x + demi, y + demi,
+                             fill=melanger(FOND, couleur, force), outline="")
+
+    def _onde(self, centre, rayon, couleur) -> None:
+        """
+        L anneau d onde, deforme par l HISTORIQUE des niveaux.
+
+        Prendre le niveau courant ferait pulser le cercle d un bloc ; prendre
+        les derniers fait voyager la vague autour de lui, comme une voix qui
+        arrive.
+        """
+        points = []
+        pas = math.tau / 48
+        for i in range(48):
+            angle = i * pas
+            vieux = self.historique[i * self.MEMOIRE // 48]
+            ecart = self.taille * 0.05 * vieux * math.sin(angle * 3 + self.phase * 2)
+            r = rayon + self.taille * 0.075 + ecart
+            points.extend((centre + math.cos(angle) * r, centre + math.sin(angle) * r))
+        if points:
+            self.create_polygon(points, outline=melanger(FOND, couleur,
+                                                         0.25 + 0.45 * self.niveau),
+                                fill="", width=1, smooth=True)
 
 
 class AlmaApp:
@@ -1117,9 +1208,13 @@ class AlmaApp:
             "general.user_name" if question.echo_de == "nom_utilisateur"
             else "general.assistant_name", "") or "")
         if attendu:
-            tk.Label(cadre, text="« " + attendu + " »",
+            # Une PHRASE, pas le nom seul : un mot isole ne donne aucun
+            # contexte a la reconnaissance vocale, et elle ne rend rien.
+            tk.Label(cadre, text="« " + question.phrase(
+                         self._langue_installation(), attendu) + " »",
                      font=tkfont.Font(family="Segoe UI", size=26),
-                     bg=FOND, fg=TEXTE).pack(pady=(16, 0))
+                     bg=FOND, fg=TEXTE, wraplength=820,
+                     justify="center").pack(pady=(16, 0))
 
         if not self._preparer_micro():
             self._bouton(choix, "Continue" if anglais else "Continuer",
