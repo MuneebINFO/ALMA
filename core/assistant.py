@@ -133,8 +133,8 @@ class Assistant:
         Changer la configuration ne suffit donc pas, il faut les prevenir.
         """
         if chemins & {"general.assistant_name", "general.wake_word",
-                      "general.wake_prefixes", "voice.armed_seconds",
-                      "voice.sleep_words"}:
+                      "general.wake_prefixes", "general.wake_variants",
+                      "voice.armed_seconds", "voice.sleep_words"}:
             deriver_mots_appel(self.config.data)
             self.moteur.reconfigurer(self.config)
         if "general.language" in chemins:

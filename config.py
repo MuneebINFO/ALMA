@@ -56,8 +56,14 @@ DEFAULTS: dict = {
         # Prefixes toleres avant le nom (« OK Alma », « dis Alma »).
         "wake_prefixes": ["ok", "hey", "he", "eh", "dis"],
         # Transcriptions supplementaires a accepter. Si l assistant ne repond
-        # pas, regardez le texte affiche sous l orbe et ajoutez-le ici.
+        # pas, regardez le texte affiche sous l orbe et ajoutez-le ici. Le
+        # premier lancement en ajoute une : celle entendue quand on prononce
+        # le nom a voix haute.
         "wake_variants": [],
+        # Comment la reconnaissance vocale ecrit VOTRE prenom. « Muneeb »
+        # revient en « Mounib » : sans cela, dire « appelle-moi Muneeb »
+        # remplacerait la bonne orthographe par la mauvaise.
+        "user_name_variants": [],
         # true = le nom seul ne suffit plus, il faut « OK Alma » / « dis Alma ».
         # Utile si le nom choisi ressemble a un mot ou prenom courant.
         "wake_require_prefix": False,

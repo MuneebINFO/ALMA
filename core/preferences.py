@@ -57,6 +57,10 @@ CATALOGUE = (
     Reglage("general.wake_word", "le mot qui me réveille", "the word that wakes me",
             visible=False),
     Reglage("general.user_name", "votre nom", "your name"),
+    Reglage("general.user_name_variants", "votre nom, tel que je l'entends",
+            "your name, as I hear it", visible=False),
+    Reglage("general.wake_variants", "mon nom, tel que je l'entends",
+            "my name, as I hear it", visible=False),
     Reglage("general.setup_done", "la configuration initiale",
             "the initial setup", visible=False),
     # -- langue et voix ------------------------------------------------------

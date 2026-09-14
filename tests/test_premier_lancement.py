@@ -21,11 +21,27 @@ def relire(assistant):
     return load_config(preferences_file=assistant.preferences.chemin)
 
 
-def poser(assistant, reponses):
-    """Joue les quatre réponses, dans l'ordre, et rend ce qui a été affiché."""
-    suite = iter(reponses)
+def poser(assistant, reponses, entendu=None):
+    """
+    Joue les réponses aux questions à DÉCIDER, dans l'ordre, et rend ce qui a
+    été affiché.
+
+    Les étapes d'écoute (« dites-le à voix haute ») sont passées par défaut :
+    elles confirment une réponse déjà donnée, et n'existent pas sans micro.
+    `entendu={"ecoute_nom_assistant": "Djarvis"}` les fait répondre.
+    """
+    decisions = iter(reponses)
+    entendu = entendu or {}
     affiche = []
-    pl.poser_en_texte(assistant, lambda _invite: next(suite), affiche.append)
+    restantes = [q.cle for q in pl.QUESTIONS]
+
+    def lire(_invite):
+        cle = restantes.pop(0)
+        if pl.PAR_CLE[cle].ecoute:
+            return entendu.get(cle, "")
+        return next(decisions)
+
+    pl.poser_en_texte(assistant, lire, affiche.append)
     return "\n".join(affiche)
 
 
@@ -144,9 +160,13 @@ def test_la_langue_est_demandee_en_premier():
     assert pl.QUESTIONS[0].cle == "langue"
 
 
-def test_il_y_a_peu_de_questions():
-    """Un formulaire avant de servir à quoi que ce soit se fait fermer."""
-    assert len(pl.QUESTIONS) <= 5
+def test_il_y_a_peu_de_choses_a_decider():
+    """
+    Un formulaire avant de servir à quoi que ce soit se fait fermer. Les
+    étapes d'écoute ne comptent pas : elles ne demandent pas de décider, elles
+    font répéter à voix haute une réponse déjà donnée.
+    """
+    assert len([q for q in pl.QUESTIONS if not q.ecoute]) <= 5
 
 
 def test_chaque_question_est_ecrite_dans_les_deux_langues():
@@ -231,9 +251,29 @@ def panneau_factice(tk_root, assistant):
     faux.historique_visible = False
     faux.installation = None
     faux._suite_installation = None
+    faux._recevoir_entendu = None
+    # Un micro DÉCLARÉ indisponible, et non pas absent : `None` aurait fait
+    # construire un vrai `SpeechToText`, donc ouvrir le micro de la machine.
+    # Les étapes « dites-le à voix haute » se sautent alors d'elles-mêmes,
+    # ce qui est le comportement attendu sans entrée audio.
+    faux.stt = type("SansMicro", (), {"available": False})()
     faux.journalise = []
     faux.journaliser = lambda qui, texte, tag="assistant": faux.journalise.append(texte)
     return faux
+
+
+def etiquettes(faux):
+    """Tous les textes affichés dans le panneau, à n'importe quelle profondeur."""
+    trouves = []
+
+    def descendre(widget):
+        for enfant in widget.winfo_children():
+            if enfant.winfo_class() == "Label":
+                trouves.append(enfant.cget("text"))
+            descendre(enfant)
+
+    descendre(faux.installation)
+    return trouves
 
 
 def test_le_panneau_se_dessine_et_se_parcourt(tk_root, assistant):
@@ -247,7 +287,7 @@ def test_le_panneau_se_dessine_et_se_parcourt(tk_root, assistant):
     assert faux.installation is not None, "le panneau doit remplacer l'orbe"
     assert faux.colonne not in faux.corps.pack_slaves(), "l'orbe doit être retiré"
 
-    for reponse in ("en", "Muneeb", "Jarvis", "homme"):
+    for reponse in ("en", "Muneeb", "", "Jarvis", "", "homme"):
         assert faux.installation is not None, "il restait des questions"
         faux._repondre(reponse)
 
@@ -262,10 +302,7 @@ def test_le_panneau_se_dessine_dans_les_deux_langues(tk_root, assistant):
     faux = panneau_factice(tk_root, assistant)
     faux.montrer_installation(lambda: None)
     faux._repondre("en")            # la suite doit basculer en anglais
-    textes = [enfant.cget("text")
-              for cadre in faux.installation.winfo_children()
-              for enfant in cadre.winfo_children()
-              if enfant.winfo_class() == "Label"]
+    textes = etiquettes(faux)
     assert any("What should I call you?" in t for t in textes), textes
 
 
@@ -303,3 +340,84 @@ def test_seul_ce_qui_change_est_retenu(assistant):
         "general.user_name", "general.assistant_name", "general.wake_word",
         pl.CLE_TERMINE,
     }
+
+
+# --------------------------------------------------------------------------
+# « Dites-le à voix haute »
+# --------------------------------------------------------------------------
+# Un nom s'écrit rarement comme il s'entend : « Muneeb » revient en
+# « Mounib », « Jarvis » en « Djarvis ». Le taper ne suffit donc pas — ALMA
+# doit savoir sous quelle forme il lui parvient, sinon elle reste muette
+# quand on l'appelle.
+def test_le_nom_prononce_devient_une_variante_du_mot_dappel(assistant):
+    poser(assistant, ["1", "", "Jarvis", "1"],
+          entendu={"ecoute_nom_assistant": "Djarvis"})
+
+    variantes = assistant.config.get("general.wake_variants")
+    assert "djarvis" in variantes
+    # Et le moteur d'écoute y répond TOUT DE SUITE.
+    assert assistant.moteur.est_mot_appel("djarvis") is True
+    assert assistant.moteur.est_mot_appel("jarvis") is True
+
+
+def test_la_variante_du_mot_dappel_survit_au_redemarrage(assistant):
+    poser(assistant, ["1", "", "Jarvis", "1"],
+          entendu={"ecoute_nom_assistant": "Djarvis"})
+    assert "djarvis" in relire(assistant).get("general.wake_variants")
+
+
+def test_entendu_exactement_comme_ecrit_il_n_y_a_rien_a_retenir(assistant):
+    """Une variante identique au nom n'apprend rien et encombrerait la liste."""
+    poser(assistant, ["1", "", "Jarvis", "1"],
+          entendu={"ecoute_nom_assistant": "Jarvis"})
+    assert assistant.config.get("general.wake_variants") == []
+
+
+def test_ne_rien_dire_passe_l_etape(assistant):
+    poser(assistant, ["1", "", "Jarvis", "1"])
+    assert assistant.config.get("general.wake_variants") == []
+    assert pl.est_necessaire(assistant.config) is False
+
+
+def test_le_prenom_prononce_protege_son_orthographe(assistant):
+    """
+    Le vrai effet, côté utilisateur : dire « appelle-moi Muneeb » après coup
+    renvoie « Mounib » à la transcription. Sans la variante apprise, la bonne
+    orthographe serait remplacée par la mauvaise.
+    """
+    poser(assistant, ["1", "Muneeb", "", "1"],
+          entendu={"ecoute_nom_utilisateur": "Mounib"})
+    assert "mounib" in assistant.config.get("general.user_name_variants")
+
+    reponse = assistant.handle("appelle-moi Mounib")
+
+    assert assistant.config.get("general.user_name") == "Muneeb", (
+        "la forme entendue ne doit pas écraser celle qui a été écrite")
+    assert "Muneeb" in reponse.text
+
+
+def test_un_prenom_vraiment_different_change_bien_le_nom(assistant):
+    """Le pendant : la protection ne doit pas empêcher de se renommer."""
+    poser(assistant, ["1", "Muneeb", "", "1"],
+          entendu={"ecoute_nom_utilisateur": "Mounib"})
+
+    assistant.handle("appelle-moi Sarah")
+
+    assert assistant.config.get("general.user_name") == "Sarah"
+
+
+def test_les_etapes_d_ecoute_suivent_le_nom_qu_elles_confirment():
+    """Demander de prononcer un nom trois questions plus loin n'a pas de sens."""
+    ordre = [q.cle for q in pl.QUESTIONS]
+    for question in pl.QUESTIONS:
+        if question.ecoute:
+            assert ordre.index(question.cle) == ordre.index(question.echo_de) + 1
+
+
+def test_sans_micro_le_panneau_saute_l_etape(tk_root, assistant):
+    """Une machine sans entrée audio ne doit pas rester bloquée dessus."""
+    faux = panneau_factice(tk_root, assistant)
+    faux.montrer_installation(lambda: None)
+    faux._repondre("fr")
+    faux._repondre("Muneeb")
+    assert any("Pas de micro" in t for t in etiquettes(faux)), etiquettes(faux)

@@ -466,6 +466,7 @@ class AlmaApp:
         # Panneau du premier lancement : absent tant qu il n y a rien a demander.
         self.installation = None
         self._suite_installation = None
+        self._recevoir_entendu = None
         self._largeur_panneau = 0
         self._animation_historique = None
 
@@ -808,6 +809,10 @@ class AlmaApp:
                     self.journaliser(qui, texte, "moi" if qui == "Vous" else "assistant")
                 elif type_evenement == "erreur":
                     self.journaliser(self.nom, charge, "erreur")
+                elif type_evenement == "installation_entendu":
+                    recevoir = getattr(self, "_recevoir_entendu", None)
+                    if recevoir is not None:
+                        recevoir(charge)
                 elif type_evenement == "renomme":
                     self.root.title(charge)
                     self.etiquette_sigle.configure(text=sigle(charge))
@@ -898,6 +903,23 @@ class AlmaApp:
 
         return premier_lancement.est_necessaire(self.assistant.config)
 
+    def _preparer_micro(self) -> bool:
+        """
+        Cree le moteur de reconnaissance sans lancer l ecoute continue.
+
+        Le premier lancement a besoin d entendre une fois -- « dites-le a
+        voix haute » -- alors que la boucle du micro n a pas encore demarre.
+        """
+        if getattr(self, "stt", None) is None:
+            try:
+                from core.stt import SpeechToText
+
+                self.stt = SpeechToText(self.assistant.config)
+                self.assistant.stt = self.stt
+            except Exception:
+                return False
+        return bool(getattr(self.stt, "available", False))
+
     def montrer_installation(self, quand_fini) -> None:
         """
         Pose les questions du premier lancement, dans la fenetre elle-meme.
@@ -951,7 +973,9 @@ class AlmaApp:
 
         choix = tk.Frame(cadre, bg=FOND)
         choix.pack(pady=(30, 0))
-        if question.libre:
+        if question.ecoute:
+            self._poser_question_ecoutee(question, choix, cadre, anglais)
+        elif question.libre:
             saisie = tk.Entry(choix, font=tkfont.Font(family="Segoe UI", size=18),
                               bg=FOND_CARTE, fg=TEXTE, insertbackground=TEXTE,
                               bd=0, relief="flat", justify="center", width=22)
@@ -981,6 +1005,70 @@ class AlmaApp:
                           bg=FOND, fg=TEXTE_DOUX, cursor="hand2")
         passer.pack(pady=(26, 0))
         passer.bind("<Button-1>", lambda _e: self._repondre(""))
+
+    def _poser_question_ecoutee(self, question, choix, cadre, anglais: bool) -> None:
+        """
+        Un bouton qui ECOUTE, et montre ce qu il a compris.
+
+        Sans micro, l etape n a pas lieu d etre : on le dit et on passe. Avec
+        micro, l ecoute tourne dans un thread -- Tkinter ne doit jamais
+        attendre -- et le resultat revient par la file d evenements.
+        """
+        # Le mot a prononcer est la reponse deja donnee a la question d avant.
+        attendu = str(self.assistant.config.get(
+            "general.user_name" if question.echo_de == "nom_utilisateur"
+            else "general.assistant_name", "") or "")
+        if attendu:
+            tk.Label(cadre, text="« " + attendu + " »",
+                     font=tkfont.Font(family="Segoe UI", size=20),
+                     bg=FOND, fg=TEXTE).pack(pady=(18, 0))
+
+        if not self._preparer_micro():
+            tk.Label(choix, text=("No microphone — skipping this step."
+                                  if anglais else
+                                  "Pas de micro — cette étape est sautée."),
+                     font=tkfont.Font(family="Segoe UI", size=11),
+                     bg=FOND, fg=TEXTE_DOUX).pack(pady=(0, 14))
+            self._bouton(choix, "Continue" if anglais else "Continuer",
+                         lambda: self._repondre("")).pack()
+            return
+
+        etat = tk.Label(choix, text="", font=tkfont.Font(family="Segoe UI", size=13),
+                        bg=FOND, fg=TEXTE_DOUX)
+        etat.pack(pady=(0, 14))
+        bouton = self._bouton(choix, "Speak" if anglais else "Parler", lambda: None)
+        bouton.pack()
+
+        def ecouter() -> None:
+            bouton.configure(state="disabled",
+                             text="Listening…" if anglais else "J'écoute…")
+            etat.configure(text="")
+            threading.Thread(target=capter, daemon=True).start()
+
+        def capter() -> None:
+            try:
+                entendu = self.stt.listen_live(timeout=6.0, phrase_limit=4.0)
+            except Exception:
+                entendu = ""
+            self.evenements.put(("installation_entendu", entendu))
+
+        def rendre(entendu: str) -> None:
+            bouton.configure(state="normal",
+                             text="Try again" if anglais else "Réessayer")
+            if not entendu:
+                etat.configure(text=("I didn't catch it." if anglais
+                                     else "Je n'ai rien saisi."))
+                return
+            etat.configure(text=(("I heard: " if anglais else "J'ai entendu : ")
+                                 + "« " + entendu + " »"))
+            if not garder.winfo_ismapped():
+                garder.pack(pady=(12, 0))
+            garder.configure(command=lambda: self._repondre(entendu))
+
+        garder = self._bouton(choix, "That's it" if anglais else "C'est ça",
+                              lambda: None)
+        bouton.configure(command=ecouter)
+        self._recevoir_entendu = rendre
 
     def _repondre(self, reponse: str) -> None:
         """Retient la reponse et passe a la suivante."""

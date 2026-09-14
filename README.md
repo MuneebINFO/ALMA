@@ -207,21 +207,33 @@ lands on the wrong site by accident.
 
 ### First launch — four questions, once
 
-The first time ALMA opens, it knows nothing about you, so it asks. Four
-questions, in the window itself, before the microphone starts — otherwise it
-would answer the answers:
+The first time ALMA opens, it knows nothing about you, so it asks. In the
+window itself, before the microphone starts — otherwise it would answer the
+answers:
 
-1. **Which language do you speak?** Asked in both, since it does not know yet.
-   The three questions that follow are then asked in the language you chose.
+1. **Which language do you speak most?** Asked in both, since it does not know
+   yet. This picks a *default*, nothing more: ALMA understands French and
+   English either way and always answers in the language of your sentence. The
+   choice only settles the ones where nothing tips the balance — *"call me
+   Sarah"* has no word that is exclusively English. The questions that follow
+   are asked in the language you chose.
 2. **What should I call you?** Your first name, used to greet you.
-3. **What would you like to call me?** The name you will say to wake it.
-4. **Which voice?** A female or a male one.
+3. **Now say it out loud.** A name is rarely heard the way it is written —
+   *Muneeb* comes back as *Mounib*. ALMA keeps the form it reaches her in, so
+   that saying *"call me Muneeb"* later does not replace the correct spelling
+   with the transcription's.
+4. **What would you like to call me?** The name you will say to wake it.
+5. **And call me, out loud.** The same idea, and this one matters most: that
+   transcription becomes a wake-word variant. It is the difference between
+   answering and staying silent when you call.
+6. **Which voice?** A female or a male one.
 
-Each answer applies immediately and is written down as you go, so a setup
-interrupted halfway keeps what you already chose. Every question can be
+The two spoken steps need a microphone; without one they say so and step
+aside. Each answer applies immediately and is written down as you go, so a
+setup interrupted halfway keeps what you already chose. Every question can be
 skipped — the default stays — and the whole thing never comes back. In text
-mode (`python main.py`) the same four questions are asked at the prompt, from
-the same list: there is only one set of questions in the code.
+mode (`python main.py`) the same questions are asked at the prompt, from the
+same list: there is only one set of questions in the code.
 
 Everything chosen there is changed later by asking, and so is everything else:
 

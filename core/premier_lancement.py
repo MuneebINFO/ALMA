@@ -58,6 +58,11 @@ class Question:
     aide_en: str = ""
     choix: tuple = field(default_factory=tuple)
     defaut: str = ""
+    # Une question d ECOUTE ne se tape pas : on prononce, et c est ce que la
+    # reconnaissance a COMPRIS qui est retenu. `echo_de` nomme la question
+    # dont elle reprend la reponse, pour pouvoir l afficher : « dites
+    # "Jarvis" a voix haute ».
+    echo_de: str = ""
 
     def titre(self, langue: str) -> str:
         return self.titre_en if langue == "en" else self.titre_fr
@@ -67,7 +72,11 @@ class Question:
 
     @property
     def libre(self) -> bool:
-        return not self.choix
+        return not self.choix and not self.ecoute
+
+    @property
+    def ecoute(self) -> bool:
+        return bool(self.echo_de)
 
 
 QUESTIONS = (
@@ -75,12 +84,19 @@ QUESTIONS = (
         cle="langue",
         # Cette question-la seule se pose dans les deux langues a la fois :
         # on ne sait pas encore laquelle parler.
-        titre_fr="Quelle langue parlez-vous ?",
-        titre_en="Quelle langue parlez-vous ? / What language do you speak?",
-        aide_fr="Je vous répondrai dans cette langue. Vous pourrez m'en changer "
-                "à tout moment.",
-        aide_en="Je vous répondrai dans cette langue / I'll answer you in that "
-                "language.",
+        titre_fr="Quelle langue parlez-vous le plus souvent ?",
+        titre_en="Quelle langue parlez-vous le plus souvent ? / "
+                 "Which language do you speak most?",
+        # Ce choix ne FERME rien : les deux langues restent comprises, phrase
+        # par phrase. Il ne sert qu a trancher quand une phrase ne porte
+        # aucun indice -- « call me Sarah » n a pas un mot exclusivement
+        # anglais. Le dire, sinon on croit devoir s y tenir.
+        aide_fr="Je comprends les deux et je réponds toujours dans la langue "
+                "de votre phrase. Ceci ne fixe que celle des phrases où rien "
+                "ne tranche.",
+        aide_en="Je comprends les deux / I understand both, and I always answer "
+                "in the language you used. This only settles the ones where "
+                "nothing tips the balance.",
         choix=(
             Choix("fr", "Français", "Français"),
             Choix("en", "English", "English"),
@@ -95,6 +111,17 @@ QUESTIONS = (
         aide_en="Your first name, so I can greet you. Leave it empty if you'd rather.",
     ),
     Question(
+        cle="ecoute_nom_utilisateur",
+        echo_de="nom_utilisateur",
+        titre_fr="Dites-le à voix haute, maintenant.",
+        titre_en="Now say it out loud.",
+        aide_fr="Un prénom s'écrit rarement comme il s'entend : je retiens la "
+                "façon dont il me revient, pour le reconnaître quand vous le "
+                "direz.",
+        aide_en="A first name is rarely heard the way it is written: I keep the "
+                "form it reaches me in, so I recognise it when you say it.",
+    ),
+    Question(
         cle="nom_assistant",
         titre_fr="Et moi, comment voulez-vous m'appeler ?",
         titre_en="And me — what would you like to call me?",
@@ -102,6 +129,18 @@ QUESTIONS = (
                 "au minimum.",
         aide_en="This is the name you'll say to wake me. Three letters minimum.",
         defaut="ALMA",
+    ),
+    Question(
+        cle="ecoute_nom_assistant",
+        echo_de="nom_assistant",
+        titre_fr="Et appelez-moi, à voix haute.",
+        titre_en="And call me, out loud.",
+        aide_fr="C'est ce mot-là que j'attendrai. Le prononcer une fois me dit "
+                "sous quelle forme il m'arrive — c'est ce qui fait la "
+                "différence entre répondre et rester muet.",
+        aide_en="That's the word I'll be listening for. Saying it once tells me "
+                "the form it reaches me in — which is the difference between "
+                "answering and staying silent.",
     ),
     Question(
         cle="voix",
@@ -167,6 +206,23 @@ def _reglages_bruts(cle: str, reponse: str, config) -> dict:
         genre = "homme" if reponse == "homme" else "femme"
         langue = str(config.get("general.language", "fr"))[:2]
         return {"voice.neural_voice": prefs.voix_pour(langue, genre)}
+
+    if cle in ("ecoute_nom_utilisateur", "ecoute_nom_assistant"):
+        entendu = text_utils.normalize(reponse).strip()
+        if not entendu:
+            return {}
+        chemin = ("general.user_name_variants"
+                  if cle == "ecoute_nom_utilisateur" else "general.wake_variants")
+        attendu = text_utils.normalize(
+            config.get("general.user_name" if cle == "ecoute_nom_utilisateur"
+                       else "general.assistant_name", "") or "").strip()
+        # Entendu exactement comme ecrit : il n y a pas de variante a retenir.
+        if entendu == attendu:
+            return {}
+        deja = list(config.get(chemin, []) or [])
+        if entendu in deja:
+            return {}
+        return {chemin: deja + [entendu]}
 
     if cle == "nom_utilisateur":
         return {"general.user_name": _nom_propre(reponse)} if reponse else {}
@@ -244,11 +300,12 @@ def poser_en_texte(assistant, lire, ecrire) -> None:
 
 def _lire_reponse(question: "Question", saisie: str) -> str:
     """
-    Une question fermee accepte le numero ou le mot ; une question libre,
-    tout ce qui est tape. Vide veut dire « passer », jamais « recommencer ».
+    Une question fermee accepte le numero ou le mot ; une question libre --
+    ou ECOUTEE, ou c est la transcription qui arrive --, tout ce qui vient.
+    Vide veut dire « passer », jamais « recommencer ».
     """
     saisie = " ".join(str(saisie or "").split())
-    if question.libre:
+    if question.libre or question.ecoute:
         return saisie
     if saisie.isdigit():
         index = int(saisie) - 1
@@ -266,7 +323,9 @@ def _lire_reponse(question: "Question", saisie: str) -> str:
 def bienvenue(nom: str, langue: str) -> str:
     """Le mot qui clot le premier lancement, une fois le nom connu."""
     if langue == "en":
-        return ("All set. Say \"" + nom + "\" to wake me — and anything you just "
-                "chose can be changed by asking me.")
-    return ("Tout est prêt. Dites « " + nom + " » pour me réveiller — et tout ce "
-            "que vous venez de choisir se change en me le demandant.")
+        return ("All set. Say \"" + nom + "\" to wake me. Speak French or English "
+                "as you like — and anything you just chose can be changed by "
+                "asking me.")
+    return ("Tout est prêt. Dites « " + nom + " » pour me réveiller. Parlez-moi "
+            "en français ou en anglais indifféremment — et tout ce que vous "
+            "venez de choisir se change en me le demandant.")

@@ -30,6 +30,26 @@ def _est_une_question(valeur: str) -> bool:
     return not mots or mots[0] in INTERROGATIFS
 
 
+def _deja_connu(ctx, nom: str) -> str:
+    """
+    Le prenom entendu designe-t-il celui qu on connait deja ?
+
+    Retourne l orthographe RETENUE, ou une chaine vide. La liste des formes
+    entendues est remplie au premier lancement, quand on prononce son prenom.
+    """
+    from core import text_utils
+
+    actuel = str(ctx.config.get("general.user_name", "") or "")
+    if not actuel:
+        return ""
+    entendu = text_utils.normalize(nom).strip()
+    if not entendu or entendu == text_utils.normalize(actuel).strip():
+        return ""
+    formes = [text_utils.normalize(str(v)).strip()
+              for v in (ctx.config.get("general.user_name_variants", []) or [])]
+    return actuel if entendu in formes else ""
+
+
 def _nom_propre(valeur: str) -> str:
     """
     Un nom prononce devient un nom ecrit : « jarvis » -> « Jarvis ».
@@ -120,6 +140,14 @@ def renommer_assistant(ctx: CommandContext) -> Response:
 def nommer_utilisateur(ctx: CommandContext) -> Response:
     """Retient le prenom de l utilisateur, pour les salutations."""
     nom = _nom_propre(ctx.arg)
+    connu_ecrit = _deja_connu(ctx, nom)
+    if connu_ecrit:
+        # Dit a voix haute, le prenom revient ecorche : « Muneeb » en
+        # « Mounib ». On a appris cette forme a l installation -- la
+        # reconnaitre evite de remplacer la bonne orthographe par la mauvaise.
+        return ctx.reponse("C'est déjà comme cela que je vous appelle, "
+                           + connu_ecrit + ".",
+                           "That's already what I call you, " + connu_ecrit + ".")
     if _est_une_question(nom):
         # « je m'appelle comment ? » : c est une question, pas un bapteme.
         connu = str(ctx.config.get("general.user_name", "") or "")
