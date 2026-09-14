@@ -91,12 +91,9 @@ QUESTIONS = (
         # par phrase. Il ne sert qu a trancher quand une phrase ne porte
         # aucun indice -- « call me Sarah » n a pas un mot exclusivement
         # anglais. Le dire, sinon on croit devoir s y tenir.
-        aide_fr="Je comprends les deux et je réponds toujours dans la langue "
-                "de votre phrase. Ceci ne fixe que celle des phrases où rien "
-                "ne tranche.",
-        aide_en="Je comprends les deux / I understand both, and I always answer "
-                "in the language you used. This only settles the ones where "
-                "nothing tips the balance.",
+        aide_fr="Je comprends les deux. Ceci ne fixe qu'un défaut.",
+        aide_en="Je comprends les deux / I understand both. This only sets a "
+                "default.",
         choix=(
             Choix("fr", "Français", "Français"),
             Choix("en", "English", "English"),
@@ -107,27 +104,23 @@ QUESTIONS = (
         cle="nom_utilisateur",
         titre_fr="Comment dois-je vous appeler ?",
         titre_en="What should I call you?",
-        aide_fr="Votre prénom, pour vous saluer. Laissez vide si vous préférez.",
-        aide_en="Your first name, so I can greet you. Leave it empty if you'd rather.",
+        aide_fr="Pour vous saluer.",
+        aide_en="So I can greet you.",
     ),
     Question(
         cle="ecoute_nom_utilisateur",
         echo_de="nom_utilisateur",
-        titre_fr="Dites-le à voix haute, maintenant.",
-        titre_en="Now say it out loud.",
-        aide_fr="Un prénom s'écrit rarement comme il s'entend : je retiens la "
-                "façon dont il me revient, pour le reconnaître quand vous le "
-                "direz.",
-        aide_en="A first name is rarely heard the way it is written: I keep the "
-                "form it reaches me in, so I recognise it when you say it.",
+        titre_fr="Dites-le à voix haute.",
+        titre_en="Say it out loud.",
+        aide_fr="Pour le reconnaître quand vous le direz.",
+        aide_en="So I recognise it when you say it.",
     ),
     Question(
         cle="nom_assistant",
         titre_fr="Et moi, comment voulez-vous m'appeler ?",
         titre_en="And me — what would you like to call me?",
-        aide_fr="C'est le nom que vous direz pour me réveiller. Trois lettres "
-                "au minimum.",
-        aide_en="This is the name you'll say to wake me. Three letters minimum.",
+        aide_fr="Le nom qui me réveille. Trois lettres au minimum.",
+        aide_en="The name that wakes me. Three letters minimum.",
         defaut="ALMA",
     ),
     Question(
@@ -135,19 +128,15 @@ QUESTIONS = (
         echo_de="nom_assistant",
         titre_fr="Et appelez-moi, à voix haute.",
         titre_en="And call me, out loud.",
-        aide_fr="C'est ce mot-là que j'attendrai. Le prononcer une fois me dit "
-                "sous quelle forme il m'arrive — c'est ce qui fait la "
-                "différence entre répondre et rester muet.",
-        aide_en="That's the word I'll be listening for. Saying it once tells me "
-                "the form it reaches me in — which is the difference between "
-                "answering and staying silent.",
+        aide_fr="C'est ce mot-là que j'attendrai.",
+        aide_en="That's the word I'll be listening for.",
     ),
     Question(
         cle="voix",
         titre_fr="Quelle voix préférez-vous ?",
         titre_en="Which voice do you prefer?",
-        aide_fr="Vous pourrez en changer, comme tout le reste.",
-        aide_en="You can change it later, like everything else.",
+        aide_fr="",
+        aide_en="",
         choix=(
             Choix("femme", "Une voix de femme", "A female voice"),
             Choix("homme", "Une voix d'homme", "A male voice"),

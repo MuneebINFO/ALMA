@@ -30,6 +30,9 @@ class SpeechToText:
         self._vosk_model = None
         self._whisper = None
         self._meter = None        # compteur de niveau, cree a la demande
+        # Pourquoi la derniere transcription a rendu une chaine vide :
+        # "incompris", "injoignable", "panne", ou "" si tout allait bien.
+        self.derniere_raison = ""
         self.engine = str((config.get("voice.stt_engine") if config else "google") or "google")
         self.language = str((config.get("voice.stt_language") if config else "fr-FR") or "fr-FR")
         self._init()
@@ -164,6 +167,11 @@ class SpeechToText:
 
         compteur = self._compteur()
         if compteur.ambient == 0.0 and compteur.threshold == compteur.plancher:
+            # A LA PREMIERE ecoute seulement. C est un piege quand on invite
+            # quelqu un a parler : il clique, il parle, et sa voix est mesuree
+            # comme le bruit de la piece -- le seuil monte au plafond et le
+            # micro devient sourd. Appeler `preparer()` pendant qu on affiche
+            # la consigne evite d en arriver la.
             compteur.calibrate(0.8, on_level=on_level)
 
         brut = compteur.listen(
@@ -175,6 +183,21 @@ class SpeechToText:
             return ""
         audio = sr.AudioData(brut, SAMPLE_RATE, SAMPLE_WIDTH)
         return self._transcribe(audio)
+
+    def preparer(self) -> bool:
+        """
+        Mesure le bruit ambiant MAINTENANT, sans rien ecouter d autre.
+
+        A appeler pendant qu on affiche « dites-le a voix haute » : la mesure
+        se fait alors sur le silence, et non sur la voix qu on vient de
+        demander. Retourne False si le micro n est pas disponible.
+        """
+        if not self.available:
+            return False
+        compteur = self._compteur()
+        if compteur.ambient == 0.0 and compteur.threshold == compteur.plancher:
+            compteur.calibrate(0.8)
+        return True
 
     def recalibrate(self, duration: float = 1.0, on_level=None) -> float:
         """Remesure le bruit ambiant (utile si l environnement change)."""
@@ -218,6 +241,12 @@ class SpeechToText:
     def _transcribe(self, audio) -> str:
         import speech_recognition as sr
 
+        # Une chaine vide a trois causes tres differentes -- pas de mot
+        # reconnaissable, service injoignable, ou panne -- et le geste a faire
+        # n est pas le meme. `derniere_raison` les distingue pour qui veut le
+        # dire a l utilisateur (voir le premier lancement).
+        self.derniere_raison = ""
+
         if self.engine == "whisper" and self._whisper is not None:
             return self._transcrire_whisper(audio)
         if self.engine == "vosk" and self._vosk_model is not None:
@@ -233,11 +262,14 @@ class SpeechToText:
         try:
             return str(self._recognizer.recognize_google(audio, language=self.language)).strip()
         except sr.UnknownValueError:
+            self.derniere_raison = "incompris"
             return ""
         except sr.RequestError as exc:
+            self.derniere_raison = "injoignable"
             log.warning("Service de reconnaissance injoignable : %s", exc)
             return ""
         except Exception as exc:
+            self.derniere_raison = "panne"
             log.debug("Echec de transcription : %s", exc)
             return ""
 

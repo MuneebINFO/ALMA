@@ -438,6 +438,63 @@ class Orbe(tk.Canvas):
                          outline="", tags="coeur")
 
 
+class BouleNiveau(tk.Canvas):
+    """
+    Une bille qui respire avec le micro.
+
+    Elle repond a une question simple, et qu on ne peut pas se poser sans
+    elle : est-ce que ma voix arrive ? Sans ce retour, « je n ai rien saisi »
+    ne dit pas si le micro n a rien entendu ou si la transcription a echoue.
+    """
+
+    PERIODE_MS = 33
+
+    def __init__(self, parent, taille: int = 72) -> None:
+        super().__init__(parent, width=taille, height=taille, bg=FOND,
+                         highlightthickness=0, bd=0)
+        self.taille = taille
+        self.niveau = 0.0          # valeur lissee, celle qui est dessinee
+        self.cible = 0.0
+        self.actif = False         # une voix franchit le seuil
+        self._vivante = True
+        self._battre()
+
+    def definir_niveau(self, niveau: float, actif: bool = False) -> None:
+        self.cible = max(0.0, min(1.0, float(niveau)))
+        self.actif = bool(actif)
+
+    def arreter(self) -> None:
+        self._vivante = False
+
+    def _battre(self) -> None:
+        if not self._vivante:
+            return
+        # Montee franche, descente douce : c est ce qui donne l impression de
+        # suivre la voix plutot que de trembler.
+        poids = 0.5 if self.cible > self.niveau else 0.12
+        self.niveau += (self.cible - self.niveau) * poids
+        try:
+            self._dessiner()
+            self.after(self.PERIODE_MS, self._battre)
+        except tk.TclError:
+            self._vivante = False
+
+    def _dessiner(self) -> None:
+        self.delete("all")
+        centre = self.taille / 2
+        base = self.taille * 0.17
+        rayon = base + self.niveau * self.taille * 0.26
+        couleur = ETATS["voix"][0] if self.actif else ETATS["veille"][0]
+
+        # Un halo, puis le noyau : deux cercles suffisent a faire vivant.
+        halo = rayon + self.taille * 0.14 * (0.4 + self.niveau)
+        self.create_oval(centre - halo, centre - halo, centre + halo, centre + halo,
+                         fill=melanger(FOND, couleur, 0.18 + 0.22 * self.niveau),
+                         outline="")
+        self.create_oval(centre - rayon, centre - rayon, centre + rayon, centre + rayon,
+                         fill=couleur, outline="")
+
+
 class AlmaApp:
     """Fenetre principale : orbe, statut, transcription et journal."""
 
@@ -467,6 +524,7 @@ class AlmaApp:
         self.installation = None
         self._suite_installation = None
         self._recevoir_entendu = None
+        self.boule = None          # bille de niveau du premier lancement
         self._largeur_panneau = 0
         self._animation_historique = None
 
@@ -809,6 +867,10 @@ class AlmaApp:
                     self.journaliser(qui, texte, "moi" if qui == "Vous" else "assistant")
                 elif type_evenement == "erreur":
                     self.journaliser(self.nom, charge, "erreur")
+                elif type_evenement == "installation_niveau":
+                    boule = getattr(self, "boule", None)
+                    if boule is not None:
+                        boule.definir_niveau(*charge)
                 elif type_evenement == "installation_entendu":
                     recevoir = getattr(self, "_recevoir_entendu", None)
                     if recevoir is not None:
@@ -944,6 +1006,10 @@ class AlmaApp:
 
     def _poser_question(self) -> None:
         """Dessine la question courante, ou termine s il n en reste plus."""
+        if self.boule is not None:
+            self.boule.arreter()
+            self.boule = None
+        self._recevoir_entendu = None
         for enfant in self.installation.winfo_children():
             enfant.destroy()
         if self._index_question >= len(self._questions):
@@ -957,19 +1023,27 @@ class AlmaApp:
         cadre = tk.Frame(self.installation, bg=FOND)
         cadre.place(relx=0.5, rely=0.5, anchor="center")
 
-        tk.Label(cadre,
-                 text=("Step " if anglais else "Étape ")
-                      + str(self._index_question + 1) + " / " + str(len(self._questions)),
-                 font=tkfont.Font(family="Segoe UI", size=10),
-                 bg=FOND, fg=TEXTE_DOUX).pack(pady=(0, 18))
+        # Des points, pas un compteur : on voit d un coup d oeil ou l on en
+        # est sans avoir a lire « etape 3 sur 6 ».
+        jalons = tk.Canvas(cadre, width=len(self._questions) * 18, height=10,
+                           bg=FOND, highlightthickness=0, bd=0)
+        jalons.pack(pady=(0, 26))
+        for rang in range(len(self._questions)):
+            x = rang * 18 + 5
+            fait = rang <= self._index_question
+            jalons.create_oval(x - 3, 2, x + 3, 8,
+                               fill=TEXTE if rang == self._index_question
+                               else (TEXTE_DOUX if fait else BORDURE),
+                               outline="")
+
         tk.Label(cadre, text=question.titre(langue),
-                 font=tkfont.Font(family="Segoe UI", size=24), bg=FOND, fg=TEXTE,
-                 wraplength=760, justify="center").pack()
+                 font=tkfont.Font(family="Segoe UI", size=26), bg=FOND, fg=TEXTE,
+                 wraplength=820, justify="center").pack()
         if question.aide(langue):
             tk.Label(cadre, text=question.aide(langue),
                      font=tkfont.Font(family="Segoe UI", size=12), bg=FOND,
                      fg=TEXTE_DOUX, wraplength=620,
-                     justify="center").pack(pady=(12, 0))
+                     justify="center").pack(pady=(10, 0))
 
         choix = tk.Frame(cadre, bg=FOND)
         choix.pack(pady=(30, 0))
@@ -1005,70 +1079,130 @@ class AlmaApp:
                           bg=FOND, fg=TEXTE_DOUX, cursor="hand2")
         passer.pack(pady=(26, 0))
         passer.bind("<Button-1>", lambda _e: self._repondre(""))
+        self._fondre_question(cadre)
+
+    def _fondre_question(self, cadre, pas: int = 0) -> None:
+        """
+        Fait apparaitre la question en montant de quelques pixels.
+
+        Tkinter ne sait pas rendre un cadre transparent : on joue donc sur la
+        POSITION, qui suffit a donner le mouvement, et sur la couleur du
+        titre, qui va du fond vers le texte.
+        """
+        total = 12
+        progres = _assouplir(min(1.0, (pas + 1) / total))
+        try:
+            cadre.place_configure(rely=0.5 + 0.035 * (1 - progres))
+            for enfant in cadre.winfo_children():
+                if enfant.winfo_class() == "Label" and enfant.cget("fg") != TEXTE_DOUX:
+                    enfant.configure(fg=melanger(FOND, TEXTE, progres))
+        except tk.TclError:
+            return
+        if pas + 1 < total:
+            self.root.after(16, lambda: self._fondre_question(cadre, pas + 1))
 
     def _poser_question_ecoutee(self, question, choix, cadre, anglais: bool) -> None:
         """
-        Un bouton qui ECOUTE, et montre ce qu il a compris.
+        Un bouton qui ECOUTE, avec une bille qui montre ce qui arrive.
 
-        Sans micro, l etape n a pas lieu d etre : on le dit et on passe. Avec
-        micro, l ecoute tourne dans un thread -- Tkinter ne doit jamais
-        attendre -- et le resultat revient par la file d evenements.
+        Sans le retour visuel, « je n ai rien saisi » ne dit pas si le micro
+        n a rien entendu ou si la transcription a echoue : on reste devant un
+        bouton qui ne marche pas, sans savoir quoi corriger.
+
+        Le bruit ambiant est mesure MAINTENANT, pendant qu on lit la consigne.
+        Le mesurer au clic revenait a mesurer la voix qu on vient de demander,
+        et le micro devenait sourd pour le reste de l etape.
         """
-        # Le mot a prononcer est la reponse deja donnee a la question d avant.
         attendu = str(self.assistant.config.get(
             "general.user_name" if question.echo_de == "nom_utilisateur"
             else "general.assistant_name", "") or "")
         if attendu:
             tk.Label(cadre, text="« " + attendu + " »",
-                     font=tkfont.Font(family="Segoe UI", size=20),
-                     bg=FOND, fg=TEXTE).pack(pady=(18, 0))
+                     font=tkfont.Font(family="Segoe UI", size=26),
+                     bg=FOND, fg=TEXTE).pack(pady=(16, 0))
 
         if not self._preparer_micro():
-            tk.Label(choix, text=("No microphone — skipping this step."
-                                  if anglais else
-                                  "Pas de micro — cette étape est sautée."),
-                     font=tkfont.Font(family="Segoe UI", size=11),
-                     bg=FOND, fg=TEXTE_DOUX).pack(pady=(0, 14))
             self._bouton(choix, "Continue" if anglais else "Continuer",
                          lambda: self._repondre("")).pack()
             return
 
+        self.boule = BouleNiveau(choix)
+        self.boule.pack(pady=(0, 10))
         etat = tk.Label(choix, text="", font=tkfont.Font(family="Segoe UI", size=13),
                         bg=FOND, fg=TEXTE_DOUX)
         etat.pack(pady=(0, 14))
         bouton = self._bouton(choix, "Speak" if anglais else "Parler", lambda: None)
         bouton.pack()
+        garder = self._bouton(choix, "That's it" if anglais else "C'est ça",
+                              lambda: None)
+
+        # Le silence se mesure pendant qu on lit : au clic, tout est pret.
+        threading.Thread(target=self._preparer_ecoute, daemon=True).start()
 
         def ecouter() -> None:
             bouton.configure(state="disabled",
                              text="Listening…" if anglais else "J'écoute…")
             etat.configure(text="")
+            garder.pack_forget()
             threading.Thread(target=capter, daemon=True).start()
 
         def capter() -> None:
+            # Le plus fort niveau atteint : c est lui qui distingue « rien
+            # entendu » de « entendu mais pas compris ».
+            pic = [0.0]
+
+            def niveau(valeur, etat_audio):
+                pic[0] = max(pic[0], valeur)
+                self.evenements.put(
+                    ("installation_niveau", (valeur, etat_audio == "parole")))
+
             try:
-                entendu = self.stt.listen_live(timeout=6.0, phrase_limit=4.0)
+                entendu = self.stt.listen_live(on_level=niveau, timeout=8.0,
+                                               phrase_limit=5.0)
             except Exception:
                 entendu = ""
-            self.evenements.put(("installation_entendu", entendu))
+            raison = getattr(self.stt, "derniere_raison", "")
+            self.evenements.put(("installation_entendu", (entendu, pic[0], raison)))
 
-        def rendre(entendu: str) -> None:
+        def rendre(charge) -> None:
+            entendu, pic, raison = charge
             bouton.configure(state="normal",
-                             text="Try again" if anglais else "Réessayer")
-            if not entendu:
-                etat.configure(text=("I didn't catch it." if anglais
-                                     else "Je n'ai rien saisi."))
-                return
-            etat.configure(text=(("I heard: " if anglais else "J'ai entendu : ")
-                                 + "« " + entendu + " »"))
-            if not garder.winfo_ismapped():
+                             text="Again" if anglais else "Réessayer")
+            self.boule.definir_niveau(0.0)
+            if entendu:
+                etat.configure(text="« " + entendu + " »", fg=TEXTE)
+                garder.configure(command=lambda: self._repondre(entendu))
                 garder.pack(pady=(12, 0))
-            garder.configure(command=lambda: self._repondre(entendu))
+                return
+            etat.configure(text=self._pourquoi_rien(pic, raison, anglais),
+                           fg=TEXTE_DOUX)
 
-        garder = self._bouton(choix, "That's it" if anglais else "C'est ça",
-                              lambda: None)
         bouton.configure(command=ecouter)
         self._recevoir_entendu = rendre
+
+    @staticmethod
+    def _pourquoi_rien(pic: float, raison: str, anglais: bool) -> str:
+        """
+        Pourquoi rien n a ete retenu -- et donc quoi faire.
+
+        « Je n ai rien saisi » ne disait pas s il fallait parler plus fort,
+        repeter, ou verifier sa connexion. Trois causes, trois gestes.
+        """
+        if raison == "injoignable":
+            return ("Speech service unreachable — are you online?" if anglais else
+                    "Reconnaissance injoignable — êtes-vous connecté ?")
+        if pic <= 0.25:
+            return ("I heard nothing — is the microphone on?" if anglais else
+                    "Je n'ai rien entendu — le micro est-il actif ?")
+        return ("Heard, but not understood." if anglais else
+                "Entendu, mais pas compris.")
+
+    def _preparer_ecoute(self) -> None:
+        """Mesure le bruit ambiant en fond, sans bloquer l affichage."""
+        try:
+            self.stt.preparer()
+        except Exception:
+            pass
 
     def _repondre(self, reponse: str) -> None:
         """Retient la reponse et passe a la suivante."""

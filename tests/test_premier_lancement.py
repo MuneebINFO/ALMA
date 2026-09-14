@@ -10,6 +10,8 @@ emmène les suivantes avec elle, que chaque réponse est appliquée tout de
 suite ET retenue, et qu'au lancement suivant l'installation ne revient pas.
 """
 
+import time
+
 import pytest
 
 from config import load_config
@@ -252,6 +254,7 @@ def panneau_factice(tk_root, assistant):
     faux.installation = None
     faux._suite_installation = None
     faux._recevoir_entendu = None
+    faux.boule = None
     # Un micro DÉCLARÉ indisponible, et non pas absent : `None` aurait fait
     # construire un vrai `SpeechToText`, donc ouvrir le micro de la machine.
     # Les étapes « dites-le à voix haute » se sautent alors d'elles-mêmes,
@@ -414,10 +417,163 @@ def test_les_etapes_d_ecoute_suivent_le_nom_qu_elles_confirment():
             assert ordre.index(question.cle) == ordre.index(question.echo_de) + 1
 
 
-def test_sans_micro_le_panneau_saute_l_etape(tk_root, assistant):
-    """Une machine sans entrée audio ne doit pas rester bloquée dessus."""
+def boutons(faux):
+    """Les libellés des boutons du panneau, à n'importe quelle profondeur."""
+    trouves = []
+
+    def descendre(widget):
+        for enfant in widget.winfo_children():
+            if enfant.winfo_class() == "Button":
+                trouves.append(enfant.cget("text"))
+            descendre(enfant)
+
+    descendre(faux.installation)
+    return trouves
+
+
+def test_sans_micro_l_etape_ne_propose_pas_de_parler(tk_root, assistant):
+    """
+    Une machine sans entrée audio ne doit pas rester bloquée devant un bouton
+    « Parler » qui ne fera rien : il n'y a qu'à continuer.
+    """
     faux = panneau_factice(tk_root, assistant)
     faux.montrer_installation(lambda: None)
     faux._repondre("fr")
     faux._repondre("Muneeb")
-    assert any("Pas de micro" in t for t in etiquettes(faux)), etiquettes(faux)
+
+    libelles = boutons(faux)
+    assert "Parler" not in libelles, libelles
+    assert "Continuer" in libelles, libelles
+    assert faux.boule is None, "pas de bille sans micro"
+
+
+# --------------------------------------------------------------------------
+# La bille de niveau
+# --------------------------------------------------------------------------
+# « Il ne détecte pas la voix, ou en tout cas il dit qu'il n'a rien saisi » :
+# sans retour visuel, on ne peut pas savoir laquelle des deux moitiés échoue.
+def test_la_bille_suit_le_niveau_et_monte_plus_vite_qu_elle_ne_descend(tk_root):
+    from gui import BouleNiveau
+
+    boule = BouleNiveau(tk_root)
+    boule.definir_niveau(1.0, actif=True)
+    boule._battre()
+    apres_une_montee = boule.niveau
+    assert apres_une_montee > 0.3, "la montée doit être franche"
+
+    boule.definir_niveau(0.0)
+    boule._battre()
+    assert boule.niveau > apres_une_montee * 0.5, "la descente doit être douce"
+    boule.arreter()
+
+
+def test_la_bille_survit_a_la_destruction_de_son_cadre(tk_root):
+    """Elle se redessine en boucle : détruite, elle doit s'arrêter seule."""
+    import tkinter as tk
+
+    from gui import BouleNiveau
+
+    cadre = tk.Frame(tk_root)
+    boule = BouleNiveau(cadre)
+    cadre.destroy()
+    boule._battre()              # ne doit pas lever
+    assert boule._vivante is False
+
+
+def test_l_etape_ecoutee_montre_une_bille_et_calibre_avant(tk_root, assistant,
+                                                           monkeypatch):
+    """
+    Le bruit ambiant se mesure pendant qu'on lit la consigne. Le mesurer au
+    clic revenait à mesurer la voix qu'on venait de demander : le seuil montait
+    au plafond et le micro devenait sourd pour le reste de l'étape.
+    """
+    faux = panneau_factice(tk_root, assistant)
+    prepare = []
+    faux.stt = type("Micro", (), {
+        "available": True,
+        "preparer": lambda self: prepare.append(True) or True,
+        "listen_live": lambda self, **k: "",
+    })()
+
+    faux.montrer_installation(lambda: None)
+    faux._repondre("fr")
+    faux._repondre("Muneeb")
+
+    assert faux.boule is not None, "la bille doit être là pour voir sa voix arriver"
+    assert "Parler" in boutons(faux)
+    for _ in range(40):          # le calibrage tourne dans un thread
+        if prepare:
+            break
+        tk_root.update()
+        time.sleep(0.01)
+    assert prepare == [True], "le silence doit être mesuré avant de parler"
+
+
+@pytest.mark.parametrize("pic,raison,attendu", [
+    # La voix est arrivée, mais aucun mot n'en est sorti : répéter.
+    (0.60, "incompris", "pas compris"),
+    # Le micro n'a rien capté du tout : c'est le micro qu'il faut regarder.
+    (0.02, "incompris", "rien entendu"),
+    # Capté, mais le service n'a pas répondu : ni l'un ni l'autre.
+    (0.60, "injoignable", "connecté"),
+])
+def test_chaque_echec_dit_quoi_faire(tk_root, assistant, pic, raison, attendu):
+    """
+    « Je n'ai rien saisi » ne disait pas s'il fallait parler plus fort,
+    répéter, ou vérifier sa connexion. Trois causes, trois gestes.
+    """
+    faux = panneau_factice(tk_root, assistant)
+    faux.stt = type("Micro", (), {
+        "available": True,
+        "preparer": lambda self: True,
+        "listen_live": lambda self, **k: "",
+    })()
+    faux.montrer_installation(lambda: None)
+    faux._repondre("fr")
+    faux._repondre("Muneeb")
+
+    faux._recevoir_entendu(("", pic, raison))
+
+    assert any(attendu in t for t in etiquettes(faux)), etiquettes(faux)
+
+
+def test_un_service_injoignable_ne_se_confond_pas_avec_un_micro_muet(tk_root,
+                                                                     assistant):
+    """Le pendant : sans connexion, dire « parlez plus fort » est un faux conseil."""
+    from gui import AlmaApp
+
+    assert "micro" in AlmaApp._pourquoi_rien(0.02, "incompris", False)
+    assert "connecté" in AlmaApp._pourquoi_rien(0.02, "injoignable", False)
+
+
+def test_ce_qui_est_entendu_est_montre_avant_d_etre_retenu(tk_root, assistant):
+    """On ne retient pas une transcription sans l'avoir fait voir."""
+    faux = panneau_factice(tk_root, assistant)
+    faux.stt = type("Micro", (), {
+        "available": True,
+        "preparer": lambda self: True,
+        "listen_live": lambda self, **k: "",
+    })()
+    faux.montrer_installation(lambda: None)
+    faux._repondre("fr")
+    faux._repondre("Muneeb")
+
+    faux._recevoir_entendu(("Mounib", 0.7, ""))
+
+    assert any("Mounib" in t for t in etiquettes(faux)), etiquettes(faux)
+    assert "C'est ça" in boutons(faux)
+
+
+# --------------------------------------------------------------------------
+# Moins de mots
+# --------------------------------------------------------------------------
+def test_les_consignes_restent_courtes():
+    """
+    Un panneau d'installation se lit d'un coup d'œil, ou ne se lit pas. Les
+    boutons disent déjà ce qu'ils font.
+    """
+    for question in pl.QUESTIONS:
+        for langue in ("fr", "en"):
+            aide = question.aide(langue)
+            assert len(aide) <= 90, (question.cle, langue, len(aide), aide)
+            assert len(question.titre(langue)) <= 90, (question.cle, langue)
