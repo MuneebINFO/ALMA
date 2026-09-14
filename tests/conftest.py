@@ -56,13 +56,66 @@ def aucune_trace_sur_la_machine(monkeypatch):
     qui a besoin de la vraie fonction la remplace lui-meme.
     """
     from commands import websites
-    from core import win_utils
+    from core import desktop, media_control, win_utils
 
-    monkeypatch.setattr(websites, "open_url", lambda *a, **k: True)
-    monkeypatch.setattr(win_utils, "set_clipboard", lambda *a, **k: True)
+    def rien(*a, **k):
+        return None
+
+    def vrai(*a, **k):
+        return True
+
+    # -- ce qui SORT : navigateur, presse-papiers, fichiers, processus -------
+    monkeypatch.setattr(websites, "open_url", vrai)
+    monkeypatch.setattr(win_utils, "set_clipboard", vrai)
+    # Le presse-papiers se LIT aussi : « lis le presse-papiers » renvoyait ce
+    # que la personne venait de copier, et un test sur la langue de la reponse
+    # echouait selon le contenu. Regle 5 : rien qui depende de la machine.
+    monkeypatch.setattr(win_utils, "get_clipboard", lambda *a, **k: "presse papiers de test")
     monkeypatch.setattr(win_utils, "launch", lambda *a, **k: (False, "test"))
     monkeypatch.setattr(win_utils, "take_screenshot",
                         lambda *a, **k: (True, "capture_de_test.png"))
+    monkeypatch.setattr(win_utils, "open_folder", lambda chemin: (False, str(chemin)))
+    monkeypatch.setattr(win_utils, "kill_process", lambda *a, **k: (False, "test"))
+    monkeypatch.setattr(win_utils, "run_command", lambda *a, **k: (False, "test"))
+    monkeypatch.setattr(win_utils, "lock_workstation", lambda *a, **k: False)
+
+    # -- le CLAVIER et la SOURIS : la suite ne tape rien, ne clique rien -----
+    # « copie », « nouvel onglet », « ferme la fenetre » envoient de vraies
+    # touches a la fenetre au premier plan -- celle ou la personne travaille.
+    monkeypatch.setattr(win_utils, "press_key", vrai)
+    monkeypatch.setattr(win_utils, "press_combo", vrai)
+    monkeypatch.setattr(win_utils, "raccourci", vrai)
+    monkeypatch.setattr(win_utils, "type_text", vrai)
+
+    # -- le SON et l ECRAN ---------------------------------------------------
+    # Sans cela la suite montait le son, le coupait, changeait la luminosite
+    # et mettait en pause ce qui jouait -- a chaque lancement.
+    monkeypatch.setattr(win_utils, "get_volume", lambda *a, **k: 50)
+    monkeypatch.setattr(win_utils, "set_volume", vrai)
+    monkeypatch.setattr(win_utils, "change_volume", lambda delta: max(0, min(100, 50 + delta)))
+    monkeypatch.setattr(win_utils, "set_mute", vrai)
+    monkeypatch.setattr(win_utils, "is_muted", lambda *a, **k: False)
+    monkeypatch.setattr(win_utils, "get_brightness", lambda *a, **k: 50)
+    monkeypatch.setattr(win_utils, "set_brightness", vrai)
+    monkeypatch.setattr(win_utils, "beep", rien)
+    monkeypatch.setattr(win_utils, "notify", rien)
+
+    # -- les LECTEURS et les FENETRES ---------------------------------------
+    monkeypatch.setattr(media_control, "_agir_sur_session", vrai)
+    monkeypatch.setattr(desktop, "mettre_au_premier_plan", vrai)
+    monkeypatch.setattr(desktop, "fermer_fenetre", vrai)
+    monkeypatch.setattr(desktop, "deplacer_vers_ecran", vrai)
+    monkeypatch.setattr(desktop, "naviguer_dans_fenetre", vrai)
+
+    # -- les ECRANS : deux, toujours les memes ------------------------------
+    # Regle 5. Une dizaine de tests supposaient un second moniteur et
+    # tombaient des qu il etait debranche -- on les prenait alors pour des
+    # « echecs de la machine », ce qui masquait les vrais. Un test qui veut
+    # une autre configuration la pose lui-meme, par-dessus.
+    monkeypatch.setattr(desktop, "ecrans", lambda: [
+        desktop.Ecran(1, (0, 0, 1920, 1080), 1),
+        desktop.Ecran(2, (1920, 0, 3840, 1080), 2),
+    ])
     # La langue de repli est un etat de module, regle par l'assistant. Sans
     # cette remise a zero, un test qui passe Alma en anglais changerait la
     # langue des suivants, selon l'ordre d'execution.

@@ -36,10 +36,10 @@ Toujours `.venv\Scripts\python.exe`, jamais le `python` du PATH : l'environnemen
 global porte pandas/scipy/sklearn, et un build fait avec lui produit un
 exécutable de 427 Mo au lieu de 150.
 
-**Environ 11 tests échouent selon la machine** (`test_volume_media`,
-`test_applications`, `test_media_lecture`, `test_deduction`) : ils lisent les
-écrans et les lecteurs média réels. Avant de conclure qu'une modification a
-cassé quelque chose, comparer avec `git stash` — ce sont presque toujours eux.
+**La suite doit passer entièrement.** Elle a longtemps laissé passer une
+dizaine d'échecs mis sur le compte de la machine ; c'étaient en réalité des
+tests qui AGISSAIENT dessus et qui supposaient un second écran. Un échec est
+un échec — ne jamais l'attribuer à l'environnement sans l'avoir montré.
 
 Pousser passe par WSL :
 
@@ -94,10 +94,16 @@ remplacement.
 ### 4. Un test ne laisse aucune trace sur la machine
 
 `assistant.handle("...")` **exécute vraiment** la commande. Sans précaution, la
-suite ouvre des onglets sur l'écran de qui la lance, écrase son presse-papiers et
-écrit des captures. Le fixture autouse `aucune_trace_sur_la_machine`
-(`tests/conftest.py`) neutralise `open_url`, `set_clipboard`, `launch` et
-`take_screenshot` pour tous les tests : ne pas le retirer.
+suite ouvre des onglets sur l'écran de qui la lance, écrase son presse-papiers,
+**monte et coupe le son**, change la luminosité, met en pause ce qui joue et
+envoie de vraies touches à la fenêtre au premier plan — à chaque lancement.
+
+Le fixture autouse `aucune_trace_sur_la_machine` (`tests/conftest.py`) coupe
+tout cela : navigateur, presse-papiers (lecture comprise), fichiers, processus,
+clavier et souris, volume, sourdine, luminosité, sessions média, fenêtres. Ne
+pas le retirer, et **l'étendre** dès qu'une fonction nouvelle sort de
+l'application. Un test qui veut vérifier qu'un appel a bien eu lieu repose sa
+propre doublure par-dessus.
 
 Pour une sonde manuelle, même règle — neutraliser les sorties et rediriger tous
 les `paths.*` vers un dossier temporaire. Et ne jamais essayer une phrase
@@ -108,8 +114,9 @@ destructrice sur la vraie configuration : « oublie tout », « efface mes notes
 
 Ni des écrans branchés, ni de ce qui joue, ni de ce que le propriétaire a
 personnalisé. `config_de_test()` repart des valeurs d'origine, préférences
-comprises. Pour les fenêtres et les écrans, `monkeypatch.setattr(desktop,
-"fenetres", ...)`.
+comprises, et le même fixture impose **deux écrans fixes** — une dizaine de
+tests supposaient un second moniteur et tombaient dès qu'il était débranché.
+Pour les fenêtres, `monkeypatch.setattr(desktop, "fenetres", ...)`.
 
 ---
 

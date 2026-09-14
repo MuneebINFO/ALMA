@@ -131,3 +131,54 @@ def test_fenetre_regardee_sur_un_autre_ecran_est_ignoree(assistant, machine):
     # relance la session (rattachée à YouTube via son titre).
     assert ("Chrome", "play") in machine["actions"]
     assert reponse.ok, reponse.text
+
+
+# --------------------------------------------------------------------------
+# L'onglet dont le titre ne dit pas que c'est une page de lecture
+# --------------------------------------------------------------------------
+# Le cas resté ouvert, et signalé de nouveau : les tests ci-dessus donnent à
+# l'onglet regardé un titre reconnaissable (« Prime Video », « Netflix »), qui
+# le fait passer pour un lecteur. Beaucoup de pages n'en ont pas — le titre est
+# celui de l'œuvre, ou du site, et rien n'y ressemble à du média. On retombait
+# alors sur « je ne sais pas mieux, je raisonne par écran », c'est-à-dire sur
+# la session de l'AUTRE onglet.
+def test_un_onglet_au_titre_muet_ne_relance_pas_lautre_onglet(assistant, machine):
+    muet = fenetre("Mon Espace — Connexion - Google Chrome", "chrome.exe", 1, 13)
+    machine["fenetres"].insert(0, muet)
+    machine["sessions"] = [session("Chrome", False, "Une vidéo")]
+    assistant.ecran_actif = 1
+    regarder(assistant, muet)
+
+    reponse = assistant.handle("lance la vidéo")
+
+    assert ("Chrome", "play") not in machine["actions"], (
+        "la session joue dans un autre onglet : le titre de la fenêtre est "
+        "celui de l'onglet actif, et il ne correspond pas")
+    assert machine["premier_plan"] == [muet.handle]
+    assert machine["touches"] == [media_control.VK_ESPACE]
+    assert reponse.ok, reponse.text
+
+
+def test_le_meme_onglet_garde_sa_session_quand_le_titre_correspond(assistant, machine):
+    """Le pendant : ne pas cesser d'agir sur la bonne session."""
+    machine["sessions"] = [session("Chrome", False, "Une vidéo")]
+    assistant.ecran_actif = 1
+    regarder(assistant, machine["youtube"])
+
+    assistant.handle("lance la vidéo")
+
+    assert ("Chrome", "play") in machine["actions"]
+    assert machine["touches"] == []
+
+
+def test_pause_non_plus_ne_touche_pas_lautre_onglet(assistant, machine):
+    """Mettre en pause ce qu'on ne regarde pas est aussi gênant que le lancer."""
+    muet = fenetre("Facture 2026 - Google Chrome", "chrome.exe", 1, 14)
+    machine["fenetres"].insert(0, muet)
+    machine["sessions"] = [session("Chrome", True, "Une vidéo")]
+    assistant.ecran_actif = 1
+    regarder(assistant, muet)
+
+    assistant.handle("mets la vidéo en pause")
+
+    assert ("Chrome", "pause") not in machine["actions"]

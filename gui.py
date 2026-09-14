@@ -1081,6 +1081,10 @@ class AlmaApp:
                 # On coupe la parole DES LA DETECTION de la voix, pas apres
                 # la transcription : attendre reviendrait a finir sa phrase
                 # pendant que l utilisateur parle.
+                #
+                # La detection, elle, exige un niveau plus haut tant qu Alma
+                # parle (voir FACTEUR_PENDANT_LA_PAROLE) : arriver ici pendant
+                # qu elle parle veut donc bien dire que QUELQU UN parle.
                 self.assistant.interrompre_parole()
                 # Et on arrete ce qui est en cours, pour la meme raison :
                 # transcrire « arrete » demande plus d une seconde, pendant
@@ -1111,6 +1115,7 @@ class AlmaApp:
                     on_level=sur_niveau,
                     timeout=6.0,
                     doit_continuer=self.ecoute_active.is_set,
+                    voix_active=self.assistant.tts.parle,
                 )
             except Exception as exc:
                 self.evenements.put(("erreur", "Erreur du micro : " + str(exc)))
@@ -1159,7 +1164,7 @@ class AlmaApp:
                 self.evenements.put(("entendu", ""))
                 self.evenements.put(("statut", ("veille", "")))
                 if self.assistant.speaks:
-                    self.assistant.tts.say(reponse, cacher=True)
+                    self._dire_jusqu_au_bout(reponse)
                 continue
 
             if analyse.etat == wake.REVEIL_SEUL:
@@ -1179,6 +1184,24 @@ class AlmaApp:
 
         self.evenements.put(("niveau", (0.0, "arret")))
         self.evenements.put(("voyant", (TEXTE_DOUX, "micro coupé")))
+
+    def _dire_jusqu_au_bout(self, replique: str) -> None:
+        """
+        Dit une replique COURTE sans reprendre l ecoute avant la fin.
+
+        « Je vous ecoute », « Tres bien » : une seconde, pre-synthetisee, donc
+        immediate. Rendre la main tout de suite rouvrait le micro pendant
+        qu elle parlait -- et elle se coupait au milieu. Rien d utile ne se
+        dit pendant ce temps : l utilisateur vient tout juste de parler.
+
+        Les REPONSES, elles, restent non bloquantes : on doit pouvoir couper
+        un long resume d un mot.
+        """
+        self.assistant.tts.say(replique, cacher=True)
+        try:
+            self.assistant.tts.wait()
+        except Exception:                           # pragma: no cover - defensif
+            pass
 
     def _est_son_echo(self, propos: str) -> bool:
         """

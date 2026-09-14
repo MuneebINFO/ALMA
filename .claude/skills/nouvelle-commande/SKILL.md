@@ -126,6 +126,6 @@ y figure atteigne la commande annoncée par sa `description`.
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-Une dizaine d'échecs dépendent de la machine (`test_volume_media`,
-`test_applications`, `test_media_lecture`, `test_deduction`). Comparer avec
-`git stash` avant de conclure qu'on a cassé quelque chose.
+Elle doit passer **entièrement**. Si un échec semble venir de la machine, c'est
+presque toujours que le test la touche ou la suppose : le corriger, ne pas
+l'excuser.

@@ -321,6 +321,14 @@ def _restreindre_a_la_fenetre(fenetre_active, sessions_ecran):
         return memes, fenetre_active
     if _est_un_lecteur(fenetre_active):
         return [], fenetre_active
+    # Un NAVIGATEUR dont aucune session ne porte le titre : par construction,
+    # ce qui joue est dans un AUTRE onglet -- le titre de la fenetre est celui
+    # de l onglet actif. C est exactement le cas signale : « va sur Prime
+    # Video » puis « lance la video » relancait la video YouTube laissee en
+    # pause derriere. On n y touche pas, et on agit au clavier sur l onglet
+    # qu on regarde.
+    if fenetre_active.est_navigateur and memes:
+        return [], fenetre_active
     return sessions_ecran, None
 
 
@@ -370,11 +378,14 @@ def agir_sur_ecran(index_ecran: int, action: str = "pause",
     # envoyer « espace » a une fenetre au hasard ferait defiler une page.
     if action not in ("pause", "play", "bascule"):
         return False, "aucun lecteur sur cet écran"
-    # Avec une fenetre visee, c est elle et elle seule ; sinon la premiere
-    # fenetre de l ecran qui ressemble a un lecteur (les fenetres arrivent
-    # dans l ordre d empilement, la premiere est celle qu on regarde).
+    # Avec une fenetre visee, c est elle et elle seule -- et on lui fait
+    # confiance meme si son titre ne dit rien d une lecture. C est la fenetre
+    # que l utilisateur REGARDE en disant « lance la video » : il affirme
+    # qu il y en a une. Le filtre `_est_un_lecteur` protege du cas inverse,
+    # ou c est le systeme qui choisit une fenetre au hasard et ou une barre
+    # d espace ferait defiler une page.
     if cible_clavier is not None:
-        candidates = [cible_clavier] if _est_un_lecteur(cible_clavier) else []
+        candidates = [cible_clavier]
     else:
         candidates = [f for f in fenetres if _est_un_lecteur(f)]
     if not candidates:

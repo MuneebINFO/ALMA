@@ -149,7 +149,8 @@ class SpeechToText:
         return self._meter
 
     def listen_live(self, on_level=None, timeout: float = 8.0,
-                    phrase_limit: float = 12.0, doit_continuer=None) -> str:
+                    phrase_limit: float = 12.0, doit_continuer=None,
+                    voix_active=None) -> str:
         """
         Comme listen(), mais en remontant le NIVEAU SONORE en direct via
         `on_level(niveau, etat)`. Utilise par l interface graphique pour
@@ -168,6 +169,7 @@ class SpeechToText:
         brut = compteur.listen(
             on_level=on_level, timeout=timeout,
             phrase_limit=phrase_limit, doit_continuer=doit_continuer,
+            voix_active=voix_active,
         )
         if not brut:
             return ""
@@ -320,6 +322,16 @@ class LevelMeterListener:
     # Au-dela, on demanderait de crier : mieux vaut quelques declenchements
     # a vide qu un assistant sourd.
     SEUIL_MAX = 0.04
+    # Ce qu il faut depasser QUAND ALMA PARLE, en multiple du seuil ordinaire.
+    #
+    # Le micro reentend les haut-parleurs. L annulation d echo de la carte son
+    # en retire l essentiel, mais pas tout -- et depuis que le plancher est
+    # descendu a 0,0004, ce qui reste suffisait a declencher : Alma se coupait
+    # la parole a elle-meme au milieu de « Je vous ecoute ». Une voix qui
+    # s adresse au micro est franchement plus forte que ce retour attenue ;
+    # exiger ce facteur pendant qu elle parle laisse passer l une et pas
+    # l autre. Voir `dire_maintenant` dans gui.py pour l autre moitie.
+    FACTEUR_PENDANT_LA_PAROLE = 3.0
 
     def __init__(self, plancher: float | None = None, facteur: float | None = None) -> None:
         self.plancher = self.PLANCHER if plancher is None else float(plancher)
@@ -441,13 +453,16 @@ class LevelMeterListener:
             return self.threshold
 
     def listen(self, on_level=None, timeout: float = 8.0, phrase_limit: float = 12.0,
-               doit_continuer=None):
+               doit_continuer=None, voix_active=None):
         """
         Ecoute jusqu a detecter une phrase complete.
 
         `on_level(niveau_affiche, etat)` est appele a chaque bloc (~16 fois par
         seconde) : c est ce qui alimente l animation.
         `doit_continuer()` permet d interrompre proprement depuis l interface.
+        `voix_active()` dit si l assistant est en train de parler : le seuil de
+        declenchement est alors releve, pour ne pas prendre sa propre voix
+        renvoyee par les haut-parleurs pour celle de l utilisateur.
         Retourne les octets audio bruts, ou None si rien n a ete capte.
         """
         try:
@@ -495,7 +510,12 @@ class LevelMeterListener:
                                                self.pic_ambiant * self.DECROISSANCE_PIC)
                         self._appliquer_seuil(self.ambient * 0.98 + niveau * 0.02)
                     # Deux blocs forts d affilee : c est une voix, pas un clic.
-                    blocs_forts = blocs_forts + 1 if niveau > self.threshold else 0
+                    # Et pendant qu Alma parle, il en faut franchement plus :
+                    # sinon c est son propre echo qui la declenche.
+                    exige = self.threshold
+                    if voix_active is not None and voix_active():
+                        exige *= self.FACTEUR_PENDANT_LA_PAROLE
+                    blocs_forts = blocs_forts + 1 if niveau > exige else 0
                     if blocs_forts >= 2:
                         parle = True
                         frames.extend(pre_buffer)
