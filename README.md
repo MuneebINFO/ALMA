@@ -1338,45 +1338,63 @@ works: the documentation cannot drift from the code.
 
 ---
 
-## Why no AI, and how to add one later
+## Two editions
 
 Routing is done by local rules: **free, instant, offline and predictable**. No
-network call is made to understand a request.
+network call is made to understand a request, and that does not change in
+either edition.
 
-When no rule matches, the router calls
-`core/ai_fallback.handle_with_ai(query)`. By default
-(`ai_fallback.enabled: false`) that function simply replies politely and
-suggests `aide` — no network, no subprocess, no cost.
+**Free edition** (`general.edition: libre`, what ships) — automation. The
+declared commands, the context memory, and the local sources: Wikipedia,
+arithmetic, the weather, the time, translation. Nothing reaches a model,
+nothing is billable, and there is no key to provide.
 
-### Asking Google's AI in the background
+**Complete edition** (`general.edition: complete`) — all of that, plus a model
+when the request outgrows the commands: an open question, an image from the
+camera. It needs an Anthropic API key that **you** supply, encrypted by
+Windows and stored apart from your settings
+([core/secrets.py](core/secrets.py)).
 
-With `provider: gemini`, a question ALMA has no command for comes back as
-ALMA's own answer, read aloud. **No API and no key**: ALMA puts the question
-to Google's **AI Mode** in a window it minimises immediately, reads it through
-the accessibility API like any other page, then closes it. Nothing stays on
-screen — you asked your assistant, not a site.
+### Where the line falls
 
-Not `gemini.google.com`, and that was measured rather than assumed. On the same
-question: minimised, the answer never arrives; visible but behind another
-window, it never arrives either; in the foreground, ten seconds. Chrome
-suspends rendering for hidden windows and the app stops writing. AI Mode is a
-results page, not an app — it renders even minimised. Two other dead ends on
-the way: `gemini.google.com/app?q=…` does not submit the question, and writing
-the field through accessibility is accepted and ignored.
+Not "simple versus hard". The question is: **is there a local or
+deterministic source?**
 
-Every question is sent with a fixed instruction appended in parentheses —
-*« réponds en une ou deux phrases, sans détour »* — even though you never say
-it. AI Mode otherwise answers with a whole file of paragraphs, bullet lists and
-sources, and ALMA only reads the first fragment it recognises, which is not
-always the right one. A short, direct answer is both easier to pick out of the
-page and less of a chore to hear. If your own wording already asks for brevity,
-the instruction is not added twice.
+A Wikipedia summary and an arithmetic result *look* like reasoning, but they
+cost nothing and work offline — so they stay free. Moving them behind the key
+would make the free edition worse than it is today, which is not something
+worth doing to sell the other one.
 
-Reading the page text in document order matters more than it sounds. Piecing
-elements together by their coordinates looked finer and was more fragile: a
-linked word is its own element, and when the sentence wraps it landed at the
-end, or vanished — « Le roman Les Misérables a été écrit par », without Victor
-Hugo.
+And the order never inverts. Even in the complete edition, **anything the
+router can handle is handled by the router** — ten milliseconds, no money.
+The model is reached only when there is nobody else to answer. A test locks
+this down (`test_une_commande_connue_ne_passe_jamais_par_le_modele`).
+
+### What the free edition says when you ask it a question
+
+Not "I didn't understand". That would be false — ALMA understood perfectly
+well, it just doesn't do that — and it would send you looking for a
+microphone problem that doesn't exist. It says so plainly instead, and the
+sentence for an image request is its own: nobody asked a question there, they
+asked for a look.
+
+### Google's AI Mode: removed
+
+An earlier version put unmatched questions to Google's **AI Mode** in a
+minimised window and read the answer back through the accessibility API — no
+key, no account. It worked, and the findings behind it were real: minimised,
+`gemini.google.com` never answers, while AI Mode renders anyway because it is
+a results page rather than an app.
+
+It is gone all the same. Three hundred and seventy-nine lines of driving a
+browser to scrape an answer is the most fragile thing that can live in a
+repository — it breaks on any markup change, silently, on someone else's
+machine — and it promised the free edition something it could not reliably
+deliver. The complete edition does the same job properly.
+
+`ollama` stays: a model running entirely on your machine, no account, no key,
+off by default. It is an advanced setting for people who want one, not part
+of the product.
 
 ### The Claude Code fallback (implemented, disabled by default)
 

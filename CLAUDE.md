@@ -11,12 +11,36 @@ travailler.
 
 ## Contraintes non négociables
 
-- **Aucune IA payante par défaut.** `ai_fallback.enabled` reste `false` dans les
-  valeurs livrées (`config.py`). La machine de développement a le droit de
-  l'activer dans son `config.yaml` — pas le dépôt.
-- **Aucune clé d'API.** Rien dans le code ne lit ni n'écrit `ANTHROPIC_API_KEY`,
-  `GEMINI_API_KEY` ou équivalent, et aucun domaine d'API d'IA n'apparaît en dur.
-  Des tests le vérifient (`tests/test_ai_fallback.py`, `test_claude_code_provider.py`).
+- **Deux éditions, et ce qui est livré est `libre`.** `general.edition` vaut
+  `"libre"` dans `config.py` : de l'automatisation, et rien d'autre. L'édition
+  `complete` ajoute un modèle pour ce qui dépasse les commandes — question
+  ouverte, analyse d'image — et suppose une clé que **l'utilisateur** fournit.
+  Voir `core/edition.py`.
+
+  La frontière n'est pas « simple contre compliqué ». Elle est : **existe-t-il
+  une source locale ou déterministe ?** Wikipedia, les calculs, la météo, la
+  traduction *ressemblent* à de la réflexion mais ne coûtent rien et marchent
+  hors ligne — ils restent gratuits. Et l'ordre ne s'inverse jamais : même en
+  édition complète, ce que le routeur sait faire, il le fait. Un test le
+  vérifie (`test_une_commande_connue_ne_passe_jamais_par_le_modele`).
+
+- **La clé vient de l'utilisateur, et de nulle part ailleurs.** Cette règle a
+  changé d'énoncé le jour où l'édition complète est apparue : elle disait
+  « aucune clé d'API n'existe ». Ce qu'elle protégeait, en revanche, n'a pas
+  bougé, et `tests/test_ai_fallback.py` le dit désormais en quatre points :
+
+  1. ce qui est livré est `libre` — rien ne sort tant que rien n'est fourni ;
+  2. **aucune clé n'est lue dans l'environnement** (`ANTHROPIC_API_KEY` et
+     consorts sont ignorées, exprès : une clé qui traîne ne doit pas faire
+     basculer Alma à l'insu de son propriétaire) ;
+  3. aucune clé ne s'écrit en clair — le coffre chiffre par DPAPI
+     (`core/secrets.py`), et `CATALOGUE` ne peut pas contenir de clé ;
+  4. la liste des providers reste close.
+
+  **En test, le coffre est neutralisé** par `aucune_trace_sur_la_machine` : sans
+  cela la suite lirait la vraie clé de qui la lance et passerait de vrais appels
+  facturés. Seul `tests/test_secrets.py` remet les vraies fonctions, dirigées
+  vers un fichier temporaire.
 - **Ne jamais agir sur l'écran où l'utilisateur travaille** sans qu'il l'ait
   demandé. Les commandes sont scopées par écran : voir `fenetre_visee`,
   `trouver_onglet`, `agir_sur_ecran`.
@@ -49,7 +73,7 @@ wsl.exe -e bash -lc "cd /mnt/c/Users/rehma/projets/Jarvis && git push origin mai
 
 ---
 
-## Les cinq règles
+## Les six règles
 
 ### 1. Toute commande comprend le français ET l'anglais
 
@@ -212,6 +236,9 @@ Ils ont tous déjà coûté un bug.
 | `core/wake.py` | mot d'appel, session d'écoute, mise en veille |
 | `core/stt.py` | micro, seuil de détection adaptatif |
 | `core/annonces.py` | les phrases d'attente (« je cherche ») |
+| `core/edition.py` | libre / complète, et la frontière entre les deux |
+| `core/secrets.py` | le coffre : la clé d'API, chiffrée par Windows |
+| `core/camera.py` | prendre une image, sans dépendance nouvelle |
 | `core/sons.py` | les quatre bruitages |
 | `core/preferences.py` | catalogue des réglages, magasin `data/preferences.json` |
 | `core/premier_lancement.py` | les quatre questions de l'installation |

@@ -1,16 +1,17 @@
 # ALMA — Privacy Policy
 
-*Applies to the free, local version of ALMA. If a paid tier is introduced
-later, this document will be updated before that tier ships, and the
-Microsoft Store listing will link to the version in effect at the time.*
+*Covers both editions of ALMA. The **free edition** is what ships and what
+runs unless you supply an API key of your own; the **complete edition** is
+described in its own section below, because it sends more, and you should
+know exactly what.*
 
 ## The short version
 
 ALMA is a rule-based assistant that runs **on your computer**. In its
-default configuration (text mode, no AI fallback), nothing you type or that
-ALMA sees on your screen is sent anywhere. Voice mode and the optional AI
-fallback change that in specific, limited ways — described below, with no
-surprises.
+default configuration — the free edition, text mode — nothing you type or
+that ALMA sees on your screen is sent anywhere. Voice mode, and the complete
+edition if you enable it, change that in specific, limited ways described
+below, with no surprises.
 
 ## What ALMA can see, and why
 
@@ -19,10 +20,12 @@ To carry out commands like "close Chrome" or "click Subscribe", ALMA reads:
 - **Window titles and screen layout** — which windows are open, on which
   monitor, so it acts only on the one you're working on.
 - **Browser tab titles and, when a command needs it, the visible text of the
-  active page** — to find the tab you asked for, or to read back an answer
-  (e.g. Google's AI Mode results, when that fallback is enabled).
+  active page** — to find the tab you asked for.
 - **Your microphone audio** — only in voice mode, and only while actively
   listening for a command.
+- **Your camera** — only when you ask for a picture, and only for that one
+  frame. The camera is released immediately afterwards; ALMA has no preview
+  and never keeps the device open.
 
 This reading happens locally, through the standard Windows accessibility
 APIs (UI Automation) — the same technology used by screen readers. **None
@@ -37,11 +40,41 @@ device through the specific network calls listed below.
 | Weather ("quel temps fait-il") | Always on | City name | [Open-Meteo](https://open-meteo.com) — free, no account, no API key |
 | Voice mode — speech recognition | **Off** by default | Your spoken audio | Google's speech API, unless you switch `stt_engine` to `whisper` or `vosk` (fully offline, on-device) |
 | Voice mode — spoken replies | **Off** by default | The text ALMA is about to say | Microsoft's Edge neural voice service, unless you switch `voice.engine` to `sapi5` (fully offline, on-device) |
-| AI fallback (questions with no matching command) | **Off** by default | The question's text | Depends on which provider you configure: a Google search page opened in a hidden window (`gemini`), the Claude Code CLI under your own Anthropic subscription (`claude_code`), or a model running entirely on your machine (`ollama`, no network at all) |
+| Photos taken with the camera | On request | Nothing — the image is written to your Pictures folder and goes nowhere else | — |
+| Complete edition — questions and image analysis | **Off** unless you supply a key | See the section below | Anthropic, under your own API key |
+| Advanced fallback (`ollama`, `claude_code`) | **Off** by default | The question's text | A model running entirely on your machine (`ollama`, no network at all), or the Claude Code CLI under your own subscription (`claude_code`) |
 
-Voice mode and the AI fallback are both opt-in: you turn them on yourself,
-in `config.yaml` or with a command-line flag. The free version never
-contacts a server operated by ALMA's developer — there isn't one.
+Voice mode and everything below the first three rows are opt-in: you turn
+them on yourself. **Neither edition ever contacts a server operated by
+ALMA's developer — there isn't one.** Where the complete edition sends data,
+it sends it to Anthropic directly, under your own account.
+
+## The complete edition, in detail
+
+The complete edition is inactive until **you** enter an Anthropic API key.
+Without one, ALMA runs exactly as described above — the setting alone does
+nothing.
+
+**What is sent, and only when you ask:**
+
+- the text of a question that no local command could answer;
+- **an image from your camera**, when you ask ALMA to look at something
+  ("analyse ce que j'ai dans la main"). The whole frame is sent, not a crop.
+  No picture is ever taken or sent unless you asked for one in that moment.
+
+Nothing else. Your screen contents, window titles, notes, clipboard, and
+command history are never sent — in either edition.
+
+**Where it goes:** to Anthropic's API, under your own key and your own
+account, subject to
+[Anthropic's privacy policy](https://www.anthropic.com/legal/privacy).
+ALMA's developer has no access to these requests and receives no copy.
+
+**Your key** is encrypted by Windows itself (DPAPI) and bound to your user
+account, in a file separate from your settings. Copied to another machine,
+or opened under a different Windows account, it cannot be read. ALMA never
+reads a key from environment variables — only the one you entered. Removing
+the key returns ALMA to the free edition immediately.
 
 ## What's stored, and where
 
@@ -56,17 +89,17 @@ deleting that folder) removes all of it.
 
 ## No accounts, no telemetry, no ads
 
-The free version doesn't require an account, doesn't collect analytics or
-crash reports, and doesn't show ads. There's no tracking of what you say to
+Neither edition requires an account with ALMA, collects analytics or
+crash reports, or shows ads. There's no tracking of what you say to
 ALMA or what it does on your screen, beyond the local history file you can
 read and delete yourself.
 
 ## Third-party services referenced above
 
 - [Open-Meteo](https://open-meteo.com) — see their own [terms](https://open-meteo.com/en/terms)
-- Google Speech-to-Text and Google Search (AI Mode) — see [Google's Privacy Policy](https://policies.google.com/privacy)
+- Google Speech-to-Text (voice mode only, and replaceable by a fully offline engine) — see [Google's Privacy Policy](https://policies.google.com/privacy)
 - Microsoft Edge neural text-to-speech — see [Microsoft's Privacy Statement](https://privacy.microsoft.com/privacystatement)
-- Anthropic (Claude Code CLI, when explicitly enabled) — see [Anthropic's Privacy Policy](https://www.anthropic.com/legal/privacy)
+- Anthropic — the complete edition's API under your own key, and the Claude Code CLI when explicitly enabled — see [Anthropic's Privacy Policy](https://www.anthropic.com/legal/privacy)
 
 ## Changes to this policy
 
