@@ -183,6 +183,8 @@ def test_websites_en_anglais(router, phrase, attendu):
     ("increase the brightness", "brightness_change"),
     ("decrease the brightness", "brightness_change"),
     ("take a screenshot", "screenshot"),
+    ("take a photo", "camera_photo"),
+    ("take a picture with the camera", "camera_photo"),
     ("lock the computer", "lock_session"),
     ("put the computer to sleep", "sleep_pc"),
     ("shut down the computer", "shutdown_pc"),

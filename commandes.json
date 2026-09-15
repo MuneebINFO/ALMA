@@ -185,6 +185,14 @@
       ]
     },
     {
+      "action": "Prendre une photo avec la caméra",
+      "phrases": [
+        "prends une photo",
+        "photo",
+        "take a photo"
+      ]
+    },
+    {
       "action": "Baisser le volume",
       "phrases": [
         "baisse le son",

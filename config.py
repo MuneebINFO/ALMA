@@ -124,6 +124,11 @@ DEFAULTS: dict = {
         "reminders": "data/reminders.json",
         "history": "data/history.json",
         "screenshots": "screenshots",
+        # Les photos prises par la camera. Chez l utilisateur, pas dans le
+        # dossier de l application : c est son image, elle lui appartient,
+        # et le dossier d installation n est pas toujours accessible en
+        # ecriture une fois l application installee depuis le Store.
+        "photos": "%USERPROFILE%/Pictures/ALMA",
         "music": "",
         # Ce qu Alma a retenu de vous (voir core/preferences.py). Ecrit par
         # les commandes de personnalisation, pas a la main.
@@ -243,6 +248,15 @@ DEFAULTS["applications"] = {
         "aliases": ["calculatrice", "calculette", "calculator", "calc"],
         "paths": ["calc.exe"],
         "process": "CalculatorApp.exe",
+    },
+    # « ouvre la camera » : l application du systeme, qui montre un apercu.
+    # Alma, elle, n en affiche aucun -- l API Windows rend une image par
+    # seconde environ, ce qui ferait un diaporama et pas une video. Pour se
+    # voir, l application de Windows fait ca bien mieux.
+    "camera": {
+        "aliases": ["camera", "webcam", "appareil photo"],
+        "paths": ["microsoft.windows.camera:", "WindowsCamera.exe"],
+        "process": "WindowsCamera.exe",
     },
     "explorer": {
         "aliases": ["explorateur", "explorateur de fichiers", "explorer", "mes fichiers"],

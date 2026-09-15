@@ -107,6 +107,23 @@ def aucune_trace_sur_la_machine(monkeypatch):
 
     monkeypatch.setattr(Bruitages, "jouer", lambda self, nom: False)
 
+    # -- la CAMERA ----------------------------------------------------------
+    # Regle 4 ET regle 5 a la fois. `capturer` allume vraiment la camera : un
+    # temoin qui s illumine pendant que la suite tourne, et une photo ecrite
+    # dans les Images de qui la lance. Et `disponible`, appele par le guard,
+    # interroge le materiel : la commande se routerait ici et pas sur une
+    # machine sans webcam.
+    #
+    # On pose donc UNE camera, toujours la meme, qui rend toujours la meme
+    # image. Un test qui veut l absence de camera la retire lui-meme.
+    from core import camera
+
+    monkeypatch.setattr(camera, "lister", lambda: [("id-test", "Camera de test")])
+    monkeypatch.setattr(camera, "capturer",
+                        lambda identifiant="": b"jpeg-de-test")
+    monkeypatch.setattr(camera, "enregistrer",
+                        lambda image, dossier: (True, str(dossier) + "/photo-de-test.jpg"))
+
     # -- les LECTEURS et les FENETRES ---------------------------------------
     monkeypatch.setattr(media_control, "_agir_sur_session", vrai)
     monkeypatch.setattr(desktop, "mettre_au_premier_plan", vrai)
