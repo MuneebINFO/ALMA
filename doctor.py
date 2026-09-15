@@ -287,6 +287,27 @@ def verifier_applications() -> None:
         note("Liste du système indisponible : les applis du Store seront manquées")
 
 
+def verifier_edition(config) -> None:
+    """L information principale : ce qu Alma a le droit de faire ici."""
+    from core import edition
+
+    titre("Édition")
+    if edition.est_complete(config):
+        ok("Complète : les questions et les images vont au modèle")
+        note("Modèle : " + str(config.get("ai_fallback.claude_api.modele")))
+        note("La clé est chiffrée par Windows, liée à ce compte utilisateur")
+        return
+    if edition.souhaitee(config) == "complete":
+        # Le cas a dire en toutes lettres : le reglage promet ce que la
+        # machine ne peut pas tenir, et Alma est donc retombee en libre.
+        manque("Réglée sur « complète », mais aucune clé lisible n'est "
+               "enregistrée : Alma fonctionne en édition libre")
+        return
+    ok("Libre : automatisation seule, aucun appel, aucun coût")
+    note("Les commandes, la mémoire du contexte et les sources locales "
+         "(Wikipedia, calculs, météo) fonctionnent sans rien")
+
+
 def verifier_ia(config) -> None:
     titre("Extension IA")
     actif = bool(config.get("ai_fallback.enabled", False))
@@ -362,6 +383,7 @@ def main() -> int:
         (verifier_ecrans, ()),
         (verifier_navigateur, ()),
         (verifier_applications, ()),
+        (verifier_edition, (config,)),
         (verifier_ia, (config,)),
     ):
         try:
