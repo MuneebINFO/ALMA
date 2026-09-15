@@ -19,6 +19,7 @@ from core.wake import MoteurEcoute
 from core.scheduler import Scheduler
 from core.storage import Storage
 from core.preferences import CATALOGUE, Preferences
+from core.sons import Bruitages
 from core.tts import TextToSpeech
 
 log = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ class Assistant:
         self.preferences = Preferences(
             self.config.resolve_path("preferences", "data/preferences.json"))
         self.tts = tts if tts is not None else TextToSpeech(self.config)
+        self.sons = Bruitages(self.config)
         self.stt = stt
         self.router = Router()
         self.scheduler = Scheduler(self)
@@ -58,6 +60,9 @@ class Assistant:
         # Branche par l interface : elle affiche le nom de l assistant, et
         # doit donc etre prevenue quand il change.
         self.signal_personnalisation = None
+        # Branche par l interface : « je cherche » s affiche aussi, pour qui
+        # a coupe la voix.
+        self.signal_attente = None
         # Poignee de la DERNIERE fenetre non-Alma que l utilisateur a eue
         # devant lui, et poignee de la fenetre d Alma elle-meme. L interface
         # les tient a jour (voir gui.py) : quand Alma est au premier plan --
@@ -95,6 +100,41 @@ class Assistant:
     def speaks(self) -> bool:
         """La lecture a voix haute est-elle activé ?"""
         return bool(self.config.get("voice.speak_responses", True)) and self.tts.available
+
+    def bruit(self, nom: str) -> bool:
+        """Joue un bruitage, sans jamais faire echouer ce qu il accompagne."""
+        try:
+            return self.sons.jouer(nom)
+        except Exception as exc:              # pragma: no cover - defensif
+            log.debug("Bruitage impossible : %s", exc)
+            return False
+
+    def annoncer_attente(self, genre: str, langue: str = "fr") -> str:
+        """
+        Dit qu on travaille, avant de travailler.
+
+        NON BLOQUANT, volontairement : le but est que la demande parte tout
+        de suite et que l annonce la couvre, pas qu elle la retarde. La
+        reponse se mettra dans la file derriere.
+
+        `cacher` garde l audio : la deuxieme fois, la phrase est immediate.
+        """
+        from core import annonces
+
+        texte = annonces.annonce(genre, langue)
+        if not texte:
+            return ""
+        if self.signal_attente is not None:
+            try:
+                self.signal_attente(texte)
+            except Exception as exc:          # pragma: no cover - defensif
+                log.debug("Interface non prévenue : %s", exc)
+        if self.speaks:
+            try:
+                self.tts.say(texte, cacher=True)
+            except Exception as exc:          # pragma: no cover - defensif
+                log.debug("Annonce non dite : %s", exc)
+        return texte
 
     # -- personnalisation -----------------------------------------------------
     def personnaliser(self, valeurs: dict) -> bool:

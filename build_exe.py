@@ -55,6 +55,10 @@ IMPORTS_CACHES = [
 DONNEES = [
     ("config.yaml.example", "."),
     ("assets/alma.ico", "assets"),
+    # Les bruitages. Sans cette ligne ils restent dans le depot et l exe est
+    # muet : `core/sons.py` ne trouve aucun fichier, et se tait -- un silence,
+    # pas une erreur, donc rien ne le signalerait.
+    ("assets/sons", "assets/sons"),
 ]
 
 

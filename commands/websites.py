@@ -820,6 +820,7 @@ def _fiche_ouverte(cibles) -> bool:
     examples=["mets la série The Flash", "lance le film Interstellar sur Netflix",
               "watch the show The Flash", "play the movie Interstellar on Netflix"],
     priority=98,
+    attente="navigation",
     guard=_est_un_titre,
 )
 def lancer_titre(ctx: CommandContext) -> Response:

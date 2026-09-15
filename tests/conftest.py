@@ -99,6 +99,13 @@ def aucune_trace_sur_la_machine(monkeypatch):
     monkeypatch.setattr(win_utils, "set_brightness", vrai)
     monkeypatch.setattr(win_utils, "beep", rien)
     monkeypatch.setattr(win_utils, "notify", rien)
+    # Les bruitages aussi : ils partent en asynchrone, donc sans ralentir la
+    # suite -- mais ils se jouent bel et bien sur les haut-parleurs de qui la
+    # lance. Un test qui veut verifier qu'un bruitage a eu lieu repose sa
+    # propre doublure par-dessus.
+    from core.sons import Bruitages
+
+    monkeypatch.setattr(Bruitages, "jouer", lambda self, nom: False)
 
     # -- les LECTEURS et les FENETRES ---------------------------------------
     monkeypatch.setattr(media_control, "_agir_sur_session", vrai)

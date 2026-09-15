@@ -254,6 +254,46 @@ def rendre_la_voix(ctx: CommandContext) -> Response:
 
 
 @command(
+    name="regler_les_bruitages",
+    patterns=[
+        r"^(?:coupe|couper|desactive|enleve|retire)\s+(?:les\s+)?"
+        r"(?:bruitages?|sons?|bips?)$",
+        r"^(?:remets|remettre|reactive|active|rallume)\s+(?:les\s+)?"
+        r"(?:bruitages?|sons?|bips?)$",
+        r"^(?:plus|pas)\s+de\s+(?:bruitages?|bips?)$",
+        r"^(?:turn\s+off|disable|mute|stop)\s+(?:the\s+)?"
+        r"(?:sound\s+effects?|sounds?|beeps?|chimes?)$",
+        r"^(?:turn\s+on|enable|restore|bring\s+back)\s+(?:the\s+)?"
+        r"(?:sound\s+effects?|sounds?|beeps?|chimes?)$",
+        r"^no\s+more\s+(?:sounds?|beeps?)$",
+    ],
+    category="Personnalisation",
+    description="Activer ou couper les bruitages",
+    examples=["coupe les bruitages", "remets les bruitages",
+              "turn off the sound effects"],
+    priority=97,
+)
+def regler_les_bruitages(ctx: CommandContext) -> Response:
+    """
+    Les quatre signes sonores : réveil, veille, action faite, échec.
+
+    Ils marquent surtout ce qui ne se dit PAS : une action réussie ne se
+    commente pas à voix haute, et sans bruitage le silence qui suit ne se
+    distingue pas d'une commande perdue.
+    """
+    norme = ctx.norm
+    couper = any(mot in norme for mot in (
+        "coupe", "couper", "desactive", "enleve", "retire", "plus de", "pas de",
+        "turn off", "disable", "mute", "stop", "no more"))
+    ctx.assistant.personnaliser({"sound.enabled": not couper})
+    if couper:
+        return ctx.reponse("Bruitages coupés.", "Sound effects off.")
+    # Le rallumage se prouve tout de suite : on le fait entendre.
+    ctx.assistant.bruit("ok")
+    return ctx.reponse("Bruitages rétablis.", "Sound effects back on.")
+
+
+@command(
     name="changer_de_voix",
     patterns=[
         r"^(?:prends|prendre|mets|utilise)\s+(?:une\s+|la\s+)?voix\s+"

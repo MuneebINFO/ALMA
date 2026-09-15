@@ -68,6 +68,7 @@ CATALOGUE = (
     Reglage("voice.stt_language", "la langue que j'écoute", "the language I listen for",
             visible=False),
     Reglage("voice.speak_responses", "la lecture à voix haute", "reading out loud"),
+    Reglage("sound.enabled", "les bruitages", "the sound effects"),
     Reglage("voice.neural_voice", "ma voix", "my voice"),
     Reglage("voice.neural_rate", "mon débit", "my speaking rate"),
     Reglage("voice.rate", "mon débit (voix locale)", "my speaking rate (local voice)",

@@ -222,6 +222,7 @@ class MoteurFactice:
 class AssistantFactice:
     def __init__(self):
         self.gestes = []
+        self.bruits = []
 
     def interrompre(self):
         self.gestes.append("interrompre")
@@ -232,6 +233,10 @@ class AssistantFactice:
 
     def oublier_contexte(self):
         self.gestes.append("contexte")
+
+    def bruit(self, nom):
+        self.bruits.append(nom)
+        return True
 
 
 def application_factice(arme=True, micro=True):
@@ -256,6 +261,14 @@ def test_endormir_coupe_tout_et_oublie_le_contexte():
     faux.endormir()
     assert faux.moteur.arme is False
     assert faux.assistant.gestes == ["interrompre", "parole", "contexte"]
+    assert faux.assistant.bruits == ["veille"], "se rendormir s'entend"
+
+
+def test_endormir_ce_qui_dort_deja_ne_fait_pas_de_bruit():
+    """Un bruitage pour rien est un bruitage de trop."""
+    faux = application_factice(arme=False)
+    faux.endormir()
+    assert faux.assistant.bruits == []
 
 
 def test_le_clic_sur_l_orbe_reveille_aussi():

@@ -64,6 +64,7 @@ def _application_ouverte(ctx: CommandContext) -> bool:
     priority=95,
     guard=_application_ouverte,
     informatif=True,
+    attente="reflexion",
     # N a de sens que si l application tourne : sinon la question part au
     # navigateur, par ask_claude. Verifie dans tests/test_claude_app.py.
     contextuel=True,
@@ -137,6 +138,7 @@ def _delegation_ouverte(ctx: CommandContext) -> bool:
     priority=98,
     guard=_delegation_ouverte,
     informatif=True,
+    attente="reflexion",
     contextuel=True,
 )
 def claude_code_tache(ctx: CommandContext) -> Response:

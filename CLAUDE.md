@@ -100,9 +100,9 @@ envoie de vraies touches à la fenêtre au premier plan — à chaque lancement.
 
 Le fixture autouse `aucune_trace_sur_la_machine` (`tests/conftest.py`) coupe
 tout cela : navigateur, presse-papiers (lecture comprise), fichiers, processus,
-clavier et souris, volume, sourdine, luminosité, sessions média, fenêtres. Ne
-pas le retirer, et **l'étendre** dès qu'une fonction nouvelle sort de
-l'application. Un test qui veut vérifier qu'un appel a bien eu lieu repose sa
+clavier et souris, volume, sourdine, luminosité, sessions média, fenêtres,
+bruitages. Ne pas le retirer, et **l'étendre** dès qu'une fonction nouvelle sort
+de l'application. Un test qui veut vérifier qu'un appel a bien eu lieu repose sa
 propre doublure par-dessus.
 
 Pour une sonde manuelle, même règle — neutraliser les sorties et rediriger tous
@@ -117,6 +117,25 @@ personnalisé. `config_de_test()` repart des valeurs d'origine, préférences
 comprises, et le même fixture impose **deux écrans fixes** — une dizaine de
 tests supposaient un second moniteur et tombaient dès qu'il était débranché.
 Pour les fenêtres, `monkeypatch.setattr(desktop, "fenetres", ...)`.
+
+### 6. Le silence doit se distinguer d'une panne
+
+Deux retours, pour deux silences.
+
+**Ce qui prend du temps s'annonce**, avant de commencer et non à la place :
+`@command(..., attente="recherche")` fait dire « je cherche » pendant que ça
+cherche. Les genres sont dans `core/annonces.py` — `recherche`, `reflexion`,
+`analyse`, `navigation`. À ne poser que sur ce qui attend **vraiment** :
+réseau, application tierce, parcours d'un site. Une annonce suivie d'une
+réponse instantanée est du bruit, et un test verrouille la liste de celles qui
+annoncent.
+
+**Ce qui ne se dit pas s'entend** : une action réussie n'est pas lue à voix
+haute (voir `informatif`), donc rien ne la signale. Les quatre bruitages de
+`core/sons.py` couvrent ce cas — `reveil`, `veille`, `ok`, `erreur`. Ils sont
+fabriqués par `outils/generer_sons.py`, pas téléchargés : on sait d'où ils
+viennent et les retoucher tient en deux nombres. En rester à quatre — un
+assistant qui tinte à chaque geste devient fatigant en une demi-journée.
 
 ---
 
@@ -161,6 +180,8 @@ Ils ont tous déjà coûté un bug.
 | `core/text_utils.py` | `normalize`, `detect_language`, marqueurs de langue |
 | `core/wake.py` | mot d'appel, session d'écoute, mise en veille |
 | `core/stt.py` | micro, seuil de détection adaptatif |
+| `core/annonces.py` | les phrases d'attente (« je cherche ») |
+| `core/sons.py` | les quatre bruitages |
 | `core/preferences.py` | catalogue des réglages, magasin `data/preferences.json` |
 | `core/premier_lancement.py` | les quatre questions de l'installation |
 | `commands/*.py` | les commandes, une famille par fichier |

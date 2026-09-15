@@ -45,6 +45,11 @@ class Command:
     # quand tout se passe bien. Une action reussie se voit -- la commenter
     # ferait perdre du temps a l utilisateur et couvrirait ce qu il regarde.
     informatif: bool = False
+    # Ce que la commande fait attendre : « recherche », « reflexion »,
+    # « analyse », « navigation » (voir core/annonces.py). Alma le dit AVANT
+    # de travailler, pour qu on sache que la demande est partie. Vide -- le
+    # cas de l immense majorite -- veut dire immediat : on se tait.
+    attente: str = ""
 
     def accepts_source(self, source: str) -> bool:
         return source in self.sources
@@ -67,6 +72,7 @@ def command(
     hidden: bool = False,
     contextuel: bool = False,
     informatif: bool = False,
+    attente: str = "",
 ):
     """
     Decorateur d enregistrement d'une commande.
@@ -81,6 +87,10 @@ def command(
     - guard : predicat optionnel ; s il renvoie False, le routeur continue de
       chercher (permet a "ouvre X" d essayer les apps puis les sites web).
     - sources : d ou la commande peut être declenchee (texte, voix, gestes).
+    - attente : ce que la commande fait attendre (« recherche », « analyse »...).
+      Alma l annonce avant de travailler. A ne mettre que sur ce qui prend
+      VRAIMENT du temps : une annonce suivie d une reponse immediate est du
+      bruit. Voir core/annonces.py.
     - informatif : la commande repond quelque chose (heure, meteo, blague).
       Les autres executent une action, dont le resultat se voit : elles ne
       sont pas lues a voix haute quand elles reussissent.
@@ -103,6 +113,7 @@ def command(
             hidden=hidden,
             contextuel=contextuel,
             informatif=informatif,
+            attente=attente,
         )
         _REGISTRY.append(cmd)
         func.command = cmd

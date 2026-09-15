@@ -157,6 +157,14 @@ def handle_unmatched(utterance: Utterance, assistant=None) -> Response:
     # Marquer une vraie reponse comme un echec la ferait afficher en rouge et
     # comptabiliser comme une commande ratee dans l historique.
     provider = get_provider(config)
+    # C est le chemin le plus lent de l application -- une fenetre de
+    # recherche ouverte, lue, refermee -- et il n est pas declare par une
+    # commande : l annonce se fait donc ici.
+    if assistant is not None and not isinstance(provider, NullProvider):
+        try:
+            assistant.annoncer_attente("recherche", getattr(utterance, "lang", "fr"))
+        except Exception:                     # pragma: no cover - defensif
+            pass
     reponse = handle_with_ai(utterance.raw, config, provider)
     return Response(text=reponse, ok=not isinstance(provider, NullProvider))
 

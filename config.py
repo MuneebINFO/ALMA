@@ -129,6 +129,11 @@ DEFAULTS: dict = {
         # les commandes de personnalisation, pas a la main.
         "preferences": "data/preferences.json",
     },
+    "sound": {
+        # Les quatre bruitages : reveil, veille, action faite, echec. Voir
+        # core/sons.py, et outils/generer_sons.py pour les fabriquer.
+        "enabled": True,
+    },
     "weather": {
         "default_city": "Bruxelles",
         "units": "metric",

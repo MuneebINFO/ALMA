@@ -605,6 +605,7 @@ class AlmaApp:
         # Renommer l assistant change ce que la fenetre affiche : le titre,
         # le sigle, le statut. Le coeur previent, l interface se remet a jour.
         assistant.signal_personnalisation = self._personnalisation_changee
+        assistant.signal_attente = self._attente_annoncee
 
         root.title(assistant.name)
         root.configure(bg=FOND)
@@ -866,6 +867,8 @@ class AlmaApp:
         """
         self.assistant.interrompre()
         self.assistant.interrompre_parole()
+        if self.moteur.arme:
+            self.assistant.bruit("veille")
         self.moteur.desarmer()
         self.assistant.oublier_contexte()
         self.evenements.put(("entendu", ""))
@@ -1032,6 +1035,14 @@ class AlmaApp:
             self.evenements.put(("erreur", "Erreur interne : " + str(exc)))
             self.evenements.put(("statut", (self._etat_repos(), "")))
             return
+
+        # Le bruitage remplace ce qui n est pas dit. Une action reussie ne se
+        # commente pas a voix haute (voir `informatif`) : sans lui, le silence
+        # qui suit ne se distingue pas d une commande perdue.
+        if reponse.ok and not reponse.speak:
+            self.assistant.bruit("ok")
+        elif not reponse.ok:
+            self.assistant.bruit("erreur")
 
         if reponse.text:
             if reponse.ok:
@@ -1330,6 +1341,15 @@ class AlmaApp:
             suite, self._suite_installation = self._suite_installation, None
             suite()
 
+    def _attente_annoncee(self, texte: str) -> None:
+        """
+        « Je cherche » s affiche pendant que ca cherche.
+
+        Appele depuis le thread audio, comme le reste : tout passe par la
+        file d evenements, Tkinter n etant pilotable que par son thread.
+        """
+        self.evenements.put(("statut", ("reflexion", texte)))
+
     def _personnalisation_changee(self) -> None:
         """
         Un reglage vient de changer sous nos pieds.
@@ -1473,6 +1493,7 @@ class AlmaApp:
                     continue
                 from core import text_utils
 
+                self.assistant.bruit("veille")
                 reponse = wake.accuse_fin(text_utils.detect_language(
                     text_utils.normalize(texte)))
                 self.assistant.oublier_contexte()
@@ -1485,6 +1506,7 @@ class AlmaApp:
                 continue
 
             if analyse.etat == wake.REVEIL_SEUL:
+                self.assistant.bruit("reveil")
                 reponse = wake.accuse_reception()
                 self.evenements.put(("journal", ("Vous", texte)))
                 self.evenements.put(("journal", (self.nom, reponse)))
@@ -1494,6 +1516,8 @@ class AlmaApp:
                     self.assistant.tts.say(reponse, cacher=True)
                 continue
 
+            if analyse.mot_appel_detecte:
+                self.assistant.bruit("reveil")
             commande = analyse.commande
             self.evenements.put(("journal", ("Vous", commande)))
             self.evenements.put(("statut", ("reflexion", "")))

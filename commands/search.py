@@ -156,6 +156,7 @@ def _wikipedia_summary_legacy(query: str, lang: str = "fr") -> str:
     examples=["cherche Alan Turing sur Wikipedia", "qui est Marie Curie",
               "who is Marie Curie"],
     priority=90,
+    attente="recherche",
 )
 def search_wikipedia(ctx: CommandContext) -> Response:
     """Recupere un résumé Wikipedia et l affiche (et le lit en mode voix)."""

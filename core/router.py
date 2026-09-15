@@ -105,6 +105,10 @@ class Router:
         ctx = CommandContext(
             utterance, assistant, match=resolution.match, command=resolution.command
         )
+        # L annonce part AVANT le travail, sans le bloquer : c est tout son
+        # interet. Dite apres, elle arriverait avec la reponse.
+        if resolution.command.attente and assistant is not None:
+            assistant.annoncer_attente(resolution.command.attente, utterance.lang)
         try:
             result = resolution.command.handler(ctx)
         except Exception as exc:

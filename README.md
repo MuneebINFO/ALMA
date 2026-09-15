@@ -237,6 +237,22 @@ same list: there is only one set of questions in the code.
 
 Everything chosen there is changed later by asking, and so is everything else:
 
+### Knowing your request went through
+
+Two kinds of silence, two kinds of feedback.
+
+**Anything slow says so first.** Asking a question that falls through to a web
+search, waiting on the Claude app, looking up Wikipedia or the weather, hunting
+for a film on a streaming site — ALMA says *"je cherche"* / *"looking it up"*
+**before** starting, not instead of answering. Everything else stays quiet:
+announcing a reply that arrives instantly is just noise.
+
+**Anything done without a word makes a sound.** A successful action is not read
+out loud — commenting it would waste your time and talk over what you are
+looking at — so four short chimes mark what speech does not: waking, going back
+to sleep, an action done, a failure. Say *"coupe les bruitages"* /
+*"turn off the sound effects"* to silence them.
+
 ### Personalization — what ALMA remembers about you
 
 Everything below is said in one sentence, in either language, and **survives a
@@ -251,6 +267,7 @@ the comments in the one you wrote by hand.
 | **Your name** | *appelle-moi Muneeb* | *call me Muneeb* |
 | **The language** | *parle-moi en anglais* | *switch to English* |
 | **Speak or stay quiet** | *ne parle plus* / *parle à voix haute* | *stop talking* / *speak out loud* |
+| **Sound effects** | *coupe les bruitages* | *turn off the sound effects* |
 | **Its voice** | *prends une voix d'homme* | *use a female voice* |
 | **Its pace** | *parle plus vite* / *moins vite* | *speak faster* / *slower* |
 | **Confirmations** | *ne me demande plus confirmation* | *always ask for confirmation* |

@@ -977,6 +977,13 @@
         "oublie mes préférences",
         "remets les réglages par défaut"
       ]
+    },
+    {
+      "action": "Activer ou couper les bruitages",
+      "phrases": [
+        "coupe les bruitages",
+        "remets les bruitages"
+      ]
     }
   ]
 }

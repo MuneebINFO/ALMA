@@ -164,6 +164,7 @@ def _forecast(latitude: float, longitude: float, timeout: int = 8):
     examples=["quel temps fait-il a Bruxelles", "météo Paris",
               "what's the weather in London"],
     priority=90,
+    attente="recherche",
 )
 def weather(ctx: CommandContext) -> Response:
     """
