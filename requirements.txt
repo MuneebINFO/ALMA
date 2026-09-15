@@ -12,3 +12,8 @@ winsdk>=1.0            # sessions media Windows : pause par application/ecran
 pycaw>=20240210        # controle du volume Windows
 comtypes>=1.2          # dependance de pycaw
 screen-brightness-control>=0.22   # luminosite de l ecran
+
+# Edition complete uniquement. Le paquet est installe dans tous les cas, mais
+# il n est importe que si l utilisateur a pose une cle d API : sans cle, aucun
+# appel n est possible et le module n est jamais charge (voir core/edition.py).
+anthropic>=1.6         # l API Claude, pour l edition complete

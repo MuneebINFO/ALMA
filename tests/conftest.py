@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import sys
 from pathlib import Path
 
@@ -107,6 +108,21 @@ def aucune_trace_sur_la_machine(monkeypatch):
 
     monkeypatch.setattr(Bruitages, "jouer", lambda self, nom: False)
 
+    # -- le COFFRE ----------------------------------------------------------
+    # Le garde-fou le plus important de ce fichier. `secrets.lire` ouvre le
+    # VRAI coffre de qui lance la suite : si sa cle d API s y trouve, Alma
+    # bascule en edition complete au milieu des tests et se met a passer de
+    # vrais appels FACTURES, sur des phrases de test.
+    #
+    # Coffre vide par defaut, donc, et ecriture neutralisee. Un test qui veut
+    # l edition complete pose sa propre doublure par-dessus -- et celui-la ne
+    # doit toujours appeler aucun reseau : c est le provider qu il remplace.
+    from core import secrets
+
+    monkeypatch.setattr(secrets, "lire", lambda nom, config=None: "")
+    monkeypatch.setattr(secrets, "poser", lambda nom, valeur, config=None: True)
+    monkeypatch.setattr(secrets, "oublier", lambda nom, config=None: True)
+
     # -- la CAMERA ----------------------------------------------------------
     # Regle 4 ET regle 5 a la fois. `capturer` allume vraiment la camera : un
     # temoin qui s illumine pendant que la suite tourne, et une photo ecrite
@@ -185,7 +201,34 @@ def config_de_test(path=None):
 
 @pytest.fixture(scope="session")
 def config():
+    """
+    Construite UNE fois : la relire a chaque test couterait plusieurs secondes
+    sur la suite entiere. `config_rendue_intacte` la remet d aplomb ensuite.
+    """
     return config_de_test()
+
+
+@pytest.fixture(autouse=True)
+def config_rendue_intacte(config):
+    """
+    La configuration partagee est rendue a son etat d origine apres CHAQUE test.
+
+    Elle est partagee pour la vitesse -- et c etait un piege. Un test qui
+    ecrivait « ai_fallback.enabled: true » le laissait derriere lui, et les
+    tests d Ollama, qui verifient justement qu aucun appel ne part quand c est
+    eteint, tombaient ou non selon l ORDRE d execution. Un echec qui
+    n apparait qu en suite complete, et pas en isolant le test, est le plus
+    couteux de tous a comprendre.
+
+    Elle ne peut pas simplement devenir propre a chaque test : `router` est de
+    portee session et en depend. D ou cet instantane, pris sur `data` seul --
+    c est tout l etat mutable.
+    """
+    avant = copy.deepcopy(config.data)
+    try:
+        yield
+    finally:
+        config.data = avant
 
 
 @pytest.fixture(scope="session")

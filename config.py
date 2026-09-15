@@ -49,6 +49,21 @@ DEFAULTS: dict = {
         "assistant_name": "ALMA",
         "user_name": "",
         "language": "fr",
+        # --- l edition : ce qu Alma a le droit de faire -----------------------
+        #
+        #   « libre »    : de l automatisation, et rien d autre. Les commandes
+        #                  declarees, la memoire du contexte, les sources
+        #                  locales (Wikipedia, calculs, meteo). Aucun modele,
+        #                  aucun appel facturable, aucune cle. C est complet en
+        #                  soi : rien n y est bride, c est un autre produit.
+        #   « complete » : tout cela, PLUS un agent quand la demande depasse
+        #                  les commandes -- question ouverte, analyse d image.
+        #                  Suppose une cle d API que l utilisateur fournit, et
+        #                  rangee chiffree (voir core/secrets.py).
+        #
+        # Livre en « libre », et cela ne bascule jamais tout seul : sans cle
+        # posee par l utilisateur, « complete » retombe en « libre ».
+        "edition": "libre",
         # --- mot d appel -----------------------------------------------------
         # Le nom prononce pour reveiller l assistant. Changer cette seule
         # valeur suffit a le renommer : aucun code a modifier.
@@ -129,6 +144,10 @@ DEFAULTS: dict = {
         # et le dossier d installation n est pas toujours accessible en
         # ecriture une fois l application installee depuis le Store.
         "photos": "%USERPROFILE%/Pictures/ALMA",
+        # Le coffre : la cle d API, chiffree par Windows. A part des
+        # preferences exprès -- on sauvegarde volontiers un fichier de
+        # reglages, beaucoup moins volontiers une cle facturable.
+        "secrets": "data/secrets.json",
         "music": "",
         # Ce qu Alma a retenu de vous (voir core/preferences.py). Ecrit par
         # les commandes de personnalisation, pas a la main.
@@ -171,13 +190,15 @@ DEFAULTS: dict = {
             "modele": "qwen2.5:3b",
             "timeout_seconds": 30,
         },
-        "gemini": {
-            # Aucune cle, aucun compte : Alma pose la question au MODE IA de
-            # Google, dans une fenetre qu elle reduit aussitot, la lit, et la
-            # referme. Pas gemini.google.com : celui-la ne repond que fenetre
-            # au premier plan. Ce delai couvre le chargement de la page ET
-            # l ecriture de la reponse, qui arrive apres le reste.
-            "timeout_seconds": 20,
+        # L edition complete. Ce bloc ne sert a rien tant qu aucune cle n est
+        # posee dans le coffre : le provider ne se construit meme pas.
+        "claude_api": {
+            # Opus 5 : le plus capable, et la qualite des reponses est ce que
+            # l edition complete vend. « claude-sonnet-5 » repond environ deux
+            # fois plus vite pour moitie moins cher -- a essayer si l attente
+            # gene plus que la justesse.
+            "modele": "claude-opus-5",
+            "timeout_seconds": 30,
         },
         "claude_code": {
             # Binaire du CLI Claude Code (doit etre dans le PATH).

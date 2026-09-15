@@ -56,7 +56,7 @@ def _chemin_chrome(config) -> str:
 
     C est le seul navigateur qu on sait lancer depuis zero avec une adresse
     ET forcer dans une fenetre neuve (--new-window) -- c est deja ce que fait
-    le mode IA de Google (core/providers/gemini_provider.py).
+    le mode IA de Google.
     """
     import os
     import shutil

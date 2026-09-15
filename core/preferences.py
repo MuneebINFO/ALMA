@@ -63,6 +63,11 @@ CATALOGUE = (
             "my name, as I hear it", visible=False),
     Reglage("general.setup_done", "la configuration initiale",
             "the initial setup", visible=False),
+    # L edition suit la cle : elle est posee quand une cle valide arrive, et
+    # retiree quand elle s en va. Invisible dans la liste des reglages parce
+    # qu on ne la choisit pas comme on choisit une voix -- on fournit une cle,
+    # ou on n en fournit pas.
+    Reglage("general.edition", "l'édition", "the edition", visible=False),
     # -- langue et voix ------------------------------------------------------
     Reglage("general.language", "la langue", "the language"),
     Reglage("voice.stt_language", "la langue que j'écoute", "the language I listen for",

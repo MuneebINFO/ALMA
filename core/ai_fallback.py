@@ -11,9 +11,6 @@ IA n existe dans le projet :
   - ollama : un modele de langage qui tourne SUR LA MACHINE. Aucun compte,
     aucune cle, rien qui sorte de l ordinateur. Il REPOND seulement -- il
     n execute aucune action, le corps d Alma reste le moteur de regles ;
-  - gemini : la question part a Google Gemini, en arriere-plan, et la reponse
-    est dite comme si Alma repondait. Rien ne s ouvre a l ecran. Demande une
-    cle gratuite, lue dans l environnement et jamais ecrite ;
   - claude_code : delegation au CLI Claude Code deja installe.
 
 Pour l activer, dans config.yaml :
@@ -26,11 +23,14 @@ Pour l activer, dans config.yaml :
 
 from __future__ import annotations
 
+import logging
 import random
 
 from core import text_utils
 from core.context import Response, Utterance
 from core.providers import AIProvider  # interface partagee par tous les providers
+
+log = logging.getLogger(__name__)
 
 # Reponses quand rien n est compris : courtes et sans renvoi vers l aide.
 # Une phrase longue coupe le rythme et n apprend rien a qui utilise
@@ -66,6 +66,13 @@ def _ollama_factory(config):
     return OllamaProvider(config)
 
 
+def _claude_api_factory(config):
+    """Import paresseux : le module n est charge que si le provider est demande."""
+    from core.providers.claude_api_provider import ClaudeApiProvider
+
+    return ClaudeApiProvider(config)
+
+
 def _claude_code_factory(config):
     """Import paresseux : le module n est charge que si le provider est demande."""
     from core.providers.claude_code_provider import ClaudeCodeProvider
@@ -73,19 +80,12 @@ def _claude_code_factory(config):
     return ClaudeCodeProvider(config)
 
 
-def _gemini_factory(config):
-    """Import paresseux : le module n est charge que si le provider est demande."""
-    from core.providers.gemini_provider import GeminiProvider
-
-    return GeminiProvider(config)
-
-
 # Registre des providers. Pour en ajouter un : creer un module dans
 # core/providers/ puis ajouter une entree ici. Rien d autre ne change.
 PROVIDERS = {
     "none": lambda config: NullProvider(),
     "ollama": _ollama_factory,
-    "gemini": _gemini_factory,
+    "claude_api": _claude_api_factory,
     "claude_code": _claude_code_factory,
 }
 
@@ -97,6 +97,20 @@ def get_provider(config) -> AIProvider:
     Renvoie NullProvider des que le fallback est desactive : c est ce qui
     garantit qu aucun appel externe ne part tant que enabled vaut false.
     """
+    # L EDITION D ABORD. Une cle posee par l utilisateur vaut activation : on
+    # ne va pas lui demander de cocher en plus une case dans un fichier qu il
+    # n ouvrira jamais. `ai_fallback` reste en dessous -- c est l echappatoire
+    # des utilisateurs avances (un modele local, le CLI Claude Code), pas le
+    # produit.
+    from core import edition
+
+    if edition.est_complete(config):
+        try:
+            return _claude_api_factory(config)
+        except Exception as exc:
+            log.warning("Édition complète indisponible : %s", exc)
+            return NullProvider()
+
     if not config or not config.get("ai_fallback.enabled", False):
         return NullProvider()
     name = str(config.get("ai_fallback.provider", "none") or "none").lower()
@@ -145,8 +159,18 @@ def handle_unmatched(utterance: Utterance, assistant=None) -> Response:
         if deduit is not None:
             return deduit
 
+    langue = getattr(utterance, "lang", "fr")
+
     if not delegation_automatique(config, utterance.raw):
-        langue = getattr(utterance, "lang", "fr")
+        # Une QUESTION restee sans reponse en edition libre n est pas un
+        # malentendu : Alma a tres bien compris, elle ne fait simplement pas
+        # ca. Lui repondre « je n ai pas compris » serait faux, et laisserait
+        # croire a un defaut de reconnaissance vocale -- on cherche alors un
+        # probleme la ou il n y en a pas.
+        from core import deduction, edition
+
+        if not edition.est_complete(config) and deduction.est_une_question(utterance.raw):
+            return Response(text=edition.hors_portee(langue), ok=False)
         return Response(
             text=random.choice(SUGGESTIONS_EN if langue == "en" else SUGGESTIONS),
             ok=False,
@@ -162,7 +186,8 @@ def handle_unmatched(utterance: Utterance, assistant=None) -> Response:
     # commande : l annonce se fait donc ici.
     if assistant is not None and not isinstance(provider, NullProvider):
         try:
-            assistant.annoncer_attente("recherche", getattr(utterance, "lang", "fr"))
+            genre = "reflexion" if provider.name == "claude_api" else "recherche"
+            assistant.annoncer_attente(genre, langue)
         except Exception:                     # pragma: no cover - defensif
             pass
     reponse = handle_with_ai(utterance.raw, config, provider)
@@ -190,6 +215,16 @@ def delegation_automatique(config, texte: str = "") -> bool:
         (« demande a Claude Code de... ») ;
       - « tout » : toute phrase sans commande est rattrapee.
     """
+    from core import edition
+
+    # En edition complete, l agent rattrape TOUT ce que le routeur a laisse
+    # passer -- pas seulement les questions. Une action mal formulee est
+    # justement ce qu il sait rattraper : lui, il comprend « tu peux allumer
+    # le truc pour me voir » et appelle la bonne commande. C est la difference
+    # qu on vend, et la brider ici la supprimerait.
+    if edition.est_complete(config):
+        return True
+
     if not config or not config.get("ai_fallback.enabled", False):
         return False
     reglage = str(config.get("ai_fallback.auto", AUTO_PAR_DEFAUT)

@@ -299,17 +299,7 @@ def verifier_ia(config) -> None:
         "jamais": "Rien ne part sans qu'on le demande",
         "tout": "Toute phrase sans commande part au provider"}.get(
             auto, "Réglage « " + auto + " » inconnu : rien ne partira"))
-    if provider == "gemini":
-        from core.providers.gemini_provider import GeminiProvider
-
-        moteur = GeminiProvider(config)
-        souci = moteur.diagnostic()
-        if souci:
-            manque(souci)
-        else:
-            ok("Mode IA de Google, lu dans le navigateur (aucune clé)")
-            note("La fenêtre est réduite puis refermée : rien ne reste à l'écran")
-    elif provider == "ollama":
+    if provider == "ollama":
         from core.providers.ollama_provider import OllamaProvider
 
         souci = OllamaProvider(config).diagnostic()

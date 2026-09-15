@@ -389,6 +389,20 @@ DEBUTS_INTERROGATIFS = (
     "sais tu", "connais tu", "dis moi", "explique", "expliques", "explique moi",
     "raconte", "racontes", "raconte moi", "parle moi", "resume", "resumes",
     "definis", "definition", "traduis moi",
+    # Anglais (regle 1). La liste est restee francaise longtemps sans que cela
+    # se voie : elle ne servait qu au reglage avance « auto: questions ». Elle
+    # decide maintenant de la frontiere entre les deux editions, et un
+    # anglophone s y serait entendu repondre « I didn t catch that » la ou une
+    # explication etait due.
+    "who", "what", "whats", "which", "why", "when", "where", "how", "whose",
+    "is", "are", "was", "were", "do", "does", "did", "should", "tell me",
+    "explain", "describe", "define", "summarize", "summarise", "translate",
+    "what s", "how s", "who s", "where s",
+    # « peux-tu » et « can you » ouvrent le plus souvent une ACTION (« can you
+    # open Chrome »), pas une question : on ne les prend qu accompagnes d un
+    # verbe de parole, exactement comme « peux tu me dire ».
+    "can you tell me", "can you explain", "could you tell me",
+    "do you know", "can you describe",
 )
 
 # Les memes mots existent au milieu d une phrase sans en faire une question :
@@ -397,6 +411,10 @@ DEBUTS_INTERROGATIFS = (
 TOURNURES_INTERROGATIVES = (
     "est ce que", "est ce qu", "qu est ce que", "qu est ce qu", "c est quoi",
     "ca veut dire quoi", "veut dire quoi", "ca sert a quoi",
+    # L apostrophe devient une espace a la normalisation : « what's » arrive
+    # ici sous la forme « what s ».
+    "what is", "what s", "what does", "what are",
+    "how do i", "how does", "how much", "how many",
 )
 
 

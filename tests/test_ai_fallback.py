@@ -156,9 +156,86 @@ def test_sans_provider_l_incomprehension_reste_un_echec(assistant):
     assert reponse.text in SUGGESTIONS
 
 
-def test_aucune_cle_api_dans_la_configuration(config):
-    """Alma ne gere aucune cle : Claude Code s authentifie lui-meme."""
+# --------------------------------------------------------------------------
+# La promesse, telle qu'elle est aujourd'hui
+# --------------------------------------------------------------------------
+# Elle a CHANGÉ D'ÉNONCÉ le jour où l'édition complète est apparue, et il faut
+# le dire franchement : longtemps, ces tests vérifiaient qu'aucune clé d'API
+# n'existait nulle part. Ce n'est plus vrai — l'édition complète en demande
+# une.
+#
+# Ce qui n'a pas changé, c'est ce que la promesse PROTÈGE : un utilisateur qui
+# n'a rien fourni ne doit voir partir aucune donnée, et ne rien payer. Les
+# tests ci-dessous disent donc la version exacte de cette promesse :
+#
+#   1. ce qui est livré est « libre » — rien ne sort tant que l'utilisateur
+#      n'a pas posé lui-même une clé ;
+#   2. aucune clé n'est jamais lue dans l'ENVIRONNEMENT : Alma ne se sert que
+#      de ce qu'on lui a explicitement confié ;
+#   3. aucune clé ne s'écrit en clair, ni en configuration ni en préférences ;
+#   4. la liste des canaux vers un modèle reste close.
+
+def test_ce_qui_est_livre_est_l_edition_libre():
+    """La valeur par défaut, avant toute personnalisation."""
+    from config import DEFAULTS
+
+    assert DEFAULTS["general"]["edition"] == "libre"
+    assert DEFAULTS["ai_fallback"]["enabled"] is False
+
+
+def test_sans_cle_rien_ne_part(config):
+    """
+    Le cœur de la promesse : pas de clé, pas de provider, donc pas d'appel.
+
+    Le fixture `aucune_trace_sur_la_machine` rend le coffre vide, ce qui est
+    exactement la situation d'une installation neuve.
+    """
+    from core import edition
+
+    assert edition.est_complete(config) is False
+    assert isinstance(get_provider(config), NullProvider)
+
+
+def test_une_edition_complete_annoncee_sans_cle_retombe_en_libre(config):
+    """
+    Le réglage seul ne suffit pas. Sinon une configuration copiée d'une
+    machine à l'autre ferait croire à Alma qu'elle peut appeler, et chaque
+    demande finirait en erreur au lieu de retomber sur ce qui marche.
+    """
+    from core import edition
+
+    config.set("general.edition", "complete")
+
+    assert edition.souhaitee(config) == "complete"
+    assert edition.active(config) == "libre"
+    assert isinstance(get_provider(config), NullProvider)
+
+
+def test_aucune_cle_n_est_lue_dans_l_environnement(monkeypatch, config):
+    """
+    Alma ne se sert QUE de ce qu'on lui a confié. Une clé qui traîne dans
+    l'environnement — celle d'un autre outil, celle d'un développeur — ne doit
+    pas la faire basculer en édition complète à l'insu de son propriétaire.
+    """
+    from core import edition
+
+    for variable in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
+                     "CLAUDE_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.setenv(variable, "sk-ant-ceci-ne-doit-pas-etre-lu")
+
+    assert edition.cle(config) == ""
+    assert edition.est_complete(config) is False
+
+
+def test_aucune_cle_ne_s_ecrit_en_clair(config):
+    """
+    Ni dans la configuration, ni dans les préférences. Le coffre est le seul
+    endroit, et il chiffre (voir core/secrets.py).
+    """
+    from core.preferences import CATALOGUE
+
     assert "api_key" not in (config.get("ai_fallback") or {})
+    assert not any("key" in reglage.chemin.lower() for reglage in CATALOGUE),         "une clé ne se range pas dans les préférences : elles s'écrivent en clair"
 
 
 def test_la_liste_des_providers_est_close():
@@ -166,7 +243,7 @@ def test_la_liste_des_providers_est_close():
     Aucun canal IA ne doit apparaître sans être déclaré ici. La liste est
     volontairement courte, et chacun de ses membres est vérifié ci-dessous.
     """
-    assert set(PROVIDERS) == {"none", "ollama", "gemini", "claude_code"}
+    assert set(PROVIDERS) == {"none", "ollama", "claude_api", "claude_code"}
 
 
 def test_aucun_provider_ne_sort_de_la_machine(config):
