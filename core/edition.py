@@ -105,3 +105,17 @@ HORS_PORTEE_EN = ("I don't answer questions — I automate things. "
 def hors_portee(langue: str = "fr") -> str:
     """La phrase dite quand la demande releve de l edition complete."""
     return HORS_PORTEE_EN if langue == "en" else HORS_PORTEE_FR
+
+
+# Regarder une image n est pas repondre a une question : il faut le dire
+# autrement, sinon Alma repondrait « je ne reponds pas aux questions » a
+# quelqu un qui n en a pose aucune.
+SANS_REGARD_FR = ("Je sais prendre la photo, mais pas la regarder. "
+                  "Il faudrait l'édition complète pour ça.")
+SANS_REGARD_EN = ("I can take the photo, but not look at it. "
+                  "That would need the complete edition.")
+
+
+def sans_regard(langue: str = "fr") -> str:
+    """La phrase dite quand on demande a Alma libre d analyser une image."""
+    return SANS_REGARD_EN if langue == "en" else SANS_REGARD_FR

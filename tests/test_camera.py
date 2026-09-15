@@ -123,3 +123,151 @@ def test_faute_de_mieux_on_prend_la_virtuelle():
 
 def test_sans_aucun_appareil_on_ne_rend_rien():
     assert camera.choisir([]) == ("", "")
+
+
+# --------------------------------------------------------------------------
+# Regarder : la frontière entre les deux éditions passe ici
+# --------------------------------------------------------------------------
+@pytest.fixture
+def edition_complete(assistant, monkeypatch):
+    """
+    Une machine où l'utilisateur a posé sa clé, avec un modèle factice.
+
+    C'est `assistant.config` qu'il faut régler, pas le fixture `config` :
+    l'assistant de test construit volontairement la sienne, isolée, pour
+    qu'un test qui renomme Alma ne renomme pas celle de qui lance la suite.
+    """
+    from core import ai_fallback, secrets
+
+    monkeypatch.setattr(secrets, "lire",
+                        lambda nom, cfg=None: "sk-ant-fausse-cle")
+    assistant.config.set("general.edition", "complete")
+
+    vues = []
+
+    class ModeleFactice:
+        name = "claude_api"
+
+        def generate(self, query, langue="fr"):
+            return "réponse"
+
+        def analyser_image(self, image, question, langue="fr"):
+            vues.append((image, question, langue))
+            return "Une tasse à café bleue."
+
+    monkeypatch.setattr(ai_fallback, "get_provider", lambda cfg: ModeleFactice())
+    return vues
+
+
+@pytest.mark.parametrize("phrase", [
+    "analyse ce que j'ai dans la main",
+    "regarde ce que j'ai dans la main",
+    "qu'est-ce que je tiens",
+    "what am I holding",
+    "what's in my hand",
+])
+def test_ces_phrases_analysent_la_main(router, phrase):
+    assert route(router, phrase) == "camera_analyser_main", phrase
+
+
+@pytest.mark.parametrize("phrase", [
+    "qu'est-ce que tu vois",
+    "regarde avec la caméra",
+    "what do you see",
+])
+def test_ces_phrases_decrivent_la_scene(router, phrase):
+    assert route(router, phrase) == "camera_decrire", phrase
+
+
+def test_en_edition_libre_alma_le_dit_sans_rien_envoyer(assistant, monkeypatch):
+    """
+    La photo n'est même PAS prise : inutile d'allumer la caméra pour une
+    analyse qu'on ne peut pas faire. Et la phrase dite n'est pas « je n'ai
+    pas compris » — Alma a très bien compris.
+    """
+    from core import edition
+
+    prises = []
+    monkeypatch.setattr(camera, "capturer",
+                        lambda identifiant="": prises.append(1) or b"jpeg")
+
+    reponse = assistant.handle("analyse ce que j'ai dans la main")
+
+    assert not reponse.ok
+    assert reponse.text == edition.SANS_REGARD_FR
+    assert prises == [], "la caméra a été allumée pour rien"
+
+
+def test_en_edition_libre_en_anglais_aussi(assistant):
+    from core import edition
+
+    reponse = assistant.handle("what am I holding")
+
+    assert reponse.text == edition.SANS_REGARD_EN
+
+
+def test_en_edition_complete_l_image_part_entiere(assistant, edition_complete):
+    """
+    Sans recadrage : un modèle de vision retrouve une main tout seul, et
+    détourer aurait coûté 180 Mo de dépendances pour une fraction de centime.
+    """
+    reponse = assistant.handle("analyse ce que j'ai dans la main")
+
+    assert reponse.ok, reponse.text
+    assert reponse.text == "Une tasse à café bleue."
+    assert len(edition_complete) == 1
+    image, question, langue = edition_complete[0]
+    assert image == b"jpeg-de-test", "l'image envoyée n'est pas celle de la caméra"
+    assert "main" in question
+    assert langue == "fr"
+
+
+def test_la_question_posee_au_modele_suit_la_langue(assistant, edition_complete):
+    assistant.handle("what am I holding")
+
+    _image, question, langue = edition_complete[0]
+    assert langue == "en"
+    assert "hand" in question and "main" not in question
+
+
+def test_decrire_et_analyser_ne_posent_pas_la_meme_question(assistant,
+                                                            edition_complete):
+    assistant.handle("analyse ce que j'ai dans la main")
+    assistant.handle("qu'est-ce que tu vois")
+
+    main = edition_complete[0][1]
+    scene = edition_complete[1][1]
+    assert main != scene
+    assert "main" in main and "main" not in scene
+
+
+def test_une_camera_muette_ne_fait_rien_partir(assistant, edition_complete,
+                                               monkeypatch):
+    """Pas d'image, pas d'appel : on ne paie pas pour envoyer du vide."""
+    monkeypatch.setattr(camera, "capturer", lambda identifiant="": b"")
+
+    reponse = assistant.handle("analyse ce que j'ai dans la main")
+
+    assert not reponse.ok
+    assert edition_complete == [], "un appel est parti sans image"
+
+
+def test_un_modele_en_panne_le_dit(assistant, monkeypatch):
+    """Une erreur réseau doit s'entendre, pas remonter en exception."""
+    from core import ai_fallback, secrets
+
+    monkeypatch.setattr(secrets, "lire", lambda nom, cfg=None: "sk-ant-fausse-cle")
+    assistant.config.set("general.edition", "complete")
+
+    class ModeleEnPanne:
+        name = "claude_api"
+
+        def analyser_image(self, image, question, langue="fr"):
+            raise RuntimeError("connexion refusée")
+
+    monkeypatch.setattr(ai_fallback, "get_provider", lambda cfg: ModeleEnPanne())
+
+    reponse = assistant.handle("analyse ce que j'ai dans la main")
+
+    assert not reponse.ok
+    assert "connexion refusée" in reponse.text

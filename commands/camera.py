@@ -1,10 +1,10 @@
 """
 Commandes de la camera.
 
-Ce fichier ne contient que ce qui releve de l AUTOMATISATION : allumer la
-camera, prendre une image, la ranger. Comprendre ce qu il y a dessus est un
-travail de modele, il vit ailleurs -- ici on se contente d appuyer sur le
-declencheur.
+PRENDRE une image releve de l automatisation, et c est gratuit. LA REGARDER
+demande un modele, et c est l edition complete (voir core/edition.py). Les
+deux vivent ici parce qu elles partagent la meme camera, mais la frontiere
+passe au milieu du fichier et elle est dite a chaque fois.
 
 Deux facons d avoir une image a l ecran, et elles ne servent pas a la meme
 chose :
@@ -21,11 +21,14 @@ video. Mieux vaut l application du systeme, qui fait ca tres bien.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from core import camera
 from core.context import CommandContext, Response
 from core.registry import command
+
+log = logging.getLogger(__name__)
 
 
 def _camera_branchee(ctx: CommandContext) -> bool:
@@ -73,3 +76,114 @@ def camera_photo(ctx: CommandContext) -> Response:
 
     return ctx.reponse("Photo enregistrée : " + Path(detail).name,
                        "Photo saved: " + Path(detail).name)
+
+
+# --------------------------------------------------------------------------
+# Regarder -- edition complete
+# --------------------------------------------------------------------------
+# Les questions posees au modele. Courtes, et elles disent que la reponse
+# sera LUE : un modele a qui l on ne precise rien repond par un paragraphe,
+# et un paragraphe ne s ecoute pas.
+QUESTION_MAIN = {
+    "fr": "Que tient la personne dans sa main ? Réponds en une phrase, "
+          "en nommant l'objet aussi précisément que tu peux.",
+    "en": "What is the person holding in their hand? Answer in one sentence, "
+          "naming the object as precisely as you can.",
+}
+QUESTION_SCENE = {
+    "fr": "Décris ce que tu vois sur cette image, en une ou deux phrases.",
+    "en": "Describe what you see in this image, in one or two sentences.",
+}
+
+
+def _regarder(ctx: CommandContext, questions: dict) -> Response:
+    """
+    Prend une image et la fait decrire. Le fond commun des deux commandes.
+
+    L image part ENTIERE, sans recadrage. Un modele de vision retrouve tres
+    bien une main dans un cadre : detourer avant d envoyer aurait coute cent
+    quatre-vingts megaoctets de dependances pour economiser une fraction de
+    centime par photo.
+    """
+    from core import ai_fallback, edition
+
+    if not edition.est_complete(ctx.config):
+        return ctx.erreur(edition.SANS_REGARD_FR, edition.SANS_REGARD_EN)
+
+    image = camera.capturer()
+    if not image:
+        return ctx.erreur(
+            "Je n'arrive pas à utiliser la caméra. "
+            "Vérifiez qu'elle est autorisée dans les paramètres de confidentialité.",
+            "I can't use the camera. "
+            "Check that it's allowed in your privacy settings.",
+        )
+
+    provider = ai_fallback.get_provider(ctx.config)
+    regarder = getattr(provider, "analyser_image", None)
+    if regarder is None:
+        # Un provider qui ne sait pas voir -- un modele local, par exemple.
+        # La photo est prise, elle ne sera simplement pas decrite.
+        return ctx.erreur(edition.SANS_REGARD_FR, edition.SANS_REGARD_EN)
+
+    try:
+        vu = regarder(image, questions.get(ctx.lang, questions["fr"]), ctx.lang)
+    except Exception as exc:
+        log.warning("Analyse d'image impossible : %s", exc)
+        return ctx.erreur("Je n'ai pas réussi à analyser l'image : " + str(exc),
+                          "I couldn't analyse the image: " + str(exc))
+
+    if not vu:
+        return ctx.erreur("Je n'ai rien pu en dire.", "I couldn't make anything of it.")
+    return ctx.reponse(vu, vu)
+
+
+@command(
+    name="camera_analyser_main",
+    informatif=True,
+    patterns=[
+        r"(?:analyse|analyser|regarde|regarder|identifie|identifier)\s+"
+        r"(?:moi\s+)?(?:ce\s+|l\s+)?(?:que|objet)?\s*"
+        r"(?:j\s+ai|que\s+je\s+tiens|dans\s+ma\s+main)",
+        r"^(?:qu\s+est\s+ce\s+que|c\s+est\s+quoi)\s+"
+        r"(?:je\s+tiens|ce\s+que\s+je\s+tiens|l\s+objet\s+dans\s+ma\s+main)",
+        r"(?:what\s+am\s+i\s+holding|what\s+s?\s*(?:is\s+)?in\s+my\s+hand)",
+        r"(?:analyse|analyze|identify)\s+(?:what\s+)?(?:i\s+m\s+|i\s+am\s+)?"
+        r"(?:holding|in\s+my\s+hand)",
+    ],
+    keywords=[["analyse", "main"], ["regarde", "main"], ["tiens", "main"],
+              ["holding"], ["analyse", "hand"]],
+    category="Recherche",
+    description="Analyser l'objet tenu dans la main",
+    examples=["analyse ce que j'ai dans la main", "what am I holding"],
+    priority=94,
+    guard=_camera_branchee,
+    attente="analyse",
+)
+def camera_analyser_main(ctx: CommandContext) -> Response:
+    """Prend une photo et dit quel objet la personne tient."""
+    return _regarder(ctx, QUESTION_MAIN)
+
+
+@command(
+    name="camera_decrire",
+    informatif=True,
+    patterns=[
+        r"^(?:qu\s+est\s+ce\s+que\s+tu\s+vois|que\s+vois\s+tu)"
+        r"(?:\s+(?:avec\s+)?(?:la\s+)?camera)?$",
+        r"(?:regarde|regarder)\s+(?:avec\s+)?(?:la\s+|ma\s+)?camera$",
+        r"^(?:what\s+do\s+you\s+see|what\s+can\s+you\s+see)"
+        r"(?:\s+(?:with\s+)?(?:the\s+)?camera)?$",
+        r"^look\s+(?:through\s+|with\s+)?(?:the\s+|my\s+)?camera$",
+    ],
+    keywords=[["vois", "camera"], ["see", "camera"]],
+    category="Recherche",
+    description="Décrire ce que voit la caméra",
+    examples=["qu'est-ce que tu vois", "what do you see"],
+    priority=92,
+    guard=_camera_branchee,
+    attente="analyse",
+)
+def camera_decrire(ctx: CommandContext) -> Response:
+    """Prend une photo et décrit ce qui s y trouve."""
+    return _regarder(ctx, QUESTION_SCENE)

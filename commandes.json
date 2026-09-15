@@ -193,6 +193,21 @@
       ]
     },
     {
+      "action": "Analyser l'objet tenu dans la main",
+      "phrases": [
+        "analyse ce que j'ai dans la main",
+        "qu'est-ce que je tiens",
+        "what am I holding"
+      ]
+    },
+    {
+      "action": "Décrire ce que voit la caméra",
+      "phrases": [
+        "qu'est-ce que tu vois",
+        "what do you see"
+      ]
+    },
+    {
       "action": "Baisser le volume",
       "phrases": [
         "baisse le son",

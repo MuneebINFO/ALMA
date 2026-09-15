@@ -253,6 +253,12 @@ def assistant(tmp_path, config):
     # Les personnalisations aussi : un test qui renomme l'assistant ne doit
     # pas renommer celui de la personne qui lance la suite.
     test_config.set("paths.preferences", str(tmp_path / "preferences.json"))
+    # Et le coffre, et les photos. Les fonctions du coffre sont deja
+    # neutralisees plus haut ; ceci est la ceinture par-dessus les bretelles,
+    # pour qu un test qui remettrait les vraies ne puisse toujours pas
+    # atteindre la cle de qui lance la suite.
+    test_config.set("paths.secrets", str(tmp_path / "secrets.json"))
+    test_config.set("paths.photos", str(tmp_path / "photos"))
 
     class SilentTTS:
         """Double de test : meme interface que TextToSpeech, sans moteur reel."""

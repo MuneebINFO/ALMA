@@ -118,6 +118,8 @@ def test_seules_les_commandes_lentes_annoncent():
         "search_wikipedia",     # deux appels réseau
         "weather",              # géocodage puis prévisions
         "lancer_titre",         # chercher, lire les résultats, cliquer
+        "camera_analyser_main",  # la caméra s'allume, puis le modèle regarde
+        "camera_decrire",        # idem
     }, sorted(annoncent)
 
 
