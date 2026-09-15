@@ -304,3 +304,112 @@ def test_un_bruit_qui_dure_tient_le_seuil_en_haut(monkeypatch):
     ecouteur._appliquer_seuil(0.003)
     ecouteur.listen(timeout=8.0, phrase_limit=0.5)
     assert ecouteur.threshold > 0.004, "un bruit continu doit tenir le seuil au-dessus"
+
+
+# --------------------------------------------------------------------------
+# Le niveau envoyé à la reconnaissance
+# --------------------------------------------------------------------------
+# Symptôme : la bille bouge — le son EST là — mais rien ne revient. Beaucoup
+# de micros intégrés capturent très bas ; sur la machine de référence le bruit
+# de fond se mesure à 0,000015, cent fois moins que la normale. La voix suit,
+# et arrive au moteur trente décibels sous ce qu'il attend.
+def onde(fraction, n=4000):
+    """Une sinusoïde dont le pic vaut `fraction` de la pleine échelle."""
+    import array
+    import math
+
+    return array.array(
+        "h", [int(fraction * 32767 * math.sin(i / 12)) for i in range(n)]
+    ).tobytes()
+
+
+def pic(brut):
+    import array
+
+    echantillons = array.array("h")
+    echantillons.frombytes(brut)
+    return max(abs(v) for v in echantillons) / 32767 if echantillons else 0.0
+
+
+@pytest.mark.parametrize("depart", [0.01, 0.05, 0.2])
+def test_une_voix_trop_faible_est_remontee(depart):
+    apres = pic(stt.normaliser(onde(depart)))
+    assert apres > depart * 3, "une prise très basse doit être franchement remontée"
+    assert apres <= 0.71, "et jamais poussée jusqu'à la saturation"
+
+
+def test_une_prise_deja_correcte_n_est_pas_touchee():
+    """Retoucher ce qui va déjà bien ne peut qu'abîmer."""
+    avant = onde(0.9)
+    assert stt.normaliser(avant) == avant
+
+
+def test_le_silence_reste_le_silence():
+    """Multiplier du souffle par mille ne crée pas de la parole."""
+    import array
+
+    vide = array.array("h", [0] * 2000).tobytes()
+    assert stt.normaliser(vide) == vide
+    assert stt.normaliser(b"") == b""
+
+
+def test_le_gain_est_plafonne():
+    """Sinon un enregistrement quasi muet deviendrait un mur de souffle."""
+    assert pic(stt.normaliser(onde(0.001))) < 0.5
+
+
+def test_le_niveau_mesure_pour_declencher_n_est_pas_touche():
+    """
+    La normalisation ne concerne que ce qu'on ENVOIE. Le niveau qui décide du
+    déclenchement décrit la pièce : le gonfler fausserait le seuil.
+    """
+    import inspect
+
+    source = inspect.getsource(stt.LevelMeterListener.listen)
+    assert "normaliser" not in source
+
+
+# --------------------------------------------------------------------------
+# Le diagnostic de capture
+# --------------------------------------------------------------------------
+# Quand la reconnaissance ne rend rien alors que le niveau bougeait, la seule
+# façon de trancher est d'ÉCOUTER ce qui a été capté : une voix mal transcrite
+# et un flux corrompu donnent le même vu-mètre. Mais un enregistreur laissé
+# allumé serait un enregistreur de la voix de l'utilisateur, à son insu.
+def test_rien_n_est_enregistre_sans_qu_on_le_demande(tmp_path, monkeypatch):
+    monkeypatch.delenv("ALMA_DIAG_CAPTURE", raising=False)
+    stt._garder_la_prise(b"\x01\x02" * 1000)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_la_prise_est_conservee_quand_on_le_demande(tmp_path, monkeypatch):
+    import wave
+
+    monkeypatch.setenv("ALMA_DIAG_CAPTURE", str(tmp_path))
+    stt._garder_la_prise(b"\x01\x02" * 1000)
+
+    fichiers = list(tmp_path.glob("*.wav"))
+    assert len(fichiers) == 1
+    with wave.open(str(fichiers[0])) as f:
+        assert f.getframerate() == stt.SAMPLE_RATE
+        assert f.getnchannels() == 1
+
+
+def test_une_prise_vide_n_ecrit_rien(tmp_path, monkeypatch):
+    monkeypatch.setenv("ALMA_DIAG_CAPTURE", str(tmp_path))
+    stt._garder_la_prise(b"")
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_le_flux_retient_qui_l_a_ouvert(ecouteur):
+    """
+    PortAudio ne survit pas à une lecture depuis un autre thread que celui
+    qui a ouvert le flux — et il ne lève pas, il plante le processus. On ne
+    peut pas l'en empêcher depuis Python ; on peut rendre la faute visible.
+    """
+    import threading
+
+    ecouteur.flux()
+    assert ecouteur._proprietaire == threading.current_thread().name
+    ecouteur.fermer()
+    assert ecouteur._proprietaire is None

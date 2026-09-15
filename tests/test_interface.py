@@ -195,7 +195,9 @@ def test_l_orbe_se_clique():
 def test_la_barre_d_espace_rendort():
     bascule = source()
     debut = bascule.index("def _sur_touche(")
-    assert 'evenement.keysym == "space"' in bascule[debut:debut + 600]
+    # La fenêtre de recherche englobe désormais le commentaire qui raconte
+    # pourquoi ces raccourcis s'effacent devant un champ de saisie.
+    assert 'evenement.keysym == "space"' in bascule[debut:debut + 1800]
 
 
 def test_echap_sort_d_abord_du_plein_ecran():
@@ -284,3 +286,93 @@ def test_le_clic_ne_reveille_pas_un_micro_coupe():
     faux = application_factice(arme=False, micro=False)
     faux.basculer_veille()
     assert faux.moteur.arme is False
+
+
+# --------------------------------------------------------------------------
+# Les raccourcis d'une lettre, pendant qu'on écrit
+# --------------------------------------------------------------------------
+# La fenêtre n'a longtemps eu aucun champ de saisie : « M » pour le micro et
+# l'espace pour la veille étaient sans danger. Le panneau d'installation en a
+# introduit un — et taper « Muneeb » déclenchait le « m ». L'écoute continue
+# démarrait au milieu de l'installation, ouvrait le micro depuis SON thread,
+# et le service d'installation lisait ensuite ce flux-là : PortAudio rendait
+# des fragments (un tiers de seconde de voix puis du silence — de quoi animer
+# la bille et ne rien transcrire), puis plantait le processus.
+class FauxChamp:
+    """Un widget qui se fait passer pour un champ de saisie."""
+
+
+def application_qui_ecrit(ecrit):
+    import queue
+    import threading
+    import tkinter as tk
+
+    from gui import AlmaApp
+
+    faux = AlmaApp.__new__(AlmaApp)
+    faux.moteur = MoteurFactice(True)
+    faux.assistant = AssistantFactice()
+    faux.evenements = queue.Queue()
+    faux.ecoute_active = threading.Event()
+    faux.ecoute_active.set()
+    faux._champ = None
+    faux._cartes = []
+    faux._vise = 0
+    faux.aides = []
+    faux.micros = []
+    faux.montrer_aide = lambda: faux.aides.append(True)
+    faux.basculer_micro = lambda: faux.micros.append(True)
+    # `focus_get` est ce que l'application interroge pour savoir si le clavier
+    # appartient à un champ.
+    faux.root = type("Racine", (), {
+        "focus_get": lambda self: (tk.Entry if ecrit else None)
+    })()
+    if ecrit:
+        faux.root = type("Racine", (), {"focus_get": lambda self: _entree()})()
+    return faux
+
+
+def _entree():
+    """Une vraie instance d'Entry, sans racine : juste de quoi être reconnue."""
+    import tkinter as tk
+
+    objet = tk.Entry.__new__(tk.Entry)
+    return objet
+
+
+def touche(nom, char=""):
+    return type("Evenement", (), {"keysym": nom, "char": char})()
+
+
+def test_taper_un_m_ne_coupe_plus_le_micro():
+    """Le bug exact : « Muneeb » démarrait l'écoute continue sur le « m »."""
+    faux = application_qui_ecrit(ecrit=True)
+    faux._sur_touche(touche("m", "m"))
+    assert faux.micros == [], "écrire ne doit rien déclencher"
+
+
+def test_taper_une_espace_ne_rendort_plus():
+    faux = application_qui_ecrit(ecrit=True)
+    faux._sur_touche(touche("space", " "))
+    assert faux.moteur.arme is True, "une espace dans un prénom n'est pas un ordre"
+
+
+def test_hors_saisie_les_raccourcis_marchent_toujours():
+    """Le pendant : on ne casse pas ce qui servait."""
+    faux = application_qui_ecrit(ecrit=False)
+    faux._sur_touche(touche("m", "m"))
+    faux._sur_touche(touche("F1"))
+    assert faux.micros == [True]
+    assert faux.aides == [True]
+
+    faux.moteur.arme = True
+    faux._sur_touche(touche("space", " "))
+    assert faux.moteur.arme is False
+
+
+def test_les_fleches_du_panneau_laissent_ecrire():
+    """Sinon on ne pourrait pas déplacer le curseur dans le champ."""
+    faux = application_qui_ecrit(ecrit=True)
+    faux._cartes = [object(), object()]
+    faux._deplacer_visee(1)
+    assert faux._vise == 0, "la visée ne doit pas bouger pendant qu'on écrit"

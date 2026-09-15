@@ -10,6 +10,7 @@ emmène les suivantes avec elle, que chaque réponse est appliquée tout de
 suite ET retenue, et qu'au lancement suivant l'installation ne revient pas.
 """
 
+import queue
 import time
 
 import pytest
@@ -255,6 +256,15 @@ def panneau_factice(tk_root, assistant):
     faux._suite_installation = None
     faux._recevoir_entendu = None
     faux.boule = None
+    faux._champ = None
+    faux._cartes = []
+    faux._vise = 0
+    faux._cadre_question = None
+    faux._ecoute_installation = None
+    faux._prises_installation = 0
+    # La boucle d'écoute poste ses résultats ici : sans la file, le thread
+    # lève dans son coin et le test ne verrait qu'un avertissement.
+    faux.evenements = queue.Queue()
     # Un micro DÉCLARÉ indisponible, et non pas absent : `None` aurait fait
     # construire un vrai `SpeechToText`, donc ouvrir le micro de la machine.
     # Les étapes « dites-le à voix haute » se sautent alors d'elles-mêmes,
@@ -418,33 +428,92 @@ def test_les_etapes_d_ecoute_suivent_le_nom_qu_elles_confirment():
 
 
 def boutons(faux):
-    """Les libellés des boutons du panneau, à n'importe quelle profondeur."""
+    """
+    Les libellés des réponses possibles.
+
+    Ce ne sont plus des boutons Tk mais des `CarteChoix` — un Canvas, parce
+    que Tkinter ne sait ni arrondir ni animer un bouton. Le libellé vit donc
+    sur l'objet, pas dans une option de widget.
+    """
+    from gui import CarteChoix
+
     trouves = []
 
     def descendre(widget):
         for enfant in widget.winfo_children():
-            if enfant.winfo_class() == "Button":
-                trouves.append(enfant.cget("text"))
+            if isinstance(enfant, CarteChoix):
+                trouves.append(enfant.texte)
             descendre(enfant)
 
     descendre(faux.installation)
     return trouves
 
 
-def test_sans_micro_l_etape_ne_propose_pas_de_parler(tk_root, assistant):
-    """
-    Une machine sans entrée audio ne doit pas rester bloquée devant un bouton
-    « Parler » qui ne fera rien : il n'y a qu'à continuer.
-    """
+def test_sans_micro_l_etape_se_passe_simplement(tk_root, assistant):
+    """Une machine sans entrée audio ne doit pas rester bloquée dessus."""
     faux = panneau_factice(tk_root, assistant)
     faux.montrer_installation(lambda: None)
     faux._repondre("fr")
     faux._repondre("Muneeb")
 
     libelles = boutons(faux)
-    assert "Parler" not in libelles, libelles
     assert "Continuer" in libelles, libelles
     assert faux.boule is None, "pas de bille sans micro"
+    assert faux._ecoute_installation is None, "rien à écouter sans micro"
+
+
+def test_l_ecoute_demarre_seule(tk_root, assistant):
+    """
+    Demander de prononcer puis exiger un clic avant d'écouter, c'est rater la
+    première fois à tous les coups : à partir du moment où on demande de
+    parler, le micro tourne.
+    """
+    faux = panneau_factice(tk_root, assistant)
+    faux.stt = type("Micro", (), {
+        "available": True,
+        "preparer": lambda self: True,
+        "listen_live": lambda self, **k: "",
+    })()
+    faux.montrer_installation(lambda: None)
+    faux._repondre("fr")
+    faux._repondre("Muneeb")
+
+    assert faux._ecoute_installation is not None
+    assert faux._ecoute_installation.is_set(), "l'écoute doit déjà tourner"
+    assert "Parler" not in boutons(faux), "aucun bouton pour démarrer"
+    faux._ranger_question()
+
+
+def test_changer_de_question_arrete_l_ecoute(tk_root, assistant):
+    """Sinon le thread continuerait à parler à un panneau détruit."""
+    faux = panneau_factice(tk_root, assistant)
+    faux.stt = type("Micro", (), {
+        "available": True,
+        "preparer": lambda self: True,
+        "listen_live": lambda self, **k: "",
+    })()
+    faux.montrer_installation(lambda: None)
+    faux._repondre("fr")
+    faux._repondre("Muneeb")
+    drapeau = faux._ecoute_installation
+
+    faux._repondre("")           # on passe à la suite
+
+    assert drapeau.is_set() is False
+    assert faux._ecoute_installation is None
+
+
+def test_une_etape_deja_fermee_n_est_pas_ecoutee(tk_root, assistant):
+    """Le service se regarde avant chaque prise, pas seulement au départ."""
+    import threading
+
+    faux = panneau_factice(tk_root, assistant)
+    ordre = []
+    faux.stt = micro_factice(ordre)
+    faux._fin_ecoute = threading.Event()
+    drapeau = threading.Event()          # jamais levé : on s'arrête d'emblée
+    faux._ecouter_pour(drapeau)
+    assert "ecoute" not in ordre, ordre
 
 
 # --------------------------------------------------------------------------
@@ -480,38 +549,81 @@ def test_la_bille_survit_a_la_destruction_de_son_cadre(tk_root):
     assert boule._vivante is False
 
 
-def test_l_etape_ecoutee_montre_une_bille_et_calibre_avant(tk_root, assistant,
-                                                           monkeypatch):
-    """
-    Le bruit ambiant se mesure pendant qu'on lit la consigne. Le mesurer au
-    clic revenait à mesurer la voix qu'on venait de demander : le seuil montait
-    au plafond et le micro devenait sourd pour le reste de l'étape.
-    """
-    faux = panneau_factice(tk_root, assistant)
-    prepare = []
-    faux.stt = type("Micro", (), {
+def micro_factice(ordre=None, rendu=""):
+    """Un micro qui note ce qu'on lui demande, sans jamais toucher au vrai."""
+    trace = ordre if ordre is not None else []
+
+    return type("Micro", (), {
         "available": True,
-        "preparer": lambda self: prepare.append(True) or True,
-        "listen_live": lambda self, **k: "",
+        "preparer": lambda self: trace.append("calibre") or True,
+        "listen_live": lambda self, **k: trace.append("ecoute") or rendu,
+        "fermer": lambda self: trace.append("ferme"),
+        "derniere_raison": "",
     })()
 
-    faux.montrer_installation(lambda: None)
-    faux._repondre("fr")
-    faux._repondre("Muneeb")
 
-    assert faux.boule is not None, "la bille doit être là pour voir sa voix arriver"
-    assert "Parler" in boutons(faux)
-    for _ in range(40):          # le calibrage tourne dans un thread
-        if prepare:
-            break
-        tk_root.update()
-        time.sleep(0.01)
-    assert prepare == [True], "le silence doit être mesuré avant de parler"
+def test_le_silence_est_mesure_avant_la_premiere_ecoute(tk_root, assistant):
+    """
+    Le mesurer pendant reviendrait à mesurer la voix qu'on vient de demander :
+    le seuil monterait au plafond et le micro deviendrait sourd.
+    """
+    import threading
+
+    faux = panneau_factice(tk_root, assistant)
+    ordre = []
+    faux.stt = micro_factice(ordre)
+    faux._travaux_ecoute = queue.Queue()
+    faux._fin_ecoute = threading.Event()
+    faux.ECOUTES_MAXIMUM = 2
+
+    drapeau = threading.Event()
+    drapeau.set()
+    faux._travaux_ecoute.put(drapeau)
+    faux._travaux_ecoute.put(None)       # puis on demande l'arrêt
+    faux._service_ecoute()
+
+    assert ordre[0] == "calibre", ordre
+    assert "ecoute" in ordre, ordre
+
+
+def test_le_service_ferme_le_micro_en_partant(tk_root, assistant):
+    """
+    Ouvrir et fermer depuis le MEME thread, c'est toute la règle : PortAudio
+    ne survit pas à une lecture faite depuis un autre thread que celui qui a
+    ouvert le flux — et il ne lève pas, il plante le processus.
+    """
+    import threading
+
+    faux = panneau_factice(tk_root, assistant)
+    ordre = []
+    faux.stt = micro_factice(ordre)
+    faux._travaux_ecoute = queue.Queue()
+    faux._fin_ecoute = threading.Event()
+    faux._travaux_ecoute.put(None)
+    faux._service_ecoute()
+
+    assert ordre[-1] == "ferme", ordre
+
+
+def test_les_deux_etapes_partagent_le_meme_thread(tk_root, assistant):
+    """
+    Une étape = un thread, c'était deux threads lisant tour à tour le même
+    flux. Le second plantait l'application, sans trace Python.
+    """
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parent.parent / "gui.py").read_text(
+        encoding="utf-8")
+    etape = source[source.index("def _poser_question_ecoutee("):
+                   source.index("def _service_ecoute(")]
+    assert "threading.Thread" not in etape, (
+        "l'étape ne doit PAS lancer son propre thread d'écoute")
+    assert "_travaux_ecoute.put" in etape
 
 
 @pytest.mark.parametrize("pic,raison,attendu", [
-    # La voix est arrivée, mais aucun mot n'en est sorti : répéter.
-    (0.60, "incompris", "pas compris"),
+    # La voix est arrivée, mais rien n'en est revenu : recommencer.
+    (0.60, "incompris", "Encore une fois"),
     # Le micro n'a rien capté du tout : c'est le micro qu'il faut regarder.
     (0.02, "incompris", "rien entendu"),
     # Capté, mais le service n'a pas répondu : ni l'un ni l'autre.
@@ -546,8 +658,31 @@ def test_un_service_injoignable_ne_se_confond_pas_avec_un_micro_muet(tk_root,
     assert "connecté" in AlmaApp._pourquoi_rien(0.02, "injoignable", False)
 
 
-def test_ce_qui_est_entendu_est_montre_avant_d_etre_retenu(tk_root, assistant):
-    """On ne retient pas une transcription sans l'avoir fait voir."""
+def test_on_ne_dit_jamais_pas_compris():
+    """
+    Il n'y a RIEN à comprendre. On ne cherche pas le sens du nom — on l'a
+    déjà, il vient d'être tapé — mais la forme sous laquelle la
+    reconnaissance le rend. Dire « pas compris » ferait croire à l'utilisateur
+    qu'il a mal prononcé, alors qu'une transcription bizarre est exactement ce
+    qu'on cherche à retenir.
+    """
+    from gui import AlmaApp
+
+    for pic in (0.02, 0.60):
+        for raison in ("incompris", "injoignable", ""):
+            for anglais in (False, True):
+                message = AlmaApp._pourquoi_rien(pic, raison, anglais).lower()
+                assert "compris" not in message, message
+                assert "understood" not in message, message
+
+
+def test_la_forme_entendue_est_retenue_tout_de_suite_et_montree(tk_root,
+                                                                assistant):
+    """
+    Aucune réponse n'est « mauvaise » : une transcription bizarre est
+    précisément ce qu'on veut retenir. Donc pas d'étape de confirmation —
+    ce qui arrive est gardé, et montré pour qu'on le voie.
+    """
     faux = panneau_factice(tk_root, assistant)
     faux.stt = type("Micro", (), {
         "available": True,
@@ -558,10 +693,35 @@ def test_ce_qui_est_entendu_est_montre_avant_d_etre_retenu(tk_root, assistant):
     faux._repondre("fr")
     faux._repondre("Muneeb")
 
-    faux._recevoir_entendu(("Mounib", 0.7, ""))
+    faux._recevoir_entendu(("je m'appelle Mounib", 0.7, ""))
 
-    assert any("Mounib" in t for t in etiquettes(faux)), etiquettes(faux)
-    assert "C'est ça" in boutons(faux)
+    assert any("mounib" in t for t in etiquettes(faux)), etiquettes(faux)
+    assert "mounib" in assistant.config.get("general.user_name_variants")
+
+
+def test_plusieurs_prises_s_accumulent(tk_root, assistant):
+    """
+    La transcription varie d'une fois sur l'autre. Chaque forme différente
+    est une chance de plus d'être reconnu plus tard — on les garde toutes.
+    """
+    faux = panneau_factice(tk_root, assistant)
+    faux.stt = type("Micro", (), {
+        "available": True,
+        "preparer": lambda self: True,
+        "listen_live": lambda self, **k: "",
+    })()
+    faux.montrer_installation(lambda: None)
+    faux._repondre("fr")
+    faux._repondre("Muneeb")
+
+    faux._recevoir_entendu(("je m'appelle Mounib", 0.7, ""))
+    faux._recevoir_entendu(("je m'appelle Mon nid", 0.7, ""))
+    faux._recevoir_entendu(("je m'appelle Mounib", 0.7, ""))   # déjà connue
+
+    formes = assistant.config.get("general.user_name_variants")
+    assert formes == ["mounib", "mon nid"], formes
+    affiche = etiquettes(faux)
+    assert any("mounib" in t and "mon nid" in t for t in affiche), affiche
 
 
 # --------------------------------------------------------------------------

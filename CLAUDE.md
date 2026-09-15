@@ -150,6 +150,31 @@ les pièges déjà payés :
 - **`sonder-alma`** — essayer des phrases pour de vrai sans rien laisser sur la
   machine, lancer l'application, refermer ce qu'une sonde a ouvert.
 
+## Le micro
+
+**Un seul thread ouvre, lit et ferme le flux.** PortAudio ne survit pas à une
+lecture faite depuis un autre thread que celui qui a ouvert le flux : il ne
+lève pas, il **plante le processus** (segfault, sans trace Python). Le flux
+retient le nom de son propriétaire et `core/stt.py` écrit un avertissement
+quand la règle est violée — c'est le seul garde-fou possible depuis Python.
+
+Deux threads y touchent aujourd'hui : `alma-micro` (l'écoute continue) et
+`alma-installation` (le service du premier lancement). Ils ne doivent jamais
+coexister. Les threads sont **nommés** exprès : deux identifiants numériques
+dans un journal n'apprennent rien.
+
+**Les raccourcis d'une lettre s'effacent devant un champ de saisie.** La
+fenêtre n'en a longtemps eu aucun, et `M` (micro) ou l'espace (veille) étaient
+sans danger. Le panneau d'installation en a introduit un — taper « **M**uneeb »
+démarrait l'écoute continue au milieu de l'installation, et les deux threads se
+volaient les tampons : fragments d'un tiers de seconde, puis segfault.
+
+**Pour diagnostiquer une prise qui ne se transcrit pas** : lancer avec
+`ALMA_DIAG_CAPTURE=<dossier>` conserve chaque enregistrement en .wav. C'est le
+seul moyen de distinguer une voix mal transcrite d'un flux corrompu — les deux
+donnent le même vu-mètre. Éteint sans la variable, et il doit le rester : un
+enregistreur laissé allumé enregistrerait la voix de l'utilisateur à son insu.
+
 ## Pièges du routeur
 
 Ils ont tous déjà coûté un bug.

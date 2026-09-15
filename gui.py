@@ -586,6 +586,132 @@ class BouleNiveau(tk.Canvas):
                                 fill="", width=1, smooth=True)
 
 
+class CarteChoix(tk.Canvas):
+    """
+    Une reponse possible, dessinee plutot que posee.
+
+    Tkinter ne sait pas arrondir un bouton ni l animer : sur un panneau qui
+    est le premier contact avec l application, cela se voit tout de suite.
+    Un Canvas, lui, dessine ce qu on veut -- un rectangle arrondi, un liseré
+    qui s allume au survol, un accent a gauche quand la carte a le focus.
+
+    Le clavier compte autant que la souris : fleches pour parcourir, Entree
+    pour choisir. Personne ne devrait avoir a lacher le clavier ici.
+    """
+
+    LARGEUR = 420
+    HAUTEUR = 62
+    RAYON = 10
+
+    def __init__(self, parent, texte: str, au_choix, accent: str) -> None:
+        super().__init__(parent, width=self.LARGEUR, height=self.HAUTEUR,
+                         bg=FOND, highlightthickness=0, bd=0, cursor="hand2")
+        self.texte = texte
+        self.au_choix = au_choix
+        self.accent = accent
+        self.survole = False
+        self.vise = False          # la carte que le clavier designe
+        self._dessiner()
+        self.bind("<Button-1>", lambda _e: self.au_choix())
+        self.bind("<Enter>", lambda _e: self._etat(survole=True))
+        self.bind("<Leave>", lambda _e: self._etat(survole=False))
+
+    def _etat(self, survole=None, vise=None) -> None:
+        if survole is not None:
+            self.survole = survole
+        if vise is not None:
+            self.vise = vise
+        self._dessiner()
+
+    def viser(self, oui: bool) -> None:
+        self._etat(vise=oui)
+
+    def _arrondi(self, x1, y1, x2, y2, r, **options) -> None:
+        """Un rectangle aux coins arrondis, en polygone lisse."""
+        points = [
+            x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r,
+            x2, y2 - r, x2, y2, x2 - r, y2, x1 + r, y2,
+            x1, y2, x1, y2 - r, x1, y1 + r, x1, y1,
+        ]
+        self.create_polygon(points, smooth=True, **options)
+
+    def _dessiner(self) -> None:
+        self.delete("all")
+        eveille = self.survole or self.vise
+        fond = melanger(FOND_CARTE, self.accent, 0.16 if eveille else 0.0)
+        bord = self.accent if eveille else BORDURE
+        self._arrondi(1, 1, self.LARGEUR - 1, self.HAUTEUR - 1, self.RAYON,
+                      fill=fond, outline=bord, width=1)
+        # L accent a gauche : c est lui qui dit « celle-ci », sans deplacer
+        # le texte ni changer sa taille -- rien ne doit sauter au survol.
+        if eveille:
+            self._arrondi(1, 12, 5, self.HAUTEUR - 12, 2,
+                          fill=self.accent, outline="")
+        self.create_text(28, self.HAUTEUR / 2, text=self.texte, anchor="w",
+                         font=tkfont.Font(family="Segoe UI", size=15),
+                         fill=TEXTE if eveille else melanger(TEXTE, FOND, 0.15))
+
+
+class ChampNom(tk.Frame):
+    """
+    Un champ de saisie sans boite : juste le texte et un trait dessous.
+
+    La boite grise d un Entry ordinaire jure avec un fond presque noir. Le
+    trait, lui, s allume quand on ecrit -- le meme signe que l accent des
+    cartes, pour que les deux sortes de questions se repondent.
+    """
+
+    def __init__(self, parent, defaut: str, au_valide, accent: str) -> None:
+        super().__init__(parent, bg=FOND)
+        self.accent = accent
+        self.saisie = tk.Entry(
+            self, font=tkfont.Font(family="Segoe UI", size=26), bg=FOND,
+            fg=TEXTE, insertbackground=accent, bd=0, relief="flat",
+            justify="center", width=18, highlightthickness=0,
+        )
+        self.saisie.pack()
+        if defaut:
+            self.saisie.insert(0, defaut)
+            self.saisie.select_range(0, "end")
+        self.trait = tk.Canvas(self, height=2, width=360, bg=FOND,
+                               highlightthickness=0, bd=0)
+        self.trait.pack(pady=(10, 0))
+        self._eclat = 0.0
+        self._cible = 0.0
+        self._vivant = True
+        self.saisie.bind("<FocusIn>", lambda _e: self._viser(1.0))
+        self.saisie.bind("<FocusOut>", lambda _e: self._viser(0.0))
+        self.saisie.bind("<Return>", lambda _e: au_valide(self.saisie.get()))
+        self._battre()
+
+    def _viser(self, valeur: float) -> None:
+        self._cible = valeur
+
+    def valeur(self) -> str:
+        return self.saisie.get()
+
+    def focus_saisie(self) -> None:
+        self.saisie.focus_set()
+        self._viser(1.0)
+
+    def arreter(self) -> None:
+        self._vivant = False
+
+    def _battre(self) -> None:
+        if not self._vivant:
+            return
+        self._eclat += (self._cible - self._eclat) * 0.2
+        try:
+            self.trait.delete("all")
+            largeur = int(self.trait.cget("width"))
+            self.trait.create_line(0, 1, largeur, 1,
+                                   fill=melanger(BORDURE, self.accent, self._eclat),
+                                   width=2)
+            self.after(33, self._battre)
+        except tk.TclError:
+            self._vivant = False
+
+
 class AlmaApp:
     """Fenetre principale : orbe, statut, transcription et journal."""
 
@@ -617,6 +743,15 @@ class AlmaApp:
         self._suite_installation = None
         self._recevoir_entendu = None
         self.boule = None          # bille de niveau du premier lancement
+        self._champ = None         # champ de saisie du premier lancement
+        self._cartes = []          # cartes de reponse, pour le clavier
+        self._vise = 0             # celle que le clavier designe
+        self._cadre_question = None
+        self._ecoute_installation = None   # drapeau de l etape en cours
+        self._prises_installation = 0
+        self._travaux_ecoute = None        # travaux postes au service
+        self._fin_ecoute = None
+        self._thread_ecoute = None
         self._largeur_panneau = 0
         self._animation_historique = None
 
@@ -833,8 +968,29 @@ class AlmaApp:
     def montrer_aide(self) -> None:
         threading.Thread(target=self._executer, args=("aide", "text"), daemon=True).start()
 
+    def _on_ecrit(self) -> bool:
+        """Le clavier appartient-il a un champ de saisie ?"""
+        try:
+            return isinstance(self.root.focus_get(), tk.Entry)
+        except Exception:                     # pragma: no cover - defensif
+            return False
+
     def _sur_touche(self, evenement) -> None:
-        """M coupe ou reessaie le micro, F1 montre l'aide, Espace rendort."""
+        """
+        M coupe ou reessaie le micro, F1 montre l'aide, Espace rendort.
+
+        SAUF pendant qu on ecrit. La fenetre n a longtemps eu aucun champ de
+        saisie, et ces raccourcis d une seule lettre etaient sans danger. Le
+        panneau d installation en a introduit un -- et taper « Muneeb »
+        declenchait le « m » : l ecoute continue demarrait au milieu de
+        l installation, ouvrait le micro depuis son propre thread, et le
+        service d installation lisait ensuite CE flux-la. PortAudio rendait
+        alors des fragments (un tiers de seconde de voix, puis du silence :
+        de quoi animer la bille et ne rien transcrire), puis plantait le
+        processus. Une espace dans un prenom, elle, rendormait Alma.
+        """
+        if self._on_ecrit():
+            return
         if evenement.keysym == "F1":
             self.montrer_aide()
         elif evenement.keysym == "space":
@@ -1098,6 +1254,12 @@ class AlmaApp:
         self._suite_installation = quand_fini
         self._questions = list(premier_lancement.QUESTIONS)
         self._index_question = 0
+        self._travaux_ecoute = queue.Queue()
+        self._fin_ecoute = threading.Event()
+        self._thread_ecoute = threading.Thread(target=self._service_ecoute,
+                                               name="alma-installation",
+                                               daemon=True)
+        self._thread_ecoute.start()
         self.colonne.pack_forget()
         self.installation = tk.Frame(self.corps, bg=FOND)
         self.installation.pack(fill="both", expand=True)
@@ -1108,12 +1270,7 @@ class AlmaApp:
 
     def _poser_question(self) -> None:
         """Dessine la question courante, ou termine s il n en reste plus."""
-        if self.boule is not None:
-            self.boule.arreter()
-            self.boule = None
-        self._recevoir_entendu = None
-        for enfant in self.installation.winfo_children():
-            enfant.destroy()
+        self._ranger_question()
         if self._index_question >= len(self._questions):
             self._finir_installation()
             return
@@ -1121,140 +1278,319 @@ class AlmaApp:
         question = self._questions[self._index_question]
         langue = self._langue_installation()
         anglais = langue == "en"
+        accent = ETATS["arme"][0] if question.ecoute else ETATS["veille"][0]
 
         cadre = tk.Frame(self.installation, bg=FOND)
         cadre.place(relx=0.5, rely=0.5, anchor="center")
+        self._cadre_question = cadre
 
-        # Des points, pas un compteur : on voit d un coup d oeil ou l on en
-        # est sans avoir a lire « etape 3 sur 6 ».
-        jalons = tk.Canvas(cadre, width=len(self._questions) * 18, height=10,
-                           bg=FOND, highlightthickness=0, bd=0)
-        jalons.pack(pady=(0, 26))
-        for rang in range(len(self._questions)):
-            x = rang * 18 + 5
-            fait = rang <= self._index_question
-            jalons.create_oval(x - 3, 2, x + 3, 8,
-                               fill=TEXTE if rang == self._index_question
-                               else (TEXTE_DOUX if fait else BORDURE),
-                               outline="")
-
+        self._jalons(cadre, accent)
         tk.Label(cadre, text=question.titre(langue),
-                 font=tkfont.Font(family="Segoe UI", size=26), bg=FOND, fg=TEXTE,
-                 wraplength=820, justify="center").pack()
+                 font=tkfont.Font(family="Segoe UI", size=28), bg=FOND, fg=TEXTE,
+                 wraplength=860, justify="center").pack()
         if question.aide(langue):
             tk.Label(cadre, text=question.aide(langue),
                      font=tkfont.Font(family="Segoe UI", size=12), bg=FOND,
-                     fg=TEXTE_DOUX, wraplength=620,
-                     justify="center").pack(pady=(10, 0))
+                     fg=TEXTE_DOUX, wraplength=640,
+                     justify="center").pack(pady=(12, 0))
 
-        choix = tk.Frame(cadre, bg=FOND)
-        choix.pack(pady=(30, 0))
+        corps = tk.Frame(cadre, bg=FOND)
+        corps.pack(pady=(34, 0))
         if question.ecoute:
-            self._poser_question_ecoutee(question, choix, cadre, anglais)
+            self._poser_question_ecoutee(question, corps, cadre, anglais)
         elif question.libre:
-            saisie = tk.Entry(choix, font=tkfont.Font(family="Segoe UI", size=18),
-                              bg=FOND_CARTE, fg=TEXTE, insertbackground=TEXTE,
-                              bd=0, relief="flat", justify="center", width=22)
-            saisie.pack(ipady=10, pady=(0, 16))
-            if question.defaut:
-                saisie.insert(0, question.defaut)
-                saisie.select_range(0, "end")
-            saisie.focus_set()
-
-            def valider(_evenement=None, champ=saisie) -> None:
-                self._repondre(champ.get())
-
-            saisie.bind("<Return>", valider)
-            self._bouton(choix, "Continue" if anglais else "Continuer",
-                         valider).pack()
+            self._poser_question_libre(question, corps, anglais, accent)
         else:
-            for possible in question.choix:
-                self._bouton(
-                    choix, possible.libelle(langue),
-                    lambda valeur=possible.valeur: self._repondre(valeur),
-                ).pack(pady=5, fill="x")
+            self._poser_question_fermee(question, corps, langue, accent)
 
         # Discret, mais present : personne ne doit rester coince ici.
         passer = tk.Label(cadre, text="Skip" if anglais else "Passer",
-                          font=tkfont.Font(family="Segoe UI", size=10,
-                                           underline=True),
-                          bg=FOND, fg=TEXTE_DOUX, cursor="hand2")
-        passer.pack(pady=(26, 0))
+                          font=tkfont.Font(family="Segoe UI", size=10),
+                          bg=FOND, fg=melanger(FOND, TEXTE_DOUX, 0.8),
+                          cursor="hand2")
+        passer.pack(pady=(30, 0))
         passer.bind("<Button-1>", lambda _e: self._repondre(""))
-        self._fondre_question(cadre)
+        passer.bind("<Enter>", lambda _e: passer.configure(fg=TEXTE_DOUX))
+        passer.bind("<Leave>",
+                    lambda _e: passer.configure(fg=melanger(FOND, TEXTE_DOUX, 0.8)))
 
-    def _fondre_question(self, cadre, pas: int = 0) -> None:
-        """
-        Fait apparaitre la question en montant de quelques pixels.
+        self.root.bind("<Up>", self._viser_precedent)
+        self.root.bind("<Down>", self._viser_suivant)
+        self.root.bind("<Return>", self._valider_vise)
+        self._glisser_question(cadre)
 
-        Tkinter ne sait pas rendre un cadre transparent : on joue donc sur la
-        POSITION, qui suffit a donner le mouvement, et sur la couleur du
-        titre, qui va du fond vers le texte.
+    def _ranger_question(self) -> None:
+        """Eteint ce qui vit encore avant de redessiner."""
+        if self.boule is not None:
+            self.boule.arreter()
+            self.boule = None
+        if self._champ is not None:
+            self._champ.arreter()
+            self._champ = None
+        if self._ecoute_installation is not None:
+            self._ecoute_installation.clear()
+            self._ecoute_installation = None
+        self._recevoir_entendu = None
+        self._cartes = []
+        self._vise = 0
+        for touche in ("<Up>", "<Down>", "<Return>"):
+            try:
+                self.root.unbind(touche)
+            except tk.TclError:
+                pass
+        for enfant in self.installation.winfo_children():
+            enfant.destroy()
+
+    def _jalons(self, cadre, accent: str) -> None:
         """
-        total = 12
+        Ou l on en est : un trait segmente, pas un compteur.
+
+        « Etape 3 sur 6 » demande de lire et de compter. Un trait se voit.
+        """
+        total = len(self._questions)
+        largeur, espace = 34, 8
+        toile = tk.Canvas(cadre, width=total * (largeur + espace), height=4,
+                          bg=FOND, highlightthickness=0, bd=0)
+        toile.pack(pady=(0, 30))
+        for rang in range(total):
+            x = rang * (largeur + espace)
+            if rang < self._index_question:
+                couleur = melanger(FOND, accent, 0.45)
+            elif rang == self._index_question:
+                couleur = accent
+            else:
+                couleur = BORDURE
+            toile.create_line(x, 2, x + largeur, 2, fill=couleur, width=3,
+                              capstyle="round")
+
+    def _poser_question_fermee(self, question, corps, langue: str,
+                               accent: str) -> None:
+        """Les reponses possibles, en cartes -- souris ou clavier."""
+        for possible in question.choix:
+            carte = CarteChoix(
+                corps, possible.libelle(langue),
+                (lambda valeur=possible.valeur: self._repondre(valeur)),
+                accent,
+            )
+            carte.pack(pady=4)
+            self._cartes.append(carte)
+        if self._cartes:
+            self._cartes[0].viser(True)
+
+    def _poser_question_libre(self, question, corps, anglais: bool,
+                              accent: str) -> None:
+        """Un champ sans boite, et le bouton qui va avec."""
+        self._champ = ChampNom(corps, question.defaut, self._repondre, accent)
+        self._champ.pack()
+        self._champ.focus_saisie()
+        carte = CarteChoix(
+            corps, "Continue" if anglais else "Continuer",
+            lambda: self._repondre(self._champ.valeur() if self._champ else ""),
+            accent,
+        )
+        carte.pack(pady=(26, 0))
+        self._cartes.append(carte)
+
+    # -- clavier --------------------------------------------------------------
+    def _viser_suivant(self, _evenement=None) -> None:
+        self._deplacer_visee(1)
+
+    def _viser_precedent(self, _evenement=None) -> None:
+        self._deplacer_visee(-1)
+
+    def _deplacer_visee(self, pas: int) -> None:
+        if self._on_ecrit() or len(self._cartes) < 2:
+            return
+        self._cartes[self._vise].viser(False)
+        self._vise = (self._vise + pas) % len(self._cartes)
+        self._cartes[self._vise].viser(True)
+
+    def _valider_vise(self, _evenement=None) -> None:
+        # Le champ gere sa propre touche Entree : la laisser passer ici
+        # validerait deux fois.
+        if self._on_ecrit():
+            return
+        if self._cartes:
+            self._cartes[self._vise].au_choix()
+
+    # -- transition -----------------------------------------------------------
+    def _glisser_question(self, cadre, pas: int = 0) -> None:
+        """
+        La question arrive en glissant depuis la droite, et en s eclaircissant.
+
+        Tkinter ne sait pas rendre un cadre transparent : le mouvement porte
+        donc l apparition, et la couleur du titre fait le reste.
+        """
+        total = 14
         progres = _assouplir(min(1.0, (pas + 1) / total))
         try:
-            cadre.place_configure(rely=0.5 + 0.035 * (1 - progres))
+            cadre.place_configure(relx=0.5 + 0.06 * (1 - progres))
             for enfant in cadre.winfo_children():
-                if enfant.winfo_class() == "Label" and enfant.cget("fg") != TEXTE_DOUX:
+                if (enfant.winfo_class() == "Label"
+                        and enfant.cget("fg") not in (TEXTE_DOUX,)):
                     enfant.configure(fg=melanger(FOND, TEXTE, progres))
         except tk.TclError:
             return
         if pas + 1 < total:
-            self.root.after(16, lambda: self._fondre_question(cadre, pas + 1))
+            self.root.after(16, lambda: self._glisser_question(cadre, pas + 1))
 
-    def _poser_question_ecoutee(self, question, choix, cadre, anglais: bool) -> None:
+    # Combien de formes differentes suffisent. Au-dela, on n apprend plus
+    # grand-chose et on retient quelqu un devant un ecran pour rien.
+    PRISES_SUFFISANTES = 3
+    # Borne dure du nombre d ecoutes : sans elle, une piece bruyante ferait
+    # tourner la boucle indefiniment.
+    ECOUTES_MAXIMUM = 8
+
+    def _poser_question_ecoutee(self, question, corps, cadre, anglais: bool) -> None:
         """
-        Un bouton qui ECOUTE, avec une bille qui montre ce qui arrive.
+        Ecouter le nom, plusieurs fois, et garder CE QUI ARRIVE.
 
-        Sans le retour visuel, « je n ai rien saisi » ne dit pas si le micro
-        n a rien entendu ou si la transcription a echoue : on reste devant un
-        bouton qui ne marche pas, sans savoir quoi corriger.
+        Il n y a rien a comprendre ici. On ne cherche pas la bonne
+        orthographe -- on l a deja, elle vient d etre tapee. On cherche la
+        forme sous laquelle la reconnaissance vocale la rend, pour la
+        reconnaitre plus tard : « Muneeb » revient en « Mounib », et c est
+        « Mounib » qu il faut retenir.
 
-        Le bruit ambiant est mesure MAINTENANT, pendant qu on lit la consigne.
-        Le mesurer au clic revenait a mesurer la voix qu on vient de demander,
-        et le micro devenait sourd pour le reste de l etape.
+        Donc aucune reponse n est mauvaise. Une transcription bizarre est
+        exactement ce qu on veut. Le seul echec est le silence.
+
+        Et AUCUN bouton pour demarrer : a partir du moment ou l on demande
+        de prononcer, l ecoute doit deja tourner. Demander de parler puis
+        exiger un clic avant d ecouter, c est rater la premiere fois a tous
+        les coups.
         """
         attendu = str(self.assistant.config.get(
             "general.user_name" if question.echo_de == "nom_utilisateur"
             else "general.assistant_name", "") or "")
+        accent = ETATS["arme"][0]
+
         if attendu:
             # Une PHRASE, pas le nom seul : un mot isole ne donne aucun
             # contexte a la reconnaissance vocale, et elle ne rend rien.
-            tk.Label(cadre, text="« " + question.phrase(
-                         self._langue_installation(), attendu) + " »",
-                     font=tkfont.Font(family="Segoe UI", size=26),
+            #
+            # `before=corps` : sans cela elle se retrouve SOUS les boutons,
+            # alors qu on doit la lire avant de parler. `corps` est deja pose
+            # quand on arrive ici.
+            tk.Label(cadre, text=question.phrase(
+                         self._langue_installation(), attendu),
+                     font=tkfont.Font(family="Segoe UI", size=24),
                      bg=FOND, fg=TEXTE, wraplength=820,
-                     justify="center").pack(pady=(16, 0))
+                     justify="center").pack(pady=(22, 0), before=corps)
 
         if not self._preparer_micro():
-            self._bouton(choix, "Continue" if anglais else "Continuer",
-                         lambda: self._repondre("")).pack()
+            carte = CarteChoix(corps, "Continue" if anglais else "Continuer",
+                               lambda: self._repondre(""), accent)
+            carte.pack()
+            self._cartes.append(carte)
             return
 
-        self.boule = BouleNiveau(choix)
-        self.boule.pack(pady=(0, 10))
-        etat = tk.Label(choix, text="", font=tkfont.Font(family="Segoe UI", size=13),
+        self.boule = BouleNiveau(corps)
+        self.boule.pack(pady=(0, 8))
+        # Les formes deja captees, montrees telles quelles : c est la preuve
+        # que quelque chose a ete retenu.
+        prises = tk.Label(corps, text="", font=tkfont.Font(family="Segoe UI", size=14),
+                          bg=FOND, fg=accent)
+        prises.pack(pady=(0, 4))
+        etat = tk.Label(corps, text="", font=tkfont.Font(family="Segoe UI", size=11),
                         bg=FOND, fg=TEXTE_DOUX)
-        etat.pack(pady=(0, 14))
-        bouton = self._bouton(choix, "Speak" if anglais else "Parler", lambda: None)
-        bouton.pack()
-        garder = self._bouton(choix, "That's it" if anglais else "C'est ça",
-                              lambda: None)
+        etat.pack(pady=(0, 20))
 
-        # Le silence se mesure pendant qu on lit : au clic, tout est pret.
-        threading.Thread(target=self._preparer_ecoute, daemon=True).start()
+        continuer = CarteChoix(corps, "Continue" if anglais else "Continuer",
+                               lambda: self._repondre(""), accent)
+        continuer.pack()
+        self._cartes = [continuer]
+        continuer.viser(True)
 
-        def ecouter() -> None:
-            bouton.configure(state="disabled",
-                             text="Listening…" if anglais else "J'écoute…")
-            etat.configure(text="")
-            garder.pack_forget()
-            threading.Thread(target=capter, daemon=True).start()
+        entendues: list = []
+        self._prises_installation = 0
 
-        def capter() -> None:
-            # Le plus fort niveau atteint : c est lui qui distingue « rien
-            # entendu » de « entendu mais pas compris ».
+        def rendre(charge) -> None:
+            from core import premier_lancement
+
+            entendu, pic, raison = charge
+            if self.boule is not None:
+                self.boule.definir_niveau(0.0)
+
+            if charge == ("", -1.0, "prete"):
+                etat.configure(text="Listening…" if anglais else "J'écoute…")
+                return
+
+            forme = premier_lancement.extraire_nom(entendu, attendu)
+            if forme:
+                # On RETIENT tout de suite. Une forme deja connue ne compte
+                # pas deux fois, mais elle n est pas un echec non plus.
+                premier_lancement.repondre(self.assistant, question.cle, entendu)
+                if forme not in entendues:
+                    entendues.append(forme)
+                self._prises_installation = len(entendues)
+                prises.configure(text="  ·  ".join(entendues))
+                self.assistant.bruit("ok")
+                if len(entendues) >= self.PRISES_SUFFISANTES:
+                    etat.configure(text="That's plenty." if anglais
+                                   else "C'est largement assez.")
+                    continuer.texte = "Done" if anglais else "Terminé"
+                    continuer._dessiner()
+                else:
+                    etat.configure(text="Once more?" if anglais
+                                   else "Encore une fois ?")
+                return
+
+            etat.configure(text=self._pourquoi_rien(pic, raison, anglais))
+
+        self._recevoir_entendu = rendre
+        # On ne lance PAS de thread ici : le micro appartient au service
+        # d ecoute, ouvert au debut de l installation et ferme a la fin. Deux
+        # threads qui lisent le meme flux PortAudio ne levent pas -- ils
+        # plantent le processus.
+        self._ecoute_installation = threading.Event()
+        self._ecoute_installation.set()
+        self._travaux_ecoute.put(self._ecoute_installation)
+
+    def _service_ecoute(self) -> None:
+        """
+        L UNIQUE thread qui touche le micro pendant l installation.
+
+        Il y a DEUX etapes d ecoute -- votre nom, puis le sien. Chacune avec
+        son thread, c etait deux threads lisant tour a tour le meme flux
+        PortAudio : le second plantait le processus, sans trace Python
+        puisque le plantage est natif. Un service unique ouvre, lit et ferme
+        le flux ; les etapes ne font que lui poster du travail.
+        """
+        prepare = False
+        try:
+            while not self._fin_ecoute.is_set():
+                try:
+                    actif = self._travaux_ecoute.get(timeout=0.2)
+                except queue.Empty:
+                    continue
+                if actif is None:
+                    return
+                if not prepare:
+                    # Le silence se mesure une fois, avant la premiere
+                    # ecoute. Le mesurer pendant reviendrait a mesurer la
+                    # voix qu on vient de demander.
+                    try:
+                        self.stt.preparer()
+                    except Exception:
+                        pass
+                    prepare = True
+                self._ecouter_pour(actif)
+        finally:
+            # Ferme depuis le thread qui a ouvert : c est toute la regle.
+            try:
+                self.stt.fermer()
+            except Exception:
+                pass
+
+    def _ecouter_pour(self, actif) -> None:
+        """Les prises successives d une etape, tant qu elle est affichee."""
+        if not actif.is_set():
+            return
+        self.evenements.put(("installation_entendu", ("", -1.0, "prete")))
+
+        for _ in range(self.ECOUTES_MAXIMUM):
+            if not actif.is_set() or self._fin_ecoute.is_set():
+                return
             pic = [0.0]
 
             def niveau(valeur, etat_audio):
@@ -1263,36 +1599,25 @@ class AlmaApp:
                     ("installation_niveau", (valeur, etat_audio == "parole")))
 
             try:
-                entendu = self.stt.listen_live(on_level=niveau, timeout=8.0,
-                                               phrase_limit=5.0)
+                entendu = self.stt.listen_live(
+                    on_level=niveau, timeout=10.0, phrase_limit=5.0,
+                    doit_continuer=actif.is_set)
             except Exception:
                 entendu = ""
+            if not actif.is_set():
+                return
             raison = getattr(self.stt, "derniere_raison", "")
             self.evenements.put(("installation_entendu", (entendu, pic[0], raison)))
-
-        def rendre(charge) -> None:
-            entendu, pic, raison = charge
-            bouton.configure(state="normal",
-                             text="Again" if anglais else "Réessayer")
-            self.boule.definir_niveau(0.0)
-            if entendu:
-                etat.configure(text="« " + entendu + " »", fg=TEXTE)
-                garder.configure(command=lambda: self._repondre(entendu))
-                garder.pack(pady=(12, 0))
+            if self._prises_installation >= self.PRISES_SUFFISANTES:
                 return
-            etat.configure(text=self._pourquoi_rien(pic, raison, anglais),
-                           fg=TEXTE_DOUX)
-
-        bouton.configure(command=ecouter)
-        self._recevoir_entendu = rendre
 
     @staticmethod
     def _pourquoi_rien(pic: float, raison: str, anglais: bool) -> str:
         """
         Pourquoi rien n a ete retenu -- et donc quoi faire.
 
-        « Je n ai rien saisi » ne disait pas s il fallait parler plus fort,
-        repeter, ou verifier sa connexion. Trois causes, trois gestes.
+        Jamais « pas compris » : il n y a rien a comprendre. Ou la voix n est
+        pas arrivee, ou le service n a pas repondu.
         """
         if raison == "injoignable":
             return ("Speech service unreachable — are you online?" if anglais else
@@ -1300,15 +1625,8 @@ class AlmaApp:
         if pic <= 0.25:
             return ("I heard nothing — is the microphone on?" if anglais else
                     "Je n'ai rien entendu — le micro est-il actif ?")
-        return ("Heard, but not understood." if anglais else
-                "Entendu, mais pas compris.")
-
-    def _preparer_ecoute(self) -> None:
-        """Mesure le bruit ambiant en fond, sans bloquer l affichage."""
-        try:
-            self.stt.preparer()
-        except Exception:
-            pass
+        return ("Nothing came back. Once more?" if anglais else
+                "Rien n'est revenu. Encore une fois ?")
 
     def _repondre(self, reponse: str) -> None:
         """Retient la reponse et passe a la suivante."""
@@ -1324,6 +1642,11 @@ class AlmaApp:
         from core import premier_lancement
 
         premier_lancement.terminer(self.assistant)
+        # Le service rend le micro avant que l ecoute continue ne le reprenne.
+        self._fin_ecoute.set()
+        self._travaux_ecoute.put(None)
+        self._thread_ecoute.join(timeout=3)
+        self._thread_ecoute = None
         self.installation.destroy()
         self.installation = None
         # `before` n accepte pas None : le panneau d historique n est POSE que
@@ -1390,7 +1713,8 @@ class AlmaApp:
 
         self.ecoute_active.set()
         if self.thread_audio is None or not self.thread_audio.is_alive():
-            self.thread_audio = threading.Thread(target=self._boucle_micro, daemon=True)
+            self.thread_audio = threading.Thread(target=self._boucle_micro,
+                                                 name="alma-micro", daemon=True)
             self.thread_audio.start()
 
     def basculer_micro(self) -> None:

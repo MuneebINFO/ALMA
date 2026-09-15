@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 
 log = logging.getLogger(__name__)
 
@@ -181,7 +182,8 @@ class SpeechToText:
         )
         if not brut:
             return ""
-        audio = sr.AudioData(brut, SAMPLE_RATE, SAMPLE_WIDTH)
+        _garder_la_prise(brut)
+        audio = sr.AudioData(normaliser(brut), SAMPLE_RATE, SAMPLE_WIDTH)
         return self._transcribe(audio)
 
     def preparer(self) -> bool:
@@ -296,6 +298,79 @@ STATE_SPEAKING = "parole"
 STATE_DONE = "termine"
 
 
+# Niveau vise apres normalisation, en fraction de la pleine echelle. 0,7
+# laisse de la marge : pousser a 1,0 ferait saturer le moindre depassement,
+# et la saturation s entend comme un gresillement que rien ne transcrit.
+CIBLE_NORMALISATION = 0.70
+# Au-dela, on amplifierait du souffle. Un enregistrement reellement vide
+# doit le rester : le multiplier par mille ne cree pas de la parole.
+GAIN_MAXIMAL = 40.0
+
+
+def _garder_la_prise(brut: bytes) -> None:
+    """
+    Ecrit la derniere prise sur le disque, si ALMA_DIAG_CAPTURE le demande.
+
+    Quand la reconnaissance ne rend rien alors que le niveau bougeait, la
+    seule facon de trancher est d ECOUTER ce qui a ete capte : une voix mal
+    transcrite et un flux corrompu produisent le meme vu-metre. Eteint par
+    defaut -- rien ne s ecrit sans qu on l ait demande.
+    """
+    import os
+
+    dossier = os.environ.get("ALMA_DIAG_CAPTURE", "")
+    if not dossier or not brut:
+        return
+    try:
+        import time
+        import wave
+        from pathlib import Path
+
+        cible = Path(dossier)
+        cible.mkdir(parents=True, exist_ok=True)
+        chemin = cible / ("prise_%.0f.wav" % (time.time() * 1000))
+        with wave.open(str(chemin), "wb") as fichier:
+            fichier.setnchannels(1)
+            fichier.setsampwidth(SAMPLE_WIDTH)
+            fichier.setframerate(SAMPLE_RATE)
+            fichier.writeframes(brut)
+        log.warning("Prise conservée : %s (%d octets)", chemin, len(brut))
+    except Exception as exc:
+        log.debug("Prise non conservée : %s", exc)
+
+
+def normaliser(brut: bytes) -> bytes:
+    """
+    Remonte le niveau d un enregistrement avant de le transcrire.
+
+    Beaucoup de micros integres capturent tres bas : sur cette machine, le
+    bruit de fond se mesure a 0,000015, soit cent fois moins que la normale.
+    La voix suit -- elle arrive donc au moteur de reconnaissance trente
+    decibels sous ce qu il attend, et il ne rend rien. On voit alors la bille
+    bouger (le son EST la) sans qu aucun mot ne revienne.
+
+    Le niveau sonore mesure pour le declenchement, lui, n est pas touche :
+    il decrit la piece, pas ce qu on envoie a Google.
+    """
+    import array
+
+    if not brut:
+        return brut
+    echantillons = array.array("h")
+    echantillons.frombytes(brut[: len(brut) - (len(brut) % 2)])
+    if not echantillons:
+        return brut
+    pic = max(abs(v) for v in echantillons)
+    if pic == 0:
+        return brut
+    gain = min(GAIN_MAXIMAL, CIBLE_NORMALISATION * 32767 / pic)
+    if gain <= 1.05:
+        return brut                    # deja au bon niveau : ne rien toucher
+    for i, valeur in enumerate(echantillons):
+        echantillons[i] = max(-32768, min(32767, int(valeur * gain)))
+    return echantillons.tobytes()
+
+
 def _rms(raw: bytes) -> float:
     """Niveau sonore moyen d un bloc audio, entre 0 et 1."""
     import array
@@ -374,6 +449,7 @@ class LevelMeterListener:
         self.pic_ambiant = 0.0       # le bloc de silence le plus fort, recent
         self._audio = None
         self._stream = None
+        self._proprietaire = None      # thread qui a ouvert le flux
 
     def _open_stream(self):
         import pyaudio
@@ -397,10 +473,23 @@ class LevelMeterListener:
         seconde. Rouvrir le flux a chaque ecoute creait donc une fenetre
         sourde a chaque tour de boucle, et une longue au tout debut : le
         premier appel passait a la trappe et il fallait le repeter.
+
+        UN SEUL THREAD doit s en servir. PortAudio ne survit pas a une
+        lecture faite depuis un thread autre que celui qui a ouvert le flux :
+        cela ne leve pas, cela plante le processus (segfault, sans trace
+        Python). L appelant qui change de thread doit donc fermer d abord.
+        On se contente ici de le SIGNALER -- fermer depuis le mauvais thread
+        serait tout aussi hasardeux.
         """
         if self._stream is not None:
+            if self._proprietaire not in (None, threading.current_thread().name):
+                log.warning(
+                    "Flux micro ouvert par « %s », lu depuis « %s » : "
+                    "PortAudio n aime pas cela du tout.",
+                    self._proprietaire, threading.current_thread().name)
             return self._stream
         self._audio, self._stream = self._open_stream()
+        self._proprietaire = threading.current_thread().name
         return self._stream
 
     def fermer(self) -> None:
@@ -409,6 +498,7 @@ class LevelMeterListener:
             return
         audio, stream = self._audio, self._stream
         self._audio = self._stream = None
+        self._proprietaire = None
         self._close(audio, stream)
 
     def _rattraper(self, stream) -> list:
