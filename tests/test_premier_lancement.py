@@ -676,13 +676,8 @@ def test_on_ne_dit_jamais_pas_compris():
                 assert "understood" not in message, message
 
 
-def test_la_forme_entendue_est_retenue_tout_de_suite_et_montree(tk_root,
-                                                                assistant):
-    """
-    Aucune réponse n'est « mauvaise » : une transcription bizarre est
-    précisément ce qu'on veut retenir. Donc pas d'étape de confirmation —
-    ce qui arrive est gardé, et montré pour qu'on le voie.
-    """
+def etape_ecoutee(tk_root, assistant):
+    """Le panneau, amené jusqu'à la première étape d'écoute."""
     faux = panneau_factice(tk_root, assistant)
     faux.stt = type("Micro", (), {
         "available": True,
@@ -692,11 +687,25 @@ def test_la_forme_entendue_est_retenue_tout_de_suite_et_montree(tk_root,
     faux.montrer_installation(lambda: None)
     faux._repondre("fr")
     faux._repondre("Muneeb")
+    return faux
 
-    faux._recevoir_entendu(("je m'appelle Mounib", 0.7, ""))
 
-    assert any("mounib" in t for t in etiquettes(faux)), etiquettes(faux)
-    assert "mounib" in assistant.config.get("general.user_name_variants")
+def test_la_forme_entendue_est_retenue_mais_jamais_montree(tk_root, assistant):
+    """
+    « Muneeb » revient parfois en « monique ». C'est exactement la forme
+    qu'on veut garder — et exactement ce qu'il ne faut pas afficher : on
+    écrirait à quelqu'un que son prénom a été compris de travers, là où on
+    lui dit en réalité « c'est enregistré ».
+    """
+    faux = etape_ecoutee(tk_root, assistant)
+
+    faux._recevoir_entendu(("je m'appelle monique", 0.7, ""))
+
+    assert "monique" in assistant.config.get("general.user_name_variants"), \
+        "la forme entendue doit bien être retenue"
+    affiche = " ".join(etiquettes(faux)).lower()
+    assert "monique" not in affiche, affiche
+    assert "enregistr" in affiche, affiche
 
 
 def test_plusieurs_prises_s_accumulent(tk_root, assistant):
@@ -704,15 +713,7 @@ def test_plusieurs_prises_s_accumulent(tk_root, assistant):
     La transcription varie d'une fois sur l'autre. Chaque forme différente
     est une chance de plus d'être reconnu plus tard — on les garde toutes.
     """
-    faux = panneau_factice(tk_root, assistant)
-    faux.stt = type("Micro", (), {
-        "available": True,
-        "preparer": lambda self: True,
-        "listen_live": lambda self, **k: "",
-    })()
-    faux.montrer_installation(lambda: None)
-    faux._repondre("fr")
-    faux._repondre("Muneeb")
+    faux = etape_ecoutee(tk_root, assistant)
 
     faux._recevoir_entendu(("je m'appelle Mounib", 0.7, ""))
     faux._recevoir_entendu(("je m'appelle Mon nid", 0.7, ""))
@@ -720,8 +721,27 @@ def test_plusieurs_prises_s_accumulent(tk_root, assistant):
 
     formes = assistant.config.get("general.user_name_variants")
     assert formes == ["mounib", "mon nid"], formes
-    affiche = etiquettes(faux)
-    assert any("mounib" in t and "mon nid" in t for t in affiche), affiche
+    # Aucune des deux ne s'affiche : c'est un compte de prises qu'on montre,
+    # pas ce qui a été compris.
+    affiche = " ".join(etiquettes(faux)).lower()
+    for forme in formes:
+        assert forme not in affiche, affiche
+
+
+def test_aucune_transcription_ne_s_affiche_jamais(tk_root, assistant):
+    """
+    Le garde-fou, quelle que soit la forme entendue : rien de ce que la
+    reconnaissance a produit ne doit apparaître à l'écran.
+    """
+    faux = etape_ecoutee(tk_root, assistant)
+
+    for entendu in ("je m'appelle monique", "je m'appelle mon nid",
+                    "je m'appelle bidule"):
+        faux._recevoir_entendu((entendu, 0.7, ""))
+
+    affiche = " ".join(etiquettes(faux)).lower()
+    for mot in ("monique", "mon nid", "bidule"):
+        assert mot not in affiche, (mot, affiche)
 
 
 # --------------------------------------------------------------------------

@@ -169,6 +169,12 @@ sans danger. Le panneau d'installation en a introduit un — taper « **M**uneeb
 démarrait l'écoute continue au milieu de l'installation, et les deux threads se
 volaient les tampons : fragments d'un tiers de seconde, puis segfault.
 
+**Ce que la reconnaissance a compris ne s'affiche pas.** Le premier lancement
+apprend la forme sous laquelle un nom lui parvient — « Muneeb » revient en
+« monique ». C'est exactement ce qu'il faut retenir, et exactement ce qu'il ne
+faut pas montrer : on écrirait à quelqu'un que son prénom a été compris de
+travers, là où on lui dit « c'est enregistré ». Un test l'interdit.
+
 **Pour diagnostiquer une prise qui ne se transcrit pas** : lancer avec
 `ALMA_DIAG_CAPTURE=<dossier>` conserve chaque enregistrement en .wav. C'est le
 seul moyen de distinguer une voix mal transcrite d'un flux corrompu — les deux

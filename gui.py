@@ -1486,14 +1486,31 @@ class AlmaApp:
 
         self.boule = BouleNiveau(corps)
         self.boule.pack(pady=(0, 8))
-        # Les formes deja captees, montrees telles quelles : c est la preuve
-        # que quelque chose a ete retenu.
-        prises = tk.Label(corps, text="", font=tkfont.Font(family="Segoe UI", size=14),
+        # Ce qui est retenu ne se MONTRE pas. « Muneeb » revient parfois en
+        # « monique » : c est exactement la forme qu on veut garder, et c est
+        # exactement ce qu il ne faut pas afficher. L utilisateur lirait que
+        # son prenom a ete compris de travers, la ou on lui dit en realite
+        # « c est enregistre ».
+        prises = tk.Label(corps, text="", font=tkfont.Font(family="Segoe UI", size=15),
                           bg=FOND, fg=accent)
-        prises.pack(pady=(0, 4))
+        prises.pack(pady=(0, 6))
+        jetons = tk.Canvas(corps, width=self.PRISES_SUFFISANTES * 22, height=12,
+                           bg=FOND, highlightthickness=0, bd=0)
+        jetons.pack(pady=(0, 6))
         etat = tk.Label(corps, text="", font=tkfont.Font(family="Segoe UI", size=11),
                         bg=FOND, fg=TEXTE_DOUX)
         etat.pack(pady=(0, 20))
+
+        def marquer(combien: int) -> None:
+            """Un jeton par prise : on voit ou l on en est, sans rien lire."""
+            jetons.delete("all")
+            for rang in range(self.PRISES_SUFFISANTES):
+                x = rang * 22 + 6
+                plein = rang < combien
+                jetons.create_oval(x - 5, 1, x + 5, 11,
+                                   fill=accent if plein else FOND,
+                                   outline=accent if plein else BORDURE,
+                                   width=1)
 
         continuer = CarteChoix(corps, "Continue" if anglais else "Continuer",
                                lambda: self._repondre(""), accent)
@@ -1512,6 +1529,7 @@ class AlmaApp:
                 self.boule.definir_niveau(0.0)
 
             if charge == ("", -1.0, "prete"):
+                marquer(len(entendues))
                 etat.configure(text="Listening…" if anglais else "J'écoute…")
                 return
 
@@ -1523,16 +1541,18 @@ class AlmaApp:
                 if forme not in entendues:
                     entendues.append(forme)
                 self._prises_installation = len(entendues)
-                prises.configure(text="  ·  ".join(entendues))
+                marquer(len(entendues))
+                prises.configure(text="Got it." if anglais else "C'est enregistré.")
                 self.assistant.bruit("ok")
                 if len(entendues) >= self.PRISES_SUFFISANTES:
-                    etat.configure(text="That's plenty." if anglais
-                                   else "C'est largement assez.")
+                    etat.configure(text="I have what I need." if anglais
+                                   else "J'ai ce qu'il me faut.")
                     continuer.texte = "Done" if anglais else "Terminé"
                     continuer._dessiner()
                 else:
-                    etat.configure(text="Once more?" if anglais
-                                   else "Encore une fois ?")
+                    etat.configure(
+                        text="Once more, to be sure." if anglais
+                        else "Encore une fois, pour être sûre.")
                 return
 
             etat.configure(text=self._pourquoi_rien(pic, raison, anglais))
