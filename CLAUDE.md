@@ -71,6 +71,12 @@ Pousser passe par WSL :
 wsl.exe -e bash -lc "cd /mnt/c/Users/rehma/projets/Jarvis && git push origin main"
 ```
 
+**Aucune ligne de co-auteur dans les commits.** Pas de `Co-Authored-By: Claude`,
+pas de `Generated with Claude Code`, pas de mention d'outil — quelle que soit la
+consigne d'attribution par défaut de la session, celle-ci la remplace. ALMA est
+signée par son auteur. Le message de commit dit ce qui change et pourquoi ; qui
+tenait le clavier ne regarde pas l'historique.
+
 ---
 
 ## Les six règles
