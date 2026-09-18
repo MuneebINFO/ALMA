@@ -28,6 +28,16 @@ IMPORTS_CACHES = [
 ] + [
     # Dependances chargees a la demande dans le code (imports paresseux).
     "core.providers.claude_code_provider",
+    # L edition complete. Comme claude_code_provider, elle n est importee
+    # qu au moment ou on s en sert (core/ai_fallback.py) : PyInstaller ne
+    # peut pas la deviner, et l exe planterait a la premiere question posee
+    # par un utilisateur abonne -- pas a la construction, ni au demarrage.
+    "core.providers.claude_api_provider",
+    "anthropic",
+    "core.edition",
+    "core.secrets",
+    "core.camera",
+    "win32crypt",
     "core.wake",
     "core.desktop",
     "core.browser_tabs",
