@@ -41,21 +41,30 @@ device through the specific network calls listed below.
 | Voice mode — speech recognition | **Off** by default | Your spoken audio | Google's speech API, unless you switch `stt_engine` to `whisper` or `vosk` (fully offline, on-device) |
 | Voice mode — spoken replies | **Off** by default | The text ALMA is about to say | Microsoft's Edge neural voice service, unless you switch `voice.engine` to `sapi5` (fully offline, on-device) |
 | Photos taken with the camera | On request | Nothing — the image is written to your Pictures folder and goes nowhere else | — |
-| Complete edition — questions and image analysis | **Off** unless you supply a key | See the section below | Anthropic, under your own API key |
+| Complete edition — questions and image analysis | **Off** until you subscribe or supply a key | See the section below | Anthropic — directly under your own key, or through ALMA's relay if you subscribed |
 | Advanced fallback (`ollama`, `claude_code`) | **Off** by default | The question's text | A model running entirely on your machine (`ollama`, no network at all), or the Claude Code CLI under your own subscription (`claude_code`) |
 
 Voice mode and everything below the first three rows are opt-in: you turn
-them on yourself. **Neither edition ever contacts a server operated by
-ALMA's developer — there isn't one.** Where the complete edition sends data,
-it sends it to Anthropic directly, under your own account.
+them on yourself.
+
+**The free edition never contacts a server operated by ALMA's developer.**
+Subscribers do — that is what a subscription is, and it is described in full
+below. If you never subscribe, no request of yours ever reaches us.
 
 ## The complete edition, in detail
 
-The complete edition is inactive until **you** enter an Anthropic API key.
-Without one, ALMA runs exactly as described above — the setting alone does
-nothing.
+The complete edition is inactive until you turn it on, and there are two ways
+to do that. Until you take one of them, ALMA runs exactly as described above:
+the setting alone does nothing.
 
-**What is sent, and only when you ask:**
+**Either you subscribe** through the Microsoft Store, and your requests pass
+through a relay we operate — see "If you subscribed" below.
+
+**Or you enter your own Anthropic API key**, and your requests go straight to
+Anthropic under your own account. Nothing of yours reaches us at all; see
+"If you use your own key".
+
+What is sent is the same in both cases, and **only when you ask**:
 
 - the text of a question that no local command could answer;
 - **an image from your camera**, when you ask ALMA to look at something
@@ -65,16 +74,38 @@ nothing.
 Nothing else. Your screen contents, window titles, notes, clipboard, and
 command history are never sent — in either edition.
 
-**Where it goes:** to Anthropic's API, under your own key and your own
+### If you use your own key
+
+Your requests go **straight to Anthropic**, under your own key and your own
 account, subject to
 [Anthropic's privacy policy](https://www.anthropic.com/legal/privacy).
-ALMA's developer has no access to these requests and receives no copy.
+ALMA's developer never sees them and receives no copy.
 
-**Your key** is encrypted by Windows itself (DPAPI) and bound to your user
-account, in a file separate from your settings. Copied to another machine,
-or opened under a different Windows account, it cannot be read. ALMA never
-reads a key from environment variables — only the one you entered. Removing
-the key returns ALMA to the free edition immediately.
+Your key is encrypted by Windows itself (DPAPI) and bound to your user
+account, in a file separate from your settings. Copied to another machine, or
+opened under a different Windows account, it cannot be read. ALMA never reads
+a key from environment variables — only the one you entered. Removing the key
+returns ALMA to the free edition immediately.
+
+### If you subscribed
+
+Your requests pass through a **relay we operate**, which forwards them to
+Anthropic under our key — that is the only way a subscription can work
+without handing every subscriber a key of their own.
+
+What the relay does with a request:
+
+- it checks with Microsoft that your subscription is active, and counts the
+  request against your monthly allowance;
+- it forwards the question, or the image, to Anthropic and returns the answer;
+- **it does not store the content of your requests, nor the images.** What is
+  kept is a count per subscriber, which is what an allowance needs and nothing
+  more.
+
+We never see your Microsoft password or your payment details: the Store
+handles the purchase, and hands the app only a signed token saying that your
+subscription is valid. Cancelling returns ALMA to the free edition, which
+keeps working exactly as before.
 
 ## What's stored, and where
 
