@@ -38,6 +38,15 @@ IMPORTS_CACHES = [
     "core.secrets",
     "core.camera",
     "win32crypt",
+    # L abonnement du Store. Verifie plutot que suppose : le paquet construit
+    # ce matin ne contenait AUCUNE entree pour winsdk.windows.services.store.
+    # Le crochet PyInstaller de winsdk ne ramasse que ce qui est atteignable,
+    # et rien n atteignait ce namespace avant ce module. « S abonner » aurait
+    # donc plante dans l exe, et nulle part ailleurs.
+    "core.abonnement_store",
+    "core.winrt_utils",
+    "winsdk.windows.services.store",
+    "winsdk._winrt",
     "core.wake",
     "core.desktop",
     "core.browser_tabs",

@@ -123,6 +123,26 @@ def aucune_trace_sur_la_machine(monkeypatch):
     monkeypatch.setattr(secrets, "poser", lambda nom, valeur, config=None: True)
     monkeypatch.setattr(secrets, "oublier", lambda nom, config=None: True)
 
+    # -- l ABONNEMENT DU STORE ----------------------------------------------
+    # Regle 5. `abonne()` interroge le Store par WinRT : la reponse depend de
+    # ce que le proprietaire de la machine a achete, et l appel coute une
+    # cinquantaine de millisecondes a chaque phrase non reconnue. Un test ne
+    # doit dependre ni de l un ni de l autre.
+    #
+    # Pas d abonnement par defaut, donc -- c est l etat d une installation
+    # neuve. Un test qui veut l inverse pose sa propre doublure.
+    from core import abonnement_store, edition
+
+    monkeypatch.setattr(abonnement_store, "abonne", lambda store_id: False)
+    monkeypatch.setattr(abonnement_store, "jeton", lambda audience="": "")
+    monkeypatch.setattr(abonnement_store, "disponible", lambda: False)
+    monkeypatch.setattr(abonnement_store, "acheter",
+                        lambda store_id, fenetre: (False, "Store absent.",
+                                                   "No Store."))
+    # Le cache est un etat de module : sans cette remise a zero, un test qui
+    # simule un abonnement le laisserait actif pour les suivants.
+    edition.oublier_le_cache()
+
     # -- la CAMERA ----------------------------------------------------------
     # Regle 4 ET regle 5 a la fois. `capturer` allume vraiment la camera : un
     # temoin qui s illumine pendant que la suite tourne, et une photo ecrite

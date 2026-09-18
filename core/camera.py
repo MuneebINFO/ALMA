@@ -20,8 +20,9 @@ desinstaller une application -- a juste titre.
 
 from __future__ import annotations
 
-import asyncio
 import logging
+
+from core import winrt_utils
 
 log = logging.getLogger(__name__)
 
@@ -104,23 +105,10 @@ async def _capturer_async(identifiant: str) -> bytes:
             log.debug("Caméra non refermée : %s", exc)
 
 
-def _executer(coroutine):
-    """
-    Joue une coroutine winsdk, meme depuis un thread sans boucle.
-
-    Alma appelle ceci depuis le thread des commandes, qui n a pas de boucle
-    asyncio. `asyncio.run` en cree une et la referme proprement.
-    """
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coroutine)
-    # Une boucle tourne deja : on en ouvre une dans un thread a part plutot
-    # que de s y greffer, ce qui bloquerait l appelant.
-    import concurrent.futures
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coroutine).result()
+# Le pont vers les coroutines WinRT vit dans core/winrt_utils.py : la camera
+# et l abonnement Store s en servent tous les deux, et deux copies d un
+# utilitaire de concurrence divergent toujours.
+_executer = winrt_utils.executer
 
 
 def capturer(identifiant: str = "") -> bytes:

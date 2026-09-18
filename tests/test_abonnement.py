@@ -316,3 +316,161 @@ def test_echap_referme_le_panneau_avant_d_endormir(panneau):
 
     assert panneau.abonnement is None
     assert sommeils == [], "ALMA a été endormie au lieu de fermer l'onglet"
+
+
+# --------------------------------------------------------------------------
+# Le bouton « S'abonner » branché sur le Store
+# --------------------------------------------------------------------------
+@pytest.fixture
+def store_present(assistant, monkeypatch):
+    """Une machine où le Store répond, avec un achat sous surveillance."""
+    from core import abonnement_store
+
+    achats = []
+    monkeypatch.setattr(abonnement_store, "disponible", lambda: True)
+    monkeypatch.setattr(
+        abonnement_store, "acheter",
+        lambda store_id, fenetre: achats.append((store_id, fenetre))
+        or (True, "C'est fait.", "All set."))
+    return achats
+
+
+def test_avec_le_store_le_bouton_s_abonner_apparait(tk_root, assistant,
+                                                    store_present):
+    faux = panneau_factice(tk_root, assistant)
+    faux.basculer_abonnement()
+
+    assert "pas encore ouvert" not in texte_affiche(faux)
+
+
+def test_l_achat_passe_par_le_store_avec_le_bon_identifiant(tk_root, assistant,
+                                                            store_present):
+    faux = panneau_factice(tk_root, assistant)
+    faux.basculer_abonnement()
+
+    faux._acheter_puis_rafraichir(fenetre=1234, anglais=False)
+
+    assert len(store_present) == 1
+    store_id, fenetre = store_present[0]
+    assert store_id == assistant.config.get("abonnement.store_id")
+    assert fenetre == 1234, "le handle de fenêtre n'est pas transmis"
+
+
+def test_un_achat_annule_le_dit_sans_rien_activer(tk_root, assistant,
+                                                  monkeypatch):
+    from core import abonnement_store, edition
+
+    monkeypatch.setattr(abonnement_store, "disponible", lambda: True)
+    monkeypatch.setattr(
+        abonnement_store, "acheter",
+        lambda store_id, fenetre: (False, "L'achat a été annulé.",
+                                   "The purchase was cancelled."))
+    faux = panneau_factice(tk_root, assistant)
+    faux.basculer_abonnement()
+
+    faux._acheter_puis_rafraichir(fenetre=1, anglais=False)
+    faux.root.update()
+
+    assert "annulé" in texte_affiche(faux)
+    assert edition.est_complete(assistant.config) is False
+
+
+def test_le_cache_est_oublie_apres_un_achat(tk_root, assistant, store_present,
+                                            monkeypatch):
+    """
+    Sans cela, ALMA continuerait de croire l'utilisateur non abonné pendant
+    trente secondes après qu'il vient de payer — la pire seconde possible
+    pour un doute.
+    """
+    from core import edition
+
+    oublis = []
+    monkeypatch.setattr(edition, "oublier_le_cache",
+                        lambda: oublis.append(True))
+    faux = panneau_factice(tk_root, assistant)
+    faux.basculer_abonnement()
+
+    faux._acheter_puis_rafraichir(fenetre=1, anglais=False)
+
+    assert oublis, "le cache d'abonnement n'a pas été invalidé"
+
+
+# --------------------------------------------------------------------------
+# Les deux voies vers l'édition complète
+# --------------------------------------------------------------------------
+def test_une_cle_envoie_droit_chez_anthropic(assistant, monkeypatch):
+    """Rien ne transite par le relais : c'est le compte de l'utilisateur."""
+    from core import edition, secrets
+    from core.providers.claude_api_provider import ClaudeApiProvider
+
+    monkeypatch.setattr(secrets, "lire", lambda nom, cfg=None: "sk-ant-a-lui")
+    assistant.config.set("general.edition", "complete")
+    assistant.config.set("abonnement.relais_url", "https://relais.test")
+
+    assert edition.voie(assistant.config) == edition.VOIE_CLE
+
+    construits = []
+    import anthropic
+    monkeypatch.setattr(anthropic, "Anthropic",
+                        lambda **k: construits.append(k) or object())
+
+    ClaudeApiProvider(assistant.config).client()
+
+    assert construits[0]["api_key"] == "sk-ant-a-lui"
+    assert "base_url" not in construits[0], "la clé de l'utilisateur est passée par le relais"
+
+
+def test_un_abonnement_passe_par_le_relais(assistant, monkeypatch):
+    """Et l'application n'a alors AUCUNE clé — seulement un jeton signé."""
+    from core import abonnement_store, edition
+    from core.providers.claude_api_provider import ClaudeApiProvider
+
+    monkeypatch.setattr(abonnement_store, "abonne", lambda store_id: True)
+    monkeypatch.setattr(abonnement_store, "jeton", lambda audience="": "jeton-signe")
+    edition.oublier_le_cache()
+    assistant.config.set("abonnement.relais_url", "https://relais.test")
+
+    assert edition.voie(assistant.config) == edition.VOIE_ABONNEMENT
+
+    construits = []
+    import anthropic
+    monkeypatch.setattr(anthropic, "Anthropic",
+                        lambda **k: construits.append(k) or object())
+
+    ClaudeApiProvider(assistant.config).client()
+
+    assert construits[0]["base_url"] == "https://relais.test"
+    assert construits[0]["api_key"] == "jeton-signe"
+    assert not construits[0]["api_key"].startswith("sk-ant")
+
+
+def test_un_abonnement_sans_relais_le_dit_clairement(assistant, monkeypatch):
+    """
+    Le cas qui arrivera pendant le déploiement : abonné, mais le relais n'est
+    pas encore en ligne. Il faut que le message le dise, pas qu'il ressemble
+    à un problème d'abonnement.
+    """
+    from core import abonnement_store, edition
+    from core.providers.claude_api_provider import ClaudeApiProvider
+
+    monkeypatch.setattr(abonnement_store, "abonne", lambda store_id: True)
+    edition.oublier_le_cache()
+    assistant.config.set("abonnement.relais_url", "")
+
+    with pytest.raises(RuntimeError, match="relais"):
+        ClaudeApiProvider(assistant.config).client()
+
+
+def test_la_cle_l_emporte_sur_l_abonnement(assistant, monkeypatch):
+    """
+    Quelqu'un qui a posé une clé l'a fait exprès, et elle ne coûte rien à
+    personne d'autre. La consulter est par ailleurs instantané.
+    """
+    from core import abonnement_store, edition, secrets
+
+    monkeypatch.setattr(secrets, "lire", lambda nom, cfg=None: "sk-ant-a-lui")
+    monkeypatch.setattr(abonnement_store, "abonne", lambda store_id: True)
+    edition.oublier_le_cache()
+    assistant.config.set("general.edition", "complete")
+
+    assert edition.voie(assistant.config) == edition.VOIE_CLE

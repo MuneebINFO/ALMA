@@ -1475,18 +1475,74 @@ class AlmaApp:
         self._etat_cle.pack(pady=(12, 0))
 
     def _bouton_abonner(self, parent, anglais: bool) -> None:
-        """Le bouton d abonnement, ou l aveu qu il n y en a pas encore."""
-        url = str(self.assistant.config.get("abonnement.url", "") or "").strip()
-        if not url:
-            tk.Label(parent,
-                     text=("Subscriptions are not open yet."
-                           if anglais else
-                           "L'abonnement n'est pas encore ouvert."),
-                     bg=FOND, fg=TEXTE_DOUX,
-                     font=tkfont.Font(family="Segoe UI", size=11)).pack()
+        """
+        Le bouton d abonnement -- ou l aveu franc qu il n y en a pas encore.
+
+        Trois cas, du meilleur au dernier recours :
+
+          1. le STORE, quand l add-on est declare et joignable. Windows ouvre
+             sa propre fenetre d achat, contre la carte deja enregistree sur
+             le compte Microsoft : un clic et c est fini ;
+          2. une PAGE de paiement hors Store, si `abonnement.url` en designe
+             une. Utile a qui distribue Alma autrement que par le Store ;
+          3. rien, et on le dit. Un bouton qui fait semblant d encaisser
+             coute plus cher en confiance qu il ne rapporte.
+        """
+        from core import abonnement_store
+
+        store_id = str(self.assistant.config.get("abonnement.store_id", "")
+                       or "").strip()
+        if store_id and abonnement_store.disponible():
+            self._bouton(parent, "Subscribe" if anglais else "S'abonner",
+                         self._acheter_abonnement).pack()
             return
-        self._bouton(parent, "Subscribe" if anglais else "S'abonner",
-                     lambda: self._ouvrir_page_abonnement(url)).pack()
+
+        url = str(self.assistant.config.get("abonnement.url", "") or "").strip()
+        if url:
+            self._bouton(parent, "Subscribe" if anglais else "S'abonner",
+                         lambda: self._ouvrir_page_abonnement(url)).pack()
+            return
+
+        tk.Label(parent,
+                 text=("Subscriptions are not open yet."
+                       if anglais else
+                       "L'abonnement n'est pas encore ouvert."),
+                 bg=FOND, fg=TEXTE_DOUX,
+                 font=tkfont.Font(family="Segoe UI", size=11)).pack()
+
+    def _acheter_abonnement(self) -> None:
+        """
+        Ouvre la fenetre d achat de Windows, hors du thread graphique.
+
+        Elle est MODALE et reste ouverte tant que l utilisateur n a pas
+        tranche : l appeler ici figerait la fenetre d Alma derriere, et
+        l utilisateur croirait l application plantee au moment precis ou on
+        lui demande de payer.
+        """
+        anglais = self._anglais()
+        if self._etat_cle is not None:
+            self._etat_cle.configure(
+                text="Opening the Store…" if anglais else "Ouverture du Store…",
+                fg=TEXTE_DOUX)
+        # Le handle de la fenetre : Windows en a besoin pour savoir devant
+        # quoi s afficher, et l achat echoue sans lui.
+        fenetre = self.root.winfo_id()
+        threading.Thread(target=self._acheter_puis_rafraichir,
+                         args=(fenetre, anglais),
+                         name="alma-achat", daemon=True).start()
+
+    def _acheter_puis_rafraichir(self, fenetre: int, anglais: bool) -> None:
+        from core import abonnement_store, edition
+
+        store_id = str(self.assistant.config.get("abonnement.store_id", "")
+                       or "").strip()
+        reussi, fr, en = abonnement_store.acheter(store_id, fenetre)
+        # La reponse gardee ne vaut plus rien : l abonnement vient de changer.
+        edition.oublier_le_cache()
+        if reussi:
+            self._revenir_au_graphique(self._succes_cle)
+            return
+        self._revenir_au_graphique(lambda: self._echec_cle(en if anglais else fr))
 
     def _ouvrir_page_abonnement(self, url: str) -> None:
         from core.win_utils import open_url

@@ -89,21 +89,51 @@ class ClaudeApiProvider:
         """
         Le client SDK, construit une seule fois.
 
-        La cle est lue du coffre a CHAQUE construction plutot que retenue au
-        demarrage : l utilisateur peut la retirer en cours de route, et Alma
-        doit alors cesser d appeler, pas continuer avec une copie en memoire.
+        DEUX DESTINATIONS POSSIBLES, et c est tout l interet de les avoir
+        reunies ici :
+
+          - une cle posee par l utilisateur part DROIT chez Anthropic, sous
+            son compte. Rien ne transite par nous ;
+          - un abonnement du Store passe par le RELAIS, qui detient la cle.
+            L application n en a aucune -- elle ne fait qu envoyer un jeton
+            signe par Microsoft la ou elle mettait une cle.
+
+        Le SDK accepte une `base_url` : le basculement tient donc en deux
+        valeurs, et revenir en arriere si le relais tombe aussi.
+
+        Les identifiants sont relus a CHAQUE construction plutot que retenus
+        au demarrage : une cle retiree ou un abonnement resilie doivent
+        arreter les appels, pas continuer sur une copie en memoire.
         """
         if self._client is not None:
             return self._client
+
         from core import edition
 
-        cle = edition.cle(self.config)
-        if not cle:
-            raise RuntimeError("aucune clé d'API : l'édition complète est inactive")
         import anthropic
 
-        self._client = anthropic.Anthropic(api_key=cle, timeout=float(self.delai))
-        return self._client
+        voie = edition.voie(self.config)
+        if voie == edition.VOIE_CLE:
+            self._client = anthropic.Anthropic(api_key=edition.cle(self.config),
+                                               timeout=float(self.delai))
+            return self._client
+
+        if voie == edition.VOIE_ABONNEMENT:
+            from core import abonnement_store
+
+            adresse = str(self.config.get("abonnement.relais_url", "") or "").strip()
+            if not adresse:
+                raise RuntimeError(
+                    "abonnement actif, mais aucun relais n'est configuré")
+            jeton = abonnement_store.jeton(adresse)
+            if not jeton:
+                raise RuntimeError(
+                    "impossible d'obtenir la preuve d'abonnement auprès du Store")
+            self._client = anthropic.Anthropic(api_key=jeton, base_url=adresse,
+                                               timeout=float(self.delai))
+            return self._client
+
+        raise RuntimeError("ni clé ni abonnement : l'édition complète est inactive")
 
     def diagnostic(self) -> str:
         """Ce qui manque pour que ce provider fonctionne, ou une chaine vide."""

@@ -53,17 +53,63 @@ def cle(config) -> str:
     return secrets.lire(CLE_API, config)
 
 
+# Les DEUX voies vers l edition complete. Elles ne se ressemblent pas et le
+# provider doit les distinguer : l une envoie la cle de l utilisateur droit a
+# Anthropic, l autre envoie un jeton d abonne au relais.
+VOIE_CLE = "cle"
+VOIE_ABONNEMENT = "abonnement"
+
+# L interrogation du Store passe par WinRT : une cinquantaine de millisecondes,
+# a chaque phrase non reconnue. On garde donc la reponse quelques secondes --
+# assez pour ne pas la payer a chaque mot, assez peu pour qu un achat qui
+# vient d aboutir soit pris en compte tout de suite.
+_DUREE_CACHE = 30.0
+_cache_abonnement = {"quand": 0.0, "actif": False}
+
+
+def _abonne_au_store(config) -> bool:
+    """L abonnement du Store est-il actif ? Reponse gardee quelques secondes."""
+    import time
+
+    from core import abonnement_store
+
+    if time.monotonic() - _cache_abonnement["quand"] < _DUREE_CACHE:
+        return _cache_abonnement["actif"]
+    identifiant = str((config.get("abonnement.store_id", "") if config else "") or "")
+    actif = abonnement_store.abonne(identifiant)
+    _cache_abonnement.update(quand=time.monotonic(), actif=actif)
+    return actif
+
+
+def oublier_le_cache() -> None:
+    """A appeler apres un achat : la reponse gardee n est plus la bonne."""
+    _cache_abonnement.update(quand=0.0, actif=False)
+
+
+def voie(config) -> str:
+    """
+    Par ou passe l edition complete : « cle », « abonnement », ou rien.
+
+    La CLE D ABORD. Quelqu un qui en a pose une l a fait exprès, et elle ne
+    coute rien a personne d autre ; la consulter est par ailleurs instantane,
+    la ou le Store demande un aller-retour WinRT.
+    """
+    if souhaitee(config) == COMPLETE and cle(config):
+        return VOIE_CLE
+    if _abonne_au_store(config):
+        return VOIE_ABONNEMENT
+    return ""
+
+
 def active(config) -> str:
     """
     L edition qui s applique reellement.
 
-    « complete » sans cle lisible vaut « libre » : c est ce qui garantit
+    « complete » sans cle NI abonnement vaut « libre » : c est ce qui garantit
     qu Alma ne tente jamais un appel qu elle ne peut pas faire, et qu elle le
     dit au lieu d echouer.
     """
-    if souhaitee(config) != COMPLETE:
-        return LIBRE
-    return COMPLETE if cle(config) else LIBRE
+    return COMPLETE if voie(config) else LIBRE
 
 
 def est_complete(config) -> bool:

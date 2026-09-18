@@ -171,6 +171,11 @@ DEFAULTS: dict = {
         # fois l add-on publie.
         "store_id": "9PLMCGR6ZGSL",
         "produit": "alma-complete-monthly",
+        # Le relais : c est lui qui detient la cle, jamais l application (voir
+        # relais/README.md). Vide tant qu il n est pas deploye -- un abonne
+        # verrait alors que son abonnement est actif mais qu Alma ne sait pas
+        # ou envoyer ses demandes, ce que l onglet lui dit franchement.
+        "relais_url": "",
         # Repli : une page de paiement hors Store, si un jour il en faut une.
         # Vide tant qu elle n existe pas -- le bouton le dit alors au lieu
         # d ouvrir une page morte.
