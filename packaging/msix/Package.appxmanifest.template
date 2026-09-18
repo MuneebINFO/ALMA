@@ -52,6 +52,14 @@
     <!-- Capacite ordinaire (pas de revue Store particuliere) : le mode voix
          a besoin du micro. -->
     <DeviceCapability Name="microphone" />
+    <!-- La camera, pour « prends une photo » et l analyse d image. Sans cette
+         ligne, l application empaquetee se voit refuser la webcam par Windows
+         alors que la meme execution depuis les sources fonctionne : hors
+         MSIX, aucune capacite n est exigee. Un ecart de ce genre ne se voit
+         qu apres publication, chez l utilisateur.
+         La description affichee dans la fiche du Store doit dire a quoi elle
+         sert : une prise a la demande, jamais en continu. -->
+    <DeviceCapability Name="webcam" />
   </Capabilities>
 
   <Applications>
