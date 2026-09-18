@@ -740,6 +740,10 @@ class AlmaApp:
         self.non_lus = 0
         # Panneau du premier lancement : absent tant qu il n y a rien a demander.
         self.installation = None
+        # Onglet Abonnement : absent tant qu on ne l ouvre pas.
+        self.abonnement = None
+        self._champ_cle = None
+        self._etat_cle = None
         self._suite_installation = None
         self._recevoir_entendu = None
         self.boule = None          # bille de niveau du premier lancement
@@ -838,6 +842,9 @@ class AlmaApp:
         boutons.pack(pady=(0, 20))
         self.bouton_historique = self._bouton(boutons, "Historique", self.basculer_historique)
         self.bouton_historique.pack(side="left", padx=5)
+        self.bouton_abonnement = self._bouton(boutons, "Abonnement",
+                                              self.basculer_abonnement)
+        self.bouton_abonnement.pack(side="left", padx=5)
         self._bouton(boutons, "Quitter", self.quitter).pack(side="left", padx=5)
 
         # L historique existe des le depart -- il se remplit meme cache -- mais
@@ -1002,10 +1009,17 @@ class AlmaApp:
         """
         Échap rend la main.
 
-        D'abord le plein écran — sans barre de titre, c'est la seule prise
+        D'abord le panneau ouvert, s'il y en a un : Échap referme ce qu'on
+        vient d'ouvrir avant de toucher au reste. Sinon on endormirait Alma
+        en croyant fermer l'onglet, et l'onglet resterait là.
+
+        Ensuite le plein écran — sans barre de titre, c'est la seule prise
         qu'on ait sur la fenêtre. Ensuite seulement, la touche remet Alma en
         veille, comme la barre d'espace et le clic sur l'orbe.
         """
+        if getattr(self, "abonnement", None) is not None:
+            self._fermer_abonnement()
+            return
         if self.plein_ecran:
             self._plein_ecran(False)
             return
@@ -1239,6 +1253,321 @@ class AlmaApp:
             except Exception:
                 return False
         return bool(getattr(self.stt, "available", False))
+
+    # ----------------------------------------------------------------------
+    # Abonnement
+    # ----------------------------------------------------------------------
+    # Ce panneau montre les deux editions cote a cote et permet d activer la
+    # complete. Il ne DECIDE de rien : l edition active se deduit de la cle
+    # rangee dans le coffre (core/edition.py), et une cle est verifiee contre
+    # le vrai service avant d etre acceptee.
+    #
+    # Il n y a ni paiement ni compte ici. Le jour ou une page de paiement
+    # existera, `abonnement.url` la designera et le bouton « S abonner »
+    # l ouvrira -- une seule ligne de configuration. Tant qu elle est vide, le
+    # bouton le DIT au lieu d ouvrir une page morte : un bouton qui fait
+    # semblant coute plus cher en confiance qu il ne rapporte.
+
+    # Les deux cartes sont posees en GRILLE, pas cote a cote en pack.
+    #
+    # Figer leur taille (`pack_propagate(False)` plus une hauteur) revenait a
+    # deviner un nombre : trop petit, la derniere puce sortait de la carte ;
+    # trop grand, le panneau depassait d une fenetre de 760 px. Une grille
+    # donne aux deux la hauteur de la PLUS HAUTE, quelle qu elle soit, et
+    # `minsize` leur impose la meme largeur. Plus rien a deviner.
+    LARGEUR_CARTE_EDITION = 380
+
+    def basculer_abonnement(self, _evenement=None) -> None:
+        """Montre ou cache l onglet Abonnement."""
+        if getattr(self, "abonnement", None) is not None:
+            self._fermer_abonnement()
+            return
+        self._ouvrir_abonnement()
+
+    def _fermer_abonnement(self) -> None:
+        cadre = getattr(self, "abonnement", None)
+        self.abonnement = None
+        self._champ_cle = None
+        self._etat_cle = None
+        if cadre is not None:
+            cadre.destroy()
+        # L installation a la priorite : si elle tourne, la colonne reste
+        # rangee, sinon l orbe reviendrait par-dessus les questions.
+        if getattr(self, "installation", None) is None:
+            self.colonne.pack(side="left", fill="both", expand=True)
+
+    def _anglais(self) -> bool:
+        return str(self.assistant.config.get("general.language", "fr"))[:2] == "en"
+
+    def _ouvrir_abonnement(self) -> None:
+        self.colonne.pack_forget()
+        self.abonnement = tk.Frame(self.corps, bg=FOND)
+        self.abonnement.pack(fill="both", expand=True)
+        self._dessiner_abonnement()
+
+    def _dessiner_abonnement(self) -> None:
+        """(Re)dessine le panneau. Rappele apres chaque changement d edition."""
+        from core import edition
+
+        for enfant in self.abonnement.winfo_children():
+            enfant.destroy()
+        self._champ_cle = None
+        self._etat_cle = None
+
+        anglais = self._anglais()
+        complete = edition.est_complete(self.assistant.config)
+
+        cadre = tk.Frame(self.abonnement, bg=FOND)
+        cadre.place(relx=0.5, rely=0.5, anchor="center")
+
+        tk.Label(cadre, text="Subscription" if anglais else "Abonnement",
+                 font=tkfont.Font(family="Segoe UI", size=27), bg=FOND,
+                 fg=TEXTE).pack()
+        tk.Label(cadre,
+                 text=("What you already have, and what a key would add."
+                       if anglais else
+                       "Ce que vous avez déjà, et ce qu'une clé ajouterait."),
+                 font=tkfont.Font(family="Segoe UI", size=12), bg=FOND,
+                 fg=TEXTE_DOUX).pack(pady=(10, 0))
+
+        cartes = tk.Frame(cadre, bg=FOND)
+        cartes.pack(pady=(24, 0))
+        for colonne in (0, 1):
+            cartes.columnconfigure(colonne, weight=1, uniform="edition",
+                                   minsize=self.LARGEUR_CARTE_EDITION)
+        self._carte_edition(cartes, libre=True, active=not complete, anglais=anglais)
+        self._carte_edition(cartes, libre=False, active=complete, anglais=anglais)
+
+        self._pied_abonnement(cadre, complete, anglais)
+
+        retour = tk.Label(cadre, text="Close" if anglais else "Fermer",
+                          font=tkfont.Font(family="Segoe UI", size=10), bg=FOND,
+                          fg=melanger(FOND, TEXTE_DOUX, 0.8), cursor="hand2")
+        retour.pack(pady=(18, 0))
+        retour.bind("<Button-1>", lambda _e: self._fermer_abonnement())
+
+    def _titre_edition(self, libre: bool, anglais: bool) -> str:
+        if libre:
+            return "ALMA"
+        return "ALMA Complete" if anglais else "ALMA complète"
+
+    def _carte_edition(self, parent, libre: bool, active: bool, anglais: bool) -> None:
+        """Une des deux editions, avec ce qu elle contient."""
+        accent = ETATS["veille"][0] if libre else ETATS["arme"][0]
+        fond = melanger(FOND_CARTE, accent, 0.10 if active else 0.0)
+        bord = accent if active else BORDURE
+
+        carte = tk.Frame(parent, bg=fond, highlightbackground=bord,
+                         highlightcolor=bord, highlightthickness=1, bd=0)
+        # `sticky` sur les quatre cotes : c est lui qui etire la carte la plus
+        # courte a la hauteur de l autre, au lieu de la laisser flotter.
+        carte.grid(row=0, column=0 if libre else 1, padx=10, sticky="nsew")
+
+        interieur = tk.Frame(carte, bg=fond)
+        interieur.pack(fill="both", expand=True, padx=26, pady=24)
+
+        tk.Label(interieur, text=self._titre_edition(libre, anglais), bg=fond,
+                 fg=TEXTE,
+                 font=tkfont.Font(family="Segoe UI", size=19)).pack(anchor="w")
+
+        if libre:
+            prix = "Free, always" if anglais else "Gratuit, pour toujours"
+        else:
+            prix = str(self.assistant.config.get(
+                "abonnement.prix_en" if anglais else "abonnement.prix_fr", ""))
+        tk.Label(interieur, text=prix, bg=fond, fg=accent,
+                 font=tkfont.Font(family="Segoe UI", size=12)).pack(
+                     anchor="w", pady=(4, 0))
+
+        if active:
+            tk.Label(interieur, text="✓ " + ("In use" if anglais else "En cours"),
+                     bg=fond, fg=accent,
+                     font=tkfont.Font(family="Segoe UI", size=11)).pack(
+                         anchor="w", pady=(10, 0))
+
+        for ligne in self._contenu_edition(libre, anglais):
+            tk.Label(interieur, text="-  " + ligne, bg=fond, fg=TEXTE_DOUX,
+                     font=tkfont.Font(family="Segoe UI", size=11),
+                     wraplength=self.LARGEUR_CARTE_EDITION - 60,
+                     justify="left").pack(anchor="w", pady=(9, 0))
+
+    def _contenu_edition(self, libre: bool, anglais: bool) -> list:
+        """
+        Ce que chaque edition apporte.
+
+        L edition libre est decrite en PREMIER et en entier, expres : ce n est
+        pas une version amputee, c est un assistant d automatisation complet.
+        La complete AJOUTE -- elle ne debloque pas.
+        """
+        # Chaque ligne tient sur UNE ligne a la largeur de la carte. Ce n est
+        # pas de la coquetterie : une puce qui passe a la ligne decale toutes
+        # les suivantes, et la derniere sortait de la carte.
+        if libre:
+            if anglais:
+                return ["Every command, by voice or keyboard",
+                        "Remembers the conversation",
+                        "Wikipedia, arithmetic, weather",
+                        "Takes photos with the camera",
+                        "Works offline, sends nothing"]
+            return ["Toutes les commandes, voix ou clavier",
+                    "Retient le fil de la conversation",
+                    "Wikipédia, calculs, météo, traduction",
+                    "Prend des photos avec la caméra",
+                    "Hors ligne, n'envoie rien"]
+        if anglais:
+            return ["Everything above, unchanged",
+                    "Answers open questions",
+                    "Looks at what the camera sees",
+                    "Understands unplanned wordings",
+                    "Your key, billed by Anthropic"]
+        return ["Tout ce qui précède, à l'identique",
+                "Répond aux questions ouvertes",
+                "Regarde ce que voit la caméra",
+                "Comprend les formulations imprévues",
+                "Votre clé, facturée par Anthropic"]
+
+    def _pied_abonnement(self, parent, complete: bool, anglais: bool) -> None:
+        """Ce qu on peut FAIRE : s abonner, activer une cle, ou la retirer."""
+        pied = tk.Frame(parent, bg=FOND)
+        pied.pack(pady=(22, 0))
+
+        if complete:
+            tk.Label(pied,
+                     text=("Your key is stored, encrypted by Windows."
+                           if anglais else
+                           "Votre clé est enregistrée, chiffrée par Windows."),
+                     bg=FOND, fg=TEXTE_DOUX,
+                     font=tkfont.Font(family="Segoe UI", size=11)).pack()
+            retirer = tk.Label(
+                pied, text="Remove the key" if anglais else "Retirer la clé",
+                bg=FOND, fg=ETATS["erreur"][0], cursor="hand2",
+                font=tkfont.Font(family="Segoe UI", size=11))
+            retirer.pack(pady=(12, 0))
+            retirer.bind("<Button-1>", lambda _e: self._retirer_cle())
+            return
+
+        self._bouton_abonner(pied, anglais)
+
+        tk.Label(pied,
+                 text=("Already have an Anthropic API key?"
+                       if anglais else
+                       "Vous avez déjà une clé d'API Anthropic ?"),
+                 bg=FOND, fg=TEXTE_DOUX,
+                 font=tkfont.Font(family="Segoe UI", size=11)).pack(pady=(18, 0))
+
+        saisie = tk.Frame(pied, bg=FOND)
+        saisie.pack(pady=(10, 0))
+        # `show` : une cle ne s affiche pas en clair, pas meme a celui qui la
+        # tape -- un partage d ecran, une capture, et elle est dehors.
+        self._champ_cle = tk.Entry(
+            saisie, font=tkfont.Font(family="Consolas", size=12), bg=FOND_CARTE,
+            fg=TEXTE, insertbackground=ETATS["arme"][0], bd=0, relief="flat",
+            width=34, show="*", highlightthickness=1,
+            highlightbackground=BORDURE, highlightcolor=ETATS["arme"][0])
+        self._champ_cle.pack(side="left", ipady=7, ipadx=10)
+        self._champ_cle.bind("<Return>", lambda _e: self._activer_cle())
+        self._bouton(saisie, "Activate" if anglais else "Activer",
+                     self._activer_cle).pack(side="left", padx=(8, 0))
+
+        self._etat_cle = tk.Label(pied, text="", bg=FOND, fg=TEXTE_DOUX,
+                                  wraplength=520, justify="center",
+                                  font=tkfont.Font(family="Segoe UI", size=11))
+        self._etat_cle.pack(pady=(12, 0))
+
+    def _bouton_abonner(self, parent, anglais: bool) -> None:
+        """Le bouton d abonnement, ou l aveu qu il n y en a pas encore."""
+        url = str(self.assistant.config.get("abonnement.url", "") or "").strip()
+        if not url:
+            tk.Label(parent,
+                     text=("Subscriptions are not open yet."
+                           if anglais else
+                           "L'abonnement n'est pas encore ouvert."),
+                     bg=FOND, fg=TEXTE_DOUX,
+                     font=tkfont.Font(family="Segoe UI", size=11)).pack()
+            return
+        self._bouton(parent, "Subscribe" if anglais else "S'abonner",
+                     lambda: self._ouvrir_page_abonnement(url)).pack()
+
+    def _ouvrir_page_abonnement(self, url: str) -> None:
+        from core.win_utils import open_url
+
+        open_url(url)
+
+    def _activer_cle(self, _evenement=None) -> None:
+        """
+        Verifie la cle, PUIS la range. Dans cet ordre.
+
+        La verification part sur le reseau : elle se fait donc dans un thread,
+        sinon la fenetre gele le temps de l aller-retour et l on croit que
+        l application a plante.
+        """
+        if self._champ_cle is None:
+            return
+        cle = self._champ_cle.get().strip()
+        anglais = self._anglais()
+        if not cle:
+            self._etat_cle.configure(
+                text="Paste your key first." if anglais
+                else "Collez d'abord votre clé.", fg=TEXTE_DOUX)
+            return
+        self._etat_cle.configure(text="Checking…" if anglais else "Vérification…",
+                                 fg=TEXTE_DOUX)
+        threading.Thread(target=self._verifier_puis_ranger, args=(cle, anglais),
+                         name="alma-verif-cle", daemon=True).start()
+
+    def _revenir_au_graphique(self, quoi) -> None:
+        """
+        Repasse dans le thread graphique, ou renonce si la fenetre n est plus la.
+
+        La verification dure jusqu a quinze secondes. Pendant ce temps
+        l utilisateur peut avoir quitte : `root.after` leve alors depuis le
+        thread (« main thread is not in main loop »), et l exception meurt
+        dans son coin sans que personne la voie. Renoncer est le bon
+        comportement -- il n y a plus rien a afficher.
+        """
+        try:
+            self.root.after(0, quoi)
+        except (tk.TclError, RuntimeError):
+            pass
+
+    def _verifier_puis_ranger(self, cle: str, anglais: bool) -> None:
+        """Hors du thread graphique : le resultat revient par `after`."""
+        from core import edition
+        from core.providers.claude_api_provider import verifier_cle
+
+        ok, raison_fr, raison_en = verifier_cle(cle)
+        if not ok:
+            raison = raison_en if anglais else raison_fr
+            self._revenir_au_graphique(lambda: self._echec_cle(raison))
+            return
+        edition.poser_cle(self.assistant.config, cle)
+        # Regle 3 : applique ET retenu. `personnaliser` fait les deux moities
+        # et previent les objets deja construits.
+        self.assistant.personnaliser({"general.edition": edition.COMPLETE})
+        self._revenir_au_graphique(self._succes_cle)
+
+    def _echec_cle(self, raison: str) -> None:
+        if self._etat_cle is None:
+            return
+        try:
+            self._etat_cle.configure(text=raison, fg=ETATS["erreur"][0])
+        except tk.TclError:
+            pass                              # le panneau a ete referme entre-temps
+
+    def _succes_cle(self) -> None:
+        self.assistant.bruit("ok")
+        if getattr(self, "abonnement", None) is not None:
+            self._dessiner_abonnement()
+
+    def _retirer_cle(self) -> None:
+        """Oublie la cle et revient en edition libre."""
+        from core import edition
+
+        edition.retirer_cle(self.assistant.config)
+        self.assistant.personnaliser({"general.edition": edition.LIBRE})
+        self.assistant.bruit("ok")
+        if getattr(self, "abonnement", None) is not None:
+            self._dessiner_abonnement()
 
     def montrer_installation(self, quand_fini) -> None:
         """

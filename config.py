@@ -158,6 +158,17 @@ DEFAULTS: dict = {
         # core/sons.py, et outils/generer_sons.py pour les fabriquer.
         "enabled": True,
     },
+    # L onglet Abonnement de la fenetre. Ce bloc ne decrit que ce qui
+    # s AFFICHE : l edition reellement active depend de la cle rangee dans le
+    # coffre, jamais d ici (voir core/edition.py).
+    "abonnement": {
+        # Page de paiement. VIDE tant qu elle n existe pas -- le bouton dit
+        # alors « bientot disponible » au lieu d ouvrir une page morte. Le
+        # jour ou elle existe, cette seule ligne suffit a l allumer.
+        "url": "",
+        "prix_fr": "6,99 € par mois",
+        "prix_en": "€6.99 per month",
+    },
     "weather": {
         "default_city": "Bruxelles",
         "units": "metric",

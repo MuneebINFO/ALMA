@@ -169,3 +169,52 @@ class ClaudeApiProvider:
 
         morceaux = [bloc.text for bloc in reponse.content if bloc.type == "text"]
         return "\n".join(morceaux).strip()
+
+
+# --------------------------------------------------------------------------
+# Verifier une cle avant de l accepter
+# --------------------------------------------------------------------------
+def verifier_cle(cle: str, delai: float = 15.0) -> tuple:
+    """
+    Cette cle fonctionne-t-elle ? Rend (ok, raison_fr, raison_en).
+
+    On interroge la LISTE DES MODELES, pas la conversation : c est une simple
+    lecture, elle ne consomme aucun jeton et ne coute donc rien, tout en
+    prouvant que la cle est valide et active. Envoyer un vrai message pour
+    verifier ferait payer l utilisateur pour le droit de s inscrire.
+
+    Accepter une cle sans la verifier serait pire que tout : elle serait
+    rangee, l edition passerait en complete, et le premier echec arriverait
+    plus tard, sur une vraie demande, sans que personne sache pourquoi.
+    """
+    cle = (cle or "").strip()
+    if not cle:
+        return False, "Aucune clé saisie.", "No key entered."
+    try:
+        import anthropic
+    except ImportError:
+        return (False,
+                "Le paquet « anthropic » n'est pas installé.",
+                "The 'anthropic' package isn't installed.")
+
+    try:
+        anthropic.Anthropic(api_key=cle, timeout=delai,
+                            max_retries=0).models.list(limit=1)
+    except anthropic.AuthenticationError:
+        return (False,
+                "Cette clé n'est pas reconnue. Vérifiez que vous l'avez copiée en entier.",
+                "That key wasn't recognised. Check you copied all of it.")
+    except anthropic.PermissionDeniedError:
+        return (False,
+                "Cette clé existe mais n'a pas les droits nécessaires.",
+                "That key exists but lacks the required permissions.")
+    except anthropic.APIConnectionError:
+        return (False,
+                "Impossible de joindre le service. Vérifiez votre connexion.",
+                "Couldn't reach the service. Check your connection.")
+    except Exception as exc:
+        # Volontairement sans la cle dans le message : une cle recopiee dans
+        # une erreur affichee a l ecran est une cle exposee.
+        return False, "Vérification impossible : " + str(exc), \
+            "Couldn't verify: " + str(exc)
+    return True, "", ""
