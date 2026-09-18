@@ -162,9 +162,18 @@ DEFAULTS: dict = {
     # s AFFICHE : l edition reellement active depend de la cle rangee dans le
     # coffre, jamais d ici (voir core/edition.py).
     "abonnement": {
-        # Page de paiement. VIDE tant qu elle n existe pas -- le bouton dit
-        # alors « bientot disponible » au lieu d ouvrir une page morte. Le
-        # jour ou elle existe, cette seule ligne suffit a l allumer.
+        # L add-on d abonnement declare sur Partner Center. C est Windows qui
+        # encaisse : le bouton « S abonner » ouvre SA fenetre d achat, avec la
+        # carte deja enregistree sur le compte Microsoft. Ni cle, ni mot de
+        # passe, ni compte a creer -- le compte Microsoft fait l identite.
+        #
+        # L identifiant est DEFINITIF cote Store : il ne se change plus une
+        # fois l add-on publie.
+        "store_id": "9PLMCGR6ZGSL",
+        "produit": "alma-complete-monthly",
+        # Repli : une page de paiement hors Store, si un jour il en faut une.
+        # Vide tant qu elle n existe pas -- le bouton le dit alors au lieu
+        # d ouvrir une page morte.
         "url": "",
         "prix_fr": "6,99 € par mois",
         "prix_en": "€6.99 per month",
