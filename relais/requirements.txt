@@ -1,0 +1,5 @@
+# Le relais est deploye SEPAREMENT de l application : ces dependances ne
+# grossissent pas Alma.exe et n ont rien a voir avec requirements.txt.
+fastapi>=0.115
+uvicorn[standard]>=0.32
+httpx>=0.27
