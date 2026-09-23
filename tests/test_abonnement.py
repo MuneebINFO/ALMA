@@ -474,3 +474,137 @@ def test_la_cle_l_emporte_sur_l_abonnement(assistant, monkeypatch):
     assistant.config.set("general.edition", "complete")
 
     assert edition.voie(assistant.config) == edition.VOIE_CLE
+
+
+# --------------------------------------------------------------------------
+# Le menu du compte : l'unique point d'entrée de l'écran
+# --------------------------------------------------------------------------
+def menu(tk_root, assistant):
+    faux = panneau_factice(tk_root, assistant)
+    faux.popup_compte = None
+    faux.basculer_compte()
+    return faux
+
+
+def textes_popup(faux):
+    trouves = []
+
+    def descendre(widget):
+        for enfant in widget.winfo_children():
+            if enfant.winfo_class() == "Label":
+                trouves.append(enfant.cget("text"))
+            descendre(enfant)
+
+    descendre(faux.popup_compte)
+    return " ".join(trouves).lower()
+
+
+def test_le_menu_s_ouvre_et_se_referme(tk_root, assistant):
+    faux = menu(tk_root, assistant)
+    assert faux.popup_compte is not None
+
+    faux.basculer_compte()
+    assert faux.popup_compte is None
+
+
+def test_le_menu_propose_profil_et_abonnement(tk_root, assistant):
+    faux = menu(tk_root, assistant)
+
+    affiche = textes_popup(faux)
+    assert "profil" in affiche, affiche
+    assert "abonnement" in affiche, affiche
+
+
+def test_la_pastille_annonce_la_formule_pas_le_nom_de_l_app(tk_root, assistant):
+    """
+    « ALMA » ne répond pas à « à quoi ai-je droit ». La ligne sous le nom
+    doit nommer la FORMULE — c'est la seule information qu'on vient y
+    chercher.
+    """
+    faux = panneau_factice(tk_root, assistant)
+    libelle, _accent = faux._edition_affichee()
+
+    assert "gratuit" in libelle.lower(), libelle
+
+
+def test_la_pastille_change_avec_l_edition(tk_root, avec_cle):
+    faux = panneau_factice(tk_root, avec_cle)
+    libelle, _accent = faux._edition_affichee()
+
+    assert "complète" in libelle.lower(), libelle
+
+
+def test_le_profil_montre_ce_qu_alma_a_retenu(tk_root, assistant):
+    assistant.config.set("general.user_name", "Muneeb")
+    faux = panneau_factice(tk_root, assistant)
+    faux.popup_compte = None
+    faux._ouvrir_profil()
+
+    affiche = textes_popup(faux)
+    assert "muneeb" in affiche, affiche
+    assert "alma" in affiche, affiche
+    assert "français" in affiche, affiche
+
+
+def test_le_profil_dit_comment_changer_plutot_que_d_offrir_un_formulaire(
+        tk_root, assistant):
+    """
+    Ces réglages se changent en le demandant à ALMA. Le rappeler ici apprend
+    la commande à qui l'ignore — un formulaire l'aurait cachée.
+    """
+    faux = panneau_factice(tk_root, assistant)
+    faux.popup_compte = None
+    faux._ouvrir_profil()
+
+    assert "appelle-moi" in textes_popup(faux)
+
+
+def test_l_abonnement_depuis_le_menu_referme_le_menu(tk_root, assistant):
+    """Deux popups ouverts l'un sur l'autre, c'est une fenêtre en désordre."""
+    faux = menu(tk_root, assistant)
+
+    faux._ouvrir_abonnement_depuis_menu()
+
+    assert faux.popup_compte is None
+    assert faux.abonnement is not None
+
+
+def test_la_modale_montre_ce_que_le_gratuit_sait_deja_faire(tk_root, assistant):
+    """
+    La colonne de gauche compte autant que celle de droite : une page
+    d'abonnement qui ne parle que du payant donne l'impression que le
+    gratuit ne sert à rien.
+    """
+    faux = panneau_factice(tk_root, assistant)
+    faux.basculer_abonnement()
+
+    affiche = texte_affiche(faux)
+    assert "ouvre chrome" in affiche, affiche
+    assert "prends une photo" in affiche, affiche
+    assert "gratuit, tout de suite" in affiche, affiche
+
+
+def test_les_exemples_sont_des_phrases_dicibles(tk_root, assistant):
+    """
+    Des phrases réelles, pas des catégories. « Ouvre Chrome » se comprend
+    sans explication ; « gestion d'applications » ne se comprend pas du tout.
+    """
+    faux = panneau_factice(tk_root, assistant)
+
+    for phrases in (faux.EXEMPLES_LIBRES[False], faux.EXEMPLES_COMPLETS[False]):
+        for phrase in phrases:
+            assert phrase == phrase.lower() or phrase[0].isupper() is False, phrase
+            assert " " in phrase, phrase
+
+
+def test_les_guillemets_suivent_la_langue(tk_root, assistant):
+    """Un texte anglais en guillemets français signale une traduction hâtive."""
+    faux = panneau_factice(tk_root, assistant)
+    faux.basculer_abonnement()
+    assert "«" in " ".join(etiquettes(faux))
+
+    assistant.config.set("general.language", "en")
+    faux._dessiner_abonnement()
+    anglais = " ".join(etiquettes(faux))
+    assert "“" in anglais
+    assert "«" not in anglais, anglais

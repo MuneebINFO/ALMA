@@ -42,6 +42,11 @@ FOND_CARTE = "#0a101a"
 TEXTE = "#e6edf7"
 TEXTE_DOUX = "#6b7d99"
 BORDURE = "#141c2b"
+# La surface des popups. Plus claire que FOND_CARTE : posee PAR-DESSUS le
+# reste, elle doit s en detacher, sinon le popup flotte sans qu on voie ou il
+# commence.
+SURFACE = "#121a28"
+SURFACE_SURVOL = "#1a2536"
 
 # Largeur du panneau d historique, en pixels. Assez pour une phrase complete
 # sans amputer l orbe.
@@ -719,6 +724,114 @@ class ChampNom(tk.Frame):
             self._vivant = False
 
 
+class Carte(tk.Canvas):
+    """
+    Un panneau aux coins arrondis, sur lequel on POSE des widgets.
+
+    Tkinter ne sait pas arrondir un Frame. Un Canvas, lui, dessine ce qu on
+    veut -- et `create_window` y depose un Frame ordinaire, dans lequel tout
+    se range ensuite normalement. C est le seul moyen d avoir des cartes qui
+    ne ressemblent pas a des boites grises de 1995.
+    """
+
+    def __init__(self, parent, largeur: int, hauteur: int, fond: str = SURFACE,
+                 bord: str = BORDURE, rayon: int = 14) -> None:
+        super().__init__(parent, width=largeur, height=hauteur, bg=FOND,
+                         highlightthickness=0, bd=0)
+        self.largeur, self.hauteur, self.rayon = largeur, hauteur, rayon
+        self._arrondi(1, 1, largeur - 1, hauteur - 1, rayon, fill=fond,
+                      outline=bord, width=1)
+        self.interieur = tk.Frame(self, bg=fond)
+        self.create_window(largeur // 2, hauteur // 2, window=self.interieur,
+                           width=largeur - 4, height=hauteur - 4)
+
+    def _arrondi(self, x1, y1, x2, y2, r, **options) -> None:
+        points = [
+            x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r,
+            x2, y2 - r, x2, y2, x2 - r, y2, x1 + r, y2,
+            x1, y2, x1, y2 - r, x1, y1 + r, x1, y1,
+        ]
+        self.create_polygon(points, smooth=True, **options)
+
+
+class EntreeMenu(tk.Frame):
+    """Une ligne cliquable d un popup, qui s eclaire au survol."""
+
+    def __init__(self, parent, texte: str, au_clic, fond: str = SURFACE,
+                 couleur: str = TEXTE) -> None:
+        super().__init__(parent, bg=fond, cursor="hand2")
+        self.fond = fond
+        self.etiquette = tk.Label(self, text=texte, bg=fond, fg=couleur,
+                                  anchor="w", font=tkfont.Font(
+                                      family="Segoe UI", size=11))
+        self.etiquette.pack(fill="x", padx=16, pady=8)
+        for cible in (self, self.etiquette):
+            cible.bind("<Button-1>", lambda _e: au_clic())
+            cible.bind("<Enter>", lambda _e: self._peindre(SURFACE_SURVOL))
+            cible.bind("<Leave>", lambda _e: self._peindre(self.fond))
+
+    def _peindre(self, couleur: str) -> None:
+        self.configure(bg=couleur)
+        self.etiquette.configure(bg=couleur)
+
+
+class BoutonCompte(tk.Canvas):
+    """
+    La pastille du compte, en bas a gauche.
+
+    Une initiale dans un rond, le nom, et l edition en cours -- la meme forme
+    que celle qu on trouve en bas des interfaces d assistants, parce qu elle
+    dit en un coup d oeil qui on est et ce a quoi on a droit.
+    """
+
+    LARGEUR = 226
+    HAUTEUR = 52
+
+    def __init__(self, parent, au_clic, nom_fourni, edition_fournie) -> None:
+        super().__init__(parent, width=self.LARGEUR, height=self.HAUTEUR,
+                         bg=FOND, highlightthickness=0, bd=0, cursor="hand2")
+        self.nom_fourni = nom_fourni
+        self.edition_fournie = edition_fournie
+        self.survole = False
+        self.bind("<Button-1>", lambda _e: au_clic())
+        self.bind("<Enter>", lambda _e: self._etat(True))
+        self.bind("<Leave>", lambda _e: self._etat(False))
+        self.redessiner()
+
+    def _etat(self, survole: bool) -> None:
+        self.survole = survole
+        self.redessiner()
+
+    def _arrondi(self, x1, y1, x2, y2, r, **options) -> None:
+        points = [
+            x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r,
+            x2, y2 - r, x2, y2, x2 - r, y2, x1 + r, y2,
+            x1, y2, x1, y2 - r, x1, y1 + r, x1, y1,
+        ]
+        self.create_polygon(points, smooth=True, **options)
+
+    def redessiner(self) -> None:
+        """A rappeler quand le nom ou l edition changent."""
+        self.delete("all")
+        nom = self.nom_fourni() or "Vous"
+        edition, accent = self.edition_fournie()
+
+        fond = SURFACE_SURVOL if self.survole else FOND_CARTE
+        self._arrondi(1, 1, self.LARGEUR - 1, self.HAUTEUR - 1, 12,
+                      fill=fond, outline=accent if self.survole else BORDURE,
+                      width=1)
+        # La pastille de l initiale : c est elle qui porte la couleur de
+        # l edition, donc l information « a quoi j ai droit ».
+        self.create_oval(11, 11, 41, 41, fill=melanger(fond, accent, 0.30),
+                         outline=accent, width=1)
+        self.create_text(26, 26, text=nom[:1].upper(), fill=accent,
+                         font=tkfont.Font(family="Segoe UI", size=13, weight="bold"))
+        self.create_text(52, 19, text=nom[:16], anchor="w", fill=TEXTE,
+                         font=tkfont.Font(family="Segoe UI", size=11))
+        self.create_text(52, 35, text=edition, anchor="w", fill=TEXTE_DOUX,
+                         font=tkfont.Font(family="Segoe UI", size=9))
+
+
 class AlmaApp:
     """Fenetre principale : orbe, statut, transcription et journal."""
 
@@ -749,6 +862,8 @@ class AlmaApp:
         self.installation = None
         # Onglet Abonnement : absent tant qu on ne l ouvre pas.
         self.abonnement = None
+        # Le popup du compte : menu, puis profil. Un seul a la fois.
+        self.popup_compte = None
         self._champ_cle = None
         self._etat_cle = None
         self._suite_installation = None
@@ -842,17 +957,21 @@ class AlmaApp:
                                           bg=FOND, fg=TEXTE, wraplength=900, height=2)
         self.etiquette_entendu.pack(pady=(6, 4))
 
-        # Micro et aide n'ont plus de bouton : l'un se demande a la voix
-        # (« Alma, que sais-tu faire »), l'autre passe par le clavier -- voir
-        # _sur_touche. Il ne reste ici que ce qui n'a pas d'autre chemin.
-        boutons = tk.Frame(self.root, bg=FOND)
-        boutons.pack(pady=(0, 20))
-        self.bouton_historique = self._bouton(boutons, "Historique", self.basculer_historique)
-        self.bouton_historique.pack(side="left", padx=5)
-        self.bouton_abonnement = self._bouton(boutons, "Abonnement",
-                                              self.basculer_abonnement)
-        self.bouton_abonnement.pack(side="left", padx=5)
-        self._bouton(boutons, "Quitter", self.quitter).pack(side="left", padx=5)
+        # LA BARRE DU BAS A ETE VIDEE. Micro et aide n en avaient deja plus :
+        # l un se demande a la voix, l autre par le clavier. L historique n y
+        # est plus non plus -- personne ne le consultait, et il occupait la
+        # place la plus visible de l ecran pour rien. Il vit maintenant dans le
+        # menu du compte, ou l on va quand on le cherche vraiment.
+        #
+        # Tout ce qui reste tient donc dans UN bouton, en bas a gauche, la ou
+        # les interfaces d assistants le posent.
+        barre = tk.Frame(self.root, bg=FOND)
+        barre.pack(fill="x", side="bottom", padx=18, pady=(0, 16))
+        self.bouton_compte = BoutonCompte(barre, self.basculer_compte,
+                                          self._nom_utilisateur,
+                                          self._edition_affichee)
+        self.bouton_compte.pack(side="left")
+        self._bouton(barre, "Quitter", self.quitter).pack(side="right")
 
         # L historique existe des le depart -- il se remplit meme cache -- mais
         # il n est pas POSE tant qu on ne le demande pas.
@@ -934,18 +1053,15 @@ class AlmaApp:
 
     def _rafraichir_bouton_historique(self) -> None:
         """
-        Le bouton dit combien de messages ont été manqués.
+        Remet a zero le compte des messages manques quand on les a vus.
 
-        L'historique étant caché par défaut, rien ne signalerait autrement
-        qu'ALMA a répondu quelque chose pendant qu'on regardait ailleurs.
+        Elle affichait ce compte sur un bouton de la barre du bas. Ce bouton
+        n existe plus -- l historique a quitte l ecran pour le menu du compte,
+        personne ne le consultait -- mais le COMPTE, lui, sert toujours : il
+        dit au panneau ou reprendre.
         """
         if self.historique_visible:
-            libelle = "Masquer l'historique"
-        elif self.non_lus:
-            libelle = "Historique (" + str(self.non_lus) + ")"
-        else:
-            libelle = "Historique"
-        self.bouton_historique.configure(text=libelle)
+            self.non_lus = 0
 
     def _animer_entree(self, pas: int = 0) -> None:
         """Fait apparaître la fenêtre en fondu, plutôt que d'un bloc."""
@@ -1262,6 +1378,155 @@ class AlmaApp:
         return bool(getattr(self.stt, "available", False))
 
     # ----------------------------------------------------------------------
+    # Le compte
+    # ----------------------------------------------------------------------
+    # Un seul bouton en bas a gauche, et deux popups derriere : le menu, puis
+    # ce qu on y choisit. Rien de tout cela ne vit dans la barre du bas --
+    # elle etait la partie la plus visible de l ecran et servait a ouvrir un
+    # historique que personne ne lisait.
+
+    def _nom_utilisateur(self) -> str:
+        return str(self.assistant.config.get("general.user_name", "") or "")
+
+    def _edition_affichee(self) -> tuple:
+        """(libelle, couleur) de l edition en cours, pour la pastille."""
+        from core import edition
+
+        anglais = self._anglais()
+        if edition.est_complete(self.assistant.config):
+            return ("Complete" if anglais else "Complète"), ETATS["arme"][0]
+        # « Gratuit », pas « ALMA » : cette ligne repond a « a quoi ai-je
+        # droit », pas a « quelle application est-ce ».
+        return ("Free plan" if anglais else "Formule gratuite"), ETATS["veille"][0]
+
+    def basculer_compte(self) -> None:
+        """Ouvre ou referme le menu du compte."""
+        if getattr(self, "popup_compte", None) is not None:
+            self._fermer_compte()
+            return
+        self._ouvrir_menu_compte()
+
+    def _fermer_compte(self) -> None:
+        popup = getattr(self, "popup_compte", None)
+        self.popup_compte = None
+        if popup is not None:
+            popup.destroy()
+
+    def _poser_popup(self, largeur: int, hauteur: int) -> "Carte":
+        """
+        Une carte posee AU-DESSUS du bouton du compte, alignee a gauche.
+
+        `place` plutot que `pack` : un popup ne doit pousser personne, il
+        recouvre. Et il est pose sur `self.root` pour pouvoir deborder de la
+        colonne centrale sans etre rogne.
+        """
+        self._fermer_compte()
+        carte = Carte(self.root, largeur, hauteur)
+        carte.place(x=18, rely=1.0, y=-(hauteur + 76), anchor="nw")
+        self.popup_compte = carte
+        return carte
+
+    def _ouvrir_menu_compte(self) -> None:
+        anglais = self._anglais()
+        nom = self._nom_utilisateur() or ("You" if anglais else "Vous")
+        libelle_edition, accent = self._edition_affichee()
+
+        carte = self._poser_popup(276, 252)
+        dedans = carte.interieur
+
+        entete = tk.Frame(dedans, bg=SURFACE)
+        entete.pack(fill="x", padx=16, pady=(14, 10))
+        tk.Label(entete, text=nom, bg=SURFACE, fg=TEXTE, anchor="w",
+                 font=tkfont.Font(family="Segoe UI", size=13)).pack(fill="x")
+        tk.Label(entete, text=libelle_edition, bg=SURFACE, fg=accent, anchor="w",
+                 font=tkfont.Font(family="Segoe UI", size=10)).pack(fill="x")
+
+        tk.Frame(dedans, bg=melanger(SURFACE, TEXTE, 0.14),
+                 height=1).pack(fill="x", padx=14, pady=(2, 0))
+
+        EntreeMenu(dedans, "Profile" if anglais else "Profil",
+                   self._ouvrir_profil).pack(fill="x", pady=(6, 0))
+        EntreeMenu(dedans, "Subscription" if anglais else "Abonnement",
+                   self._ouvrir_abonnement_depuis_menu).pack(fill="x")
+        EntreeMenu(dedans, "History" if anglais else "Historique",
+                   self._historique_depuis_menu,
+                   couleur=TEXTE_DOUX).pack(fill="x")
+
+    def _historique_depuis_menu(self) -> None:
+        self._fermer_compte()
+        self.basculer_historique()
+
+    def _ouvrir_abonnement_depuis_menu(self) -> None:
+        self._fermer_compte()
+        self.basculer_abonnement()
+
+    def _ouvrir_profil(self) -> None:
+        """
+        Ce qu Alma a retenu de vous.
+
+        En LECTURE seule, et c est voulu : ces reglages se changent en le lui
+        demandant (« appelle-moi ... », « appelle-toi ... »), pas dans un
+        formulaire. Le rappeler ici apprend la commande a qui l ignore.
+        """
+        from core import edition
+
+        anglais = self._anglais()
+        config = self.assistant.config
+        libelle_edition, accent = self._edition_affichee()
+        voie = edition.voie(config)
+
+        lignes = [
+            (("You" if anglais else "Vous"),
+             self._nom_utilisateur() or ("not set" if anglais else "non renseigné")),
+            (("Assistant" if anglais else "Assistante"),
+             str(config.get("general.assistant_name", "ALMA"))),
+            (("Wake word" if anglais else "Mot d'appel"),
+             str(config.get("general.wake_word", "alma"))),
+            (("Language" if anglais else "Langue"),
+             "English" if str(config.get("general.language", "fr")) == "en"
+             else "Français"),
+            (("Edition" if anglais else "Édition"), libelle_edition),
+        ]
+        if voie == edition.VOIE_CLE:
+            lignes.append((("Activated by" if anglais else "Activée par"),
+                           "clé d'API" if not anglais else "API key"))
+        elif voie == edition.VOIE_ABONNEMENT:
+            lignes.append((("Activated by" if anglais else "Activée par"),
+                           "Microsoft Store"))
+
+        # Le titre, les lignes, l astuce et le retour. Le premier calcul ne
+        # comptait que les lignes, et les deux derniers sortaient de la carte.
+        carte = self._poser_popup(308, 172 + len(lignes) * 36)
+        dedans = carte.interieur
+
+        tk.Label(dedans, text="Profile" if anglais else "Profil", bg=SURFACE,
+                 fg=TEXTE, anchor="w",
+                 font=tkfont.Font(family="Segoe UI", size=14)).pack(
+                     fill="x", padx=16, pady=(14, 8))
+
+        for libelle, valeur in lignes:
+            ligne = tk.Frame(dedans, bg=SURFACE)
+            ligne.pack(fill="x", padx=16, pady=3)
+            tk.Label(ligne, text=libelle, bg=SURFACE, fg=TEXTE_DOUX, anchor="w",
+                     font=tkfont.Font(family="Segoe UI", size=10)).pack(side="left")
+            tk.Label(ligne, text=valeur, bg=SURFACE,
+                     fg=accent if libelle in ("Édition", "Edition") else TEXTE,
+                     anchor="e",
+                     font=tkfont.Font(family="Segoe UI", size=10)).pack(side="right")
+
+        tk.Label(dedans,
+                 text=('Say "call me ..." to change these.' if anglais
+                       else "Dites « appelle-moi ... » pour changer."),
+                 bg=SURFACE, fg=melanger(SURFACE, TEXTE_DOUX, 0.75),
+                 wraplength=260, justify="left", anchor="w",
+                 font=tkfont.Font(family="Segoe UI", size=9)).pack(
+                     fill="x", padx=16, pady=(10, 0))
+
+        retour = EntreeMenu(dedans, "‹  " + ("Back" if anglais else "Retour"),
+                            self._ouvrir_menu_compte, couleur=TEXTE_DOUX)
+        retour.pack(fill="x", pady=(6, 0))
+
+    # ----------------------------------------------------------------------
     # Abonnement
     # ----------------------------------------------------------------------
     # Ce panneau montre les deux editions cote a cote et permet d activer la
@@ -1312,8 +1577,32 @@ class AlmaApp:
         self.abonnement.pack(fill="both", expand=True)
         self._dessiner_abonnement()
 
+    # UNE ECHELLE D ELEVATION, et elle n est pas decorative. Le fond de la
+    # fenetre, la carte posee dessus, puis les cartes de formule posees
+    # dessus encore : chaque niveau est un peu plus clair que celui qui le
+    # porte. Sans cela la modale et son contenu se confondent, et l oeil ne
+    # sait plus ce qui est pose sur quoi.
+    #
+    # C est ce qui manquait au premier essai : les enfants etaient peints en
+    # FOND sur une carte en FOND_CARTE, et le champ de saisie ressortait en
+    # rectangle noir au milieu.
+    MODALE_FOND = FOND_CARTE
+    MODALE_CARTE = SURFACE
+    LARGEUR_CARTE_MODALE = 442
+
+    LARGEUR_MODALE = 944
+    HAUTEUR_MODALE = 856
+
     def _dessiner_abonnement(self) -> None:
-        """(Re)dessine le panneau. Rappele apres chaque changement d edition."""
+        """
+        (Re)dessine la modale. Rappelee apres chaque changement d edition.
+
+        UNE MODALE, plus un panneau plein ecran. La difference n est pas
+        cosmetique : une carte posee au centre, avec sa croix, se lit comme
+        quelque chose qu on a OUVERT et qu on peut refermer. Un panneau qui
+        remplace l ecran se lit comme un changement de mode, et on ne sait
+        plus comment revenir.
+        """
         from core import edition
 
         for enfant in self.abonnement.winfo_children():
@@ -1323,35 +1612,106 @@ class AlmaApp:
 
         anglais = self._anglais()
         complete = edition.est_complete(self.assistant.config)
+        fond = self.MODALE_FOND
 
-        cadre = tk.Frame(self.abonnement, bg=FOND)
-        cadre.place(relx=0.5, rely=0.5, anchor="center")
+        carte = Carte(self.abonnement, self.LARGEUR_MODALE, self.HAUTEUR_MODALE,
+                      fond=fond, rayon=18)
+        carte.place(relx=0.5, rely=0.5, anchor="center")
+        cadre = carte.interieur
 
-        tk.Label(cadre, text="Subscription" if anglais else "Abonnement",
-                 font=tkfont.Font(family="Segoe UI", size=27), bg=FOND,
-                 fg=TEXTE).pack()
+        # La croix, en haut a droite : la sortie doit se voir avant le reste.
+        fermer = tk.Label(cadre, text="✕", bg=fond, fg=TEXTE_DOUX,
+                          cursor="hand2",
+                          font=tkfont.Font(family="Segoe UI", size=13))
+        fermer.place(relx=1.0, x=-24, y=20, anchor="ne")
+        fermer.bind("<Button-1>", lambda _e: self._fermer_abonnement())
+
         tk.Label(cadre,
-                 text=("What you already have, and what a key would add."
+                 text=("You're on ALMA Complete" if complete
+                       else "Upgrade to ALMA Complete") if anglais else
+                      ("Vous êtes sur ALMA complète" if complete
+                       else "Passer à ALMA complète"),
+                 font=tkfont.Font(family="Segoe UI", size=23), bg=fond,
+                 fg=TEXTE).pack(pady=(30, 0))
+        tk.Label(cadre,
+                 text=("Everything ALMA already does stays free."
                        if anglais else
-                       "Ce que vous avez déjà, et ce qu'une clé ajouterait."),
-                 font=tkfont.Font(family="Segoe UI", size=12), bg=FOND,
-                 fg=TEXTE_DOUX).pack(pady=(10, 0))
+                       "Tout ce qu'ALMA fait déjà reste gratuit."),
+                 font=tkfont.Font(family="Segoe UI", size=11), bg=fond,
+                 fg=TEXTE_DOUX).pack(pady=(7, 0))
 
-        cartes = tk.Frame(cadre, bg=FOND)
-        cartes.pack(pady=(24, 0))
+        cartes = tk.Frame(cadre, bg=fond)
+        cartes.pack(pady=(22, 0))
         for colonne in (0, 1):
             cartes.columnconfigure(colonne, weight=1, uniform="edition",
-                                   minsize=self.LARGEUR_CARTE_EDITION)
+                                   minsize=self.LARGEUR_CARTE_MODALE)
         self._carte_edition(cartes, libre=True, active=not complete, anglais=anglais)
         self._carte_edition(cartes, libre=False, active=complete, anglais=anglais)
 
         self._pied_abonnement(cadre, complete, anglais)
+        self._exemples_abonnement(cadre, anglais)
 
-        retour = tk.Label(cadre, text="Close" if anglais else "Fermer",
-                          font=tkfont.Font(family="Segoe UI", size=10), bg=FOND,
-                          fg=melanger(FOND, TEXTE_DOUX, 0.8), cursor="hand2")
-        retour.pack(pady=(18, 0))
-        retour.bind("<Button-1>", lambda _e: self._fermer_abonnement())
+    def _exemples_abonnement(self, parent, anglais: bool) -> None:
+        """
+        Quelques phrases, pour montrer plutot que decrire.
+
+        Une liste de fonctionnalites se lit comme un argumentaire ; des
+        phrases qu on peut dire tout de suite se lisent comme un mode
+        d emploi. Et la colonne de gauche compte autant que celle de droite :
+        elle rappelle ce qui marche DEJA, sans rien payer.
+        """
+        fond = self.MODALE_FOND
+        tk.Frame(parent, bg=melanger(fond, TEXTE, 0.12),
+                 height=1).pack(fill="x", padx=56, pady=(20, 0))
+
+        colonnes = tk.Frame(parent, bg=fond)
+        colonnes.pack(pady=(16, 0))
+        # EXACTEMENT la geometrie des cartes du dessus : meme largeur, meme
+        # ecart. Les deux colonnes tombent alors dans le prolongement des
+        # deux formules, et le bas de la modale cesse de flotter.
+        for colonne in (0, 1):
+            colonnes.columnconfigure(colonne, weight=1, uniform="exemples",
+                                     minsize=self.LARGEUR_CARTE_MODALE)
+        for rang, (titre, accent, phrases) in enumerate((
+            (("Free, right now" if anglais else "Gratuit, tout de suite"),
+             ETATS["veille"][0], self.EXEMPLES_LIBRES[anglais]),
+            (("With the subscription" if anglais else "Avec l'abonnement"),
+             ETATS["arme"][0], self.EXEMPLES_COMPLETS[anglais]),
+        )):
+            bloc = tk.Frame(colonnes, bg=fond)
+            bloc.grid(row=0, column=rang, padx=9, sticky="nsew")
+            tk.Label(bloc, text=titre, bg=fond, fg=accent, anchor="w",
+                     font=tkfont.Font(family="Segoe UI", size=10)).pack(
+                         fill="x", padx=22, pady=(0, 7))
+            for phrase in phrases:
+                # Les guillemets suivent la langue : « » en francais,
+                # " " en anglais. Un texte anglais en guillemets francais
+                # signale un logiciel traduit a la hate.
+                cite = ("“" + phrase + "”" if anglais
+                        else "« " + phrase + " »")
+                tk.Label(bloc, text=cite, bg=fond,
+                         fg=TEXTE_DOUX, anchor="w",
+                         font=tkfont.Font(family="Segoe UI", size=10)).pack(
+                             fill="x", padx=22, pady=1)
+
+    # Des phrases REELLES, pas des categories. « Ouvre Chrome » se comprend
+    # sans explication ; « gestion d applications » ne se comprend pas du
+    # tout. Et chacune tient sur une ligne : une phrase qui se replie casse
+    # l alignement des deux colonnes.
+    EXEMPLES_LIBRES = {
+        False: ["ouvre Chrome", "monte le son", "mets la vidéo en pause",
+                "rappelle-moi dans dix minutes", "prends une photo"],
+        True: ["open Chrome", "turn the volume up", "pause the video",
+               "remind me in ten minutes", "take a photo"],
+    }
+    EXEMPLES_COMPLETS = {
+        False: ["pourquoi le ciel est bleu", "qu'est-ce que je tiens",
+                "résume ce que je viens de lire",
+                "allume le truc pour me voir", "explique-moi cette erreur"],
+        True: ["why is the sky blue", "what am I holding",
+               "summarise what I just read",
+               "turn on the thing so you can see me", "explain this error"],
+    }
 
     def _titre_edition(self, libre: bool, anglais: bool) -> str:
         if libre:
@@ -1359,56 +1719,71 @@ class AlmaApp:
         return "ALMA Complete" if anglais else "ALMA complète"
 
     def _carte_edition(self, parent, libre: bool, active: bool, anglais: bool) -> None:
-        """Une des deux editions, avec ce qu elle contient."""
+        """
+        Une des deux formules, avec ce qu elle contient.
+
+        Le bouton d achat vit DANS la carte payante, pas en dessous. C est la
+        que tous les comparatifs d abonnement le mettent, et pour une bonne
+        raison : le geste se trouve a cote de ce qu il achete, au lieu de
+        flotter sous les deux colonnes sans qu on sache a laquelle il se
+        rapporte.
+        """
         accent = ETATS["veille"][0] if libre else ETATS["arme"][0]
-        fond = melanger(FOND_CARTE, accent, 0.10 if active else 0.0)
-        bord = accent if active else BORDURE
+        fond = melanger(self.MODALE_CARTE, accent, 0.10 if active else 0.0)
+        bord = accent if active else melanger(self.MODALE_FOND, TEXTE, 0.12)
 
         carte = tk.Frame(parent, bg=fond, highlightbackground=bord,
                          highlightcolor=bord, highlightthickness=1, bd=0)
         # `sticky` sur les quatre cotes : c est lui qui etire la carte la plus
         # courte a la hauteur de l autre, au lieu de la laisser flotter.
-        carte.grid(row=0, column=0 if libre else 1, padx=10, sticky="nsew")
+        carte.grid(row=0, column=0 if libre else 1, padx=9, sticky="nsew")
 
         interieur = tk.Frame(carte, bg=fond)
-        interieur.pack(fill="both", expand=True, padx=26, pady=24)
+        interieur.pack(fill="both", expand=True, padx=22, pady=18)
 
-        tk.Label(interieur, text=self._titre_edition(libre, anglais), bg=fond,
-                 fg=TEXTE,
-                 font=tkfont.Font(family="Segoe UI", size=19)).pack(anchor="w")
+        entete = tk.Frame(interieur, bg=fond)
+        entete.pack(fill="x")
+        tk.Label(entete, text=self._titre_edition(libre, anglais), bg=fond,
+                 fg=TEXTE, anchor="w",
+                 font=tkfont.Font(family="Segoe UI", size=17)).pack(side="left")
+        if active:
+            tk.Label(entete, text="✓ " + ("In use" if anglais else "En cours"),
+                     bg=fond, fg=accent, anchor="e",
+                     font=tkfont.Font(family="Segoe UI", size=10)).pack(
+                         side="right", pady=(5, 0))
 
         if libre:
             prix = "Free, always" if anglais else "Gratuit, pour toujours"
         else:
             prix = str(self.assistant.config.get(
                 "abonnement.prix_en" if anglais else "abonnement.prix_fr", ""))
-        tk.Label(interieur, text=prix, bg=fond, fg=accent,
-                 font=tkfont.Font(family="Segoe UI", size=12)).pack(
-                     anchor="w", pady=(4, 0))
+        tk.Label(interieur, text=prix, bg=fond, fg=accent, anchor="w",
+                 font=tkfont.Font(family="Segoe UI", size=13)).pack(
+                     fill="x", pady=(2, 0))
 
-        if active:
-            tk.Label(interieur, text="✓ " + ("In use" if anglais else "En cours"),
-                     bg=fond, fg=accent,
-                     font=tkfont.Font(family="Segoe UI", size=11)).pack(
-                         anchor="w", pady=(10, 0))
+        # Le geste, juste sous le prix -- dans la carte payante seulement.
+        if not libre and not active:
+            self._bouton_abonner(interieur, anglais, fond)
 
         for ligne in self._contenu_edition(libre, anglais):
-            tk.Label(interieur, text="-  " + ligne, bg=fond, fg=TEXTE_DOUX,
-                     font=tkfont.Font(family="Segoe UI", size=11),
-                     wraplength=self.LARGEUR_CARTE_EDITION - 60,
-                     justify="left").pack(anchor="w", pady=(9, 0))
+            tk.Label(interieur, text="✓  " + ligne, bg=fond,
+                     fg=TEXTE if not libre else TEXTE_DOUX, anchor="w",
+                     wraplength=self.LARGEUR_CARTE_MODALE - 56,
+                     justify="left",
+                     font=tkfont.Font(family="Segoe UI", size=11)).pack(
+                         fill="x", pady=(8, 0))
 
     def _contenu_edition(self, libre: bool, anglais: bool) -> list:
         """
-        Ce que chaque edition apporte.
+        Ce que chaque formule apporte.
 
         L edition libre est decrite en PREMIER et en entier, expres : ce n est
         pas une version amputee, c est un assistant d automatisation complet.
         La complete AJOUTE -- elle ne debloque pas.
+
+        Chaque ligne tient sur UNE ligne a la largeur de la carte : une puce
+        qui passe a la ligne decale toutes les suivantes.
         """
-        # Chaque ligne tient sur UNE ligne a la largeur de la carte. Ce n est
-        # pas de la coquetterie : une puce qui passe a la ligne decale toutes
-        # les suivantes, et la derniere sortait de la carte.
         if libre:
             if anglais:
                 return ["Every command, by voice or keyboard",
@@ -1426,64 +1801,73 @@ class AlmaApp:
                     "Answers open questions",
                     "Looks at what the camera sees",
                     "Understands unplanned wordings",
-                    "Your key, billed by Anthropic"]
+                    "Monthly usage allowance"]
         return ["Tout ce qui précède, à l'identique",
                 "Répond aux questions ouvertes",
                 "Regarde ce que voit la caméra",
                 "Comprend les formulations imprévues",
-                "Votre clé, facturée par Anthropic"]
+                "Quota mensuel inclus"]
 
     def _pied_abonnement(self, parent, complete: bool, anglais: bool) -> None:
-        """Ce qu on peut FAIRE : s abonner, activer une cle, ou la retirer."""
-        pied = tk.Frame(parent, bg=FOND)
-        pied.pack(pady=(22, 0))
+        """
+        Sous les deux cartes : la clé, ou de quoi se désabonner.
+
+        Discret exprès. Coller sa propre clé d API est un chemin d initié ;
+        le mettre au meme niveau que l abonnement embrouillerait les neuf
+        dixiemes des gens pour en servir un.
+        """
+        fond = self.MODALE_FOND
+        pied = tk.Frame(parent, bg=fond)
+        pied.pack(pady=(16, 0))
 
         if complete:
             tk.Label(pied,
                      text=("Your key is stored, encrypted by Windows."
                            if anglais else
                            "Votre clé est enregistrée, chiffrée par Windows."),
-                     bg=FOND, fg=TEXTE_DOUX,
-                     font=tkfont.Font(family="Segoe UI", size=11)).pack()
+                     bg=fond, fg=TEXTE_DOUX,
+                     font=tkfont.Font(family="Segoe UI", size=10)).pack()
             retirer = tk.Label(
                 pied, text="Remove the key" if anglais else "Retirer la clé",
-                bg=FOND, fg=ETATS["erreur"][0], cursor="hand2",
-                font=tkfont.Font(family="Segoe UI", size=11))
-            retirer.pack(pady=(12, 0))
+                bg=fond, fg=ETATS["erreur"][0], cursor="hand2",
+                font=tkfont.Font(family="Segoe UI", size=10))
+            retirer.pack(pady=(8, 0))
             retirer.bind("<Button-1>", lambda _e: self._retirer_cle())
             return
 
-        self._bouton_abonner(pied, anglais)
-
-        tk.Label(pied,
+        ligne = tk.Frame(pied, bg=fond)
+        ligne.pack()
+        tk.Label(ligne,
                  text=("Already have an Anthropic API key?"
                        if anglais else
                        "Vous avez déjà une clé d'API Anthropic ?"),
-                 bg=FOND, fg=TEXTE_DOUX,
-                 font=tkfont.Font(family="Segoe UI", size=11)).pack(pady=(18, 0))
-
-        saisie = tk.Frame(pied, bg=FOND)
-        saisie.pack(pady=(10, 0))
+                 bg=fond, fg=TEXTE_DOUX,
+                 font=tkfont.Font(family="Segoe UI", size=10)).pack(side="left",
+                                                                    padx=(0, 10))
         # `show` : une cle ne s affiche pas en clair, pas meme a celui qui la
         # tape -- un partage d ecran, une capture, et elle est dehors.
         self._champ_cle = tk.Entry(
-            saisie, font=tkfont.Font(family="Consolas", size=12), bg=FOND_CARTE,
-            fg=TEXTE, insertbackground=ETATS["arme"][0], bd=0, relief="flat",
-            width=34, show="*", highlightthickness=1,
-            highlightbackground=BORDURE, highlightcolor=ETATS["arme"][0])
-        self._champ_cle.pack(side="left", ipady=7, ipadx=10)
+            ligne, font=tkfont.Font(family="Consolas", size=10),
+            bg=self.MODALE_CARTE, fg=TEXTE, insertbackground=ETATS["arme"][0],
+            bd=0, relief="flat", width=26, show="*", highlightthickness=1,
+            highlightbackground=melanger(fond, TEXTE, 0.12),
+            highlightcolor=ETATS["arme"][0])
+        self._champ_cle.pack(side="left", ipady=5, ipadx=8)
         self._champ_cle.bind("<Return>", lambda _e: self._activer_cle())
-        self._bouton(saisie, "Activate" if anglais else "Activer",
-                     self._activer_cle).pack(side="left", padx=(8, 0))
+        activer = tk.Label(ligne, text="Activate" if anglais else "Activer",
+                           bg=fond, fg=ETATS["arme"][0], cursor="hand2",
+                           font=tkfont.Font(family="Segoe UI", size=10))
+        activer.pack(side="left", padx=(10, 0))
+        activer.bind("<Button-1>", lambda _e: self._activer_cle())
 
-        self._etat_cle = tk.Label(pied, text="", bg=FOND, fg=TEXTE_DOUX,
-                                  wraplength=520, justify="center",
-                                  font=tkfont.Font(family="Segoe UI", size=11))
-        self._etat_cle.pack(pady=(12, 0))
+        self._etat_cle = tk.Label(pied, text="", bg=fond, fg=TEXTE_DOUX,
+                                  wraplength=620, justify="center",
+                                  font=tkfont.Font(family="Segoe UI", size=10))
+        self._etat_cle.pack(pady=(9, 0))
 
-    def _bouton_abonner(self, parent, anglais: bool) -> None:
+    def _bouton_abonner(self, parent, anglais: bool, fond: str = None) -> None:
         """
-        Le bouton d abonnement -- ou l aveu franc qu il n y en a pas encore.
+        Le bouton d achat -- ou l aveu franc qu il n y en a pas encore.
 
         Trois cas, du meilleur au dernier recours :
 
@@ -1491,31 +1875,38 @@ class AlmaApp:
              sa propre fenetre d achat, contre la carte deja enregistree sur
              le compte Microsoft : un clic et c est fini ;
           2. une PAGE de paiement hors Store, si `abonnement.url` en designe
-             une. Utile a qui distribue Alma autrement que par le Store ;
+             une ;
           3. rien, et on le dit. Un bouton qui fait semblant d encaisser
              coute plus cher en confiance qu il ne rapporte.
         """
         from core import abonnement_store
 
+        fond = fond or self.MODALE_FOND
         store_id = str(self.assistant.config.get("abonnement.store_id", "")
                        or "").strip()
-        if store_id and abonnement_store.disponible():
-            self._bouton(parent, "Subscribe" if anglais else "S'abonner",
-                         self._acheter_abonnement).pack()
-            return
-
         url = str(self.assistant.config.get("abonnement.url", "") or "").strip()
-        if url:
-            self._bouton(parent, "Subscribe" if anglais else "S'abonner",
-                         lambda: self._ouvrir_page_abonnement(url)).pack()
+
+        if store_id and abonnement_store.disponible():
+            action = self._acheter_abonnement
+        elif url:
+            action = lambda: self._ouvrir_page_abonnement(url)
+        else:
+            tk.Label(parent,
+                     text=("Subscriptions are not open yet."
+                           if anglais else
+                           "L'abonnement n'est pas encore ouvert."),
+                     bg=fond, fg=TEXTE_DOUX, anchor="w",
+                     font=tkfont.Font(family="Segoe UI", size=10)).pack(
+                         fill="x", pady=(12, 2))
             return
 
-        tk.Label(parent,
-                 text=("Subscriptions are not open yet."
-                       if anglais else
-                       "L'abonnement n'est pas encore ouvert."),
-                 bg=FOND, fg=TEXTE_DOUX,
-                 font=tkfont.Font(family="Segoe UI", size=11)).pack()
+        bouton = tk.Button(
+            parent, text="Subscribe" if anglais else "S'abonner",
+            command=action, bg=ETATS["arme"][0], fg=FOND,
+            activebackground=melanger(ETATS["arme"][0], TEXTE, 0.2),
+            activeforeground=FOND, bd=0, relief="flat", cursor="hand2",
+            font=tkfont.Font(family="Segoe UI", size=11), pady=8)
+        bouton.pack(fill="x", pady=(12, 2))
 
     def _acheter_abonnement(self) -> None:
         """

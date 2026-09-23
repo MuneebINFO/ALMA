@@ -205,7 +205,17 @@ def test_l_orbe_ecoute_les_changements_de_taille(app):
 # --------------------------------------------------------------------------
 # Les boutons retirés, et leurs raccourcis de remplacement
 # --------------------------------------------------------------------------
-def test_les_deux_boutons_ont_disparu_de_l_ecran(app):
+def test_la_barre_du_bas_ne_garde_que_l_essentiel(app):
+    """
+    Elle s'est vidée en trois fois, et chaque retrait avait sa raison.
+
+    Micro et aide d'abord : l'un se demande à la voix, l'autre au clavier.
+    Puis l'historique — il occupait la place la plus visible de l'écran pour
+    quelque chose que personne ne consultait, et il vit maintenant dans le
+    menu du compte.
+
+    Ce qui reste : le compte à gauche, quitter à droite.
+    """
     def libelles(widget):
         trouves = []
         for enfant in widget.winfo_children():
@@ -217,7 +227,27 @@ def test_les_deux_boutons_ont_disparu_de_l_ecran(app):
     textes = libelles(app.root)
     assert "Couper le micro" not in textes
     assert "Que sais-tu faire ?" not in textes
-    assert "Historique" in textes and "Quitter" in textes
+    assert "Historique" not in textes,         "l'historique est revenu occuper la barre du bas"
+    assert "Abonnement" not in textes,         "l'abonnement se trouve dans le menu du compte, pas dans la barre"
+    assert "Quitter" in textes
+
+
+def test_le_bouton_du_compte_est_en_bas_a_gauche(app):
+    """La pastille du compte est le seul point d'entrée de l'écran."""
+    from gui import BoutonCompte
+
+    def chercher(widget):
+        for enfant in widget.winfo_children():
+            if isinstance(enfant, BoutonCompte):
+                return enfant
+            trouve = chercher(enfant)
+            if trouve is not None:
+                return trouve
+        return None
+
+    bouton = chercher(app.root)
+    assert bouton is not None, "le bouton du compte a disparu"
+    assert bouton.pack_info()["side"] == "left"
 
 
 def test_la_touche_m_bascule_le_micro(app, monkeypatch):

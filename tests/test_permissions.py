@@ -237,6 +237,17 @@ def test_une_autorisation_jamais_demandee_est_demandee(tk_root, assistant,
                         lambda capacite: demandes.append(capacite)
                         or permissions.AUTORISE)
 
+    # L'autorisation accordée, `demarrer_ecoute` va jusqu'au bout — et sans
+    # cette doublure il construit un VRAI SpeechToText, ouvre le micro de qui
+    # lance la suite, et lance le thread d'écoute. Règle 4 : un test ne laisse
+    # aucune trace sur la machine, micro allumé compris.
+    class MicroFactice:
+        available = True
+        error = ""
+
+    monkeypatch.setattr("core.stt.SpeechToText", lambda *a, **k: MicroFactice())
+    monkeypatch.setattr("threading.Thread.start", lambda self: None)
+
     faux = panneau_factice(tk_root, assistant)
     faux.demarrer_ecoute()
 
