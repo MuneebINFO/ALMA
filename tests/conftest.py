@@ -108,21 +108,6 @@ def aucune_trace_sur_la_machine(monkeypatch):
 
     monkeypatch.setattr(Bruitages, "jouer", lambda self, nom: False)
 
-    # -- le COFFRE ----------------------------------------------------------
-    # Le garde-fou le plus important de ce fichier. `secrets.lire` ouvre le
-    # VRAI coffre de qui lance la suite : si sa cle d API s y trouve, Alma
-    # bascule en edition complete au milieu des tests et se met a passer de
-    # vrais appels FACTURES, sur des phrases de test.
-    #
-    # Coffre vide par defaut, donc, et ecriture neutralisee. Un test qui veut
-    # l edition complete pose sa propre doublure par-dessus -- et celui-la ne
-    # doit toujours appeler aucun reseau : c est le provider qu il remplace.
-    from core import secrets
-
-    monkeypatch.setattr(secrets, "lire", lambda nom, config=None: "")
-    monkeypatch.setattr(secrets, "poser", lambda nom, valeur, config=None: True)
-    monkeypatch.setattr(secrets, "oublier", lambda nom, config=None: True)
-
     # -- les AUTORISATIONS WINDOWS -------------------------------------------
     # Regle 5. L etat depend de ce que le proprietaire de la machine a coche
     # dans ses reglages de confidentialite : sans doublure, la suite passerait

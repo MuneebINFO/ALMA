@@ -89,58 +89,49 @@ class ClaudeApiProvider:
         """
         Le client SDK, construit une seule fois.
 
-        DEUX DESTINATIONS POSSIBLES, et c est tout l interet de les avoir
-        reunies ici :
+        UNE SEULE DESTINATION : le relais. L application ne detient aucune
+        cle -- elle envoie un jeton signe par Microsoft, que le relais fait
+        valider par Microsoft avant de transmettre avec LA cle, qui n a
+        jamais quitte le serveur.
 
-          - une cle posee par l utilisateur part DROIT chez Anthropic, sous
-            son compte. Rien ne transite par nous ;
-          - un abonnement du Store passe par le RELAIS, qui detient la cle.
-            L application n en a aucune -- elle ne fait qu envoyer un jeton
-            signe par Microsoft la ou elle mettait une cle.
+        Le SDK accepte une `base_url` : c est ce qui rend l ensemble si
+        simple cote application, et ce qui permettrait d en changer en une
+        valeur si le relais devait bouger.
 
-        Le SDK accepte une `base_url` : le basculement tient donc en deux
-        valeurs, et revenir en arriere si le relais tombe aussi.
-
-        Les identifiants sont relus a CHAQUE construction plutot que retenus
-        au demarrage : une cle retiree ou un abonnement resilie doivent
-        arreter les appels, pas continuer sur une copie en memoire.
+        Le jeton est relu a CHAQUE construction plutot que retenu au
+        demarrage : un abonnement resilie doit arreter les appels, pas
+        continuer sur une copie en memoire.
         """
         if self._client is not None:
             return self._client
 
-        from core import edition
-
         import anthropic
 
-        voie = edition.voie(self.config)
-        if voie == edition.VOIE_CLE:
-            self._client = anthropic.Anthropic(api_key=edition.cle(self.config),
-                                               timeout=float(self.delai))
-            return self._client
+        from core import abonnement_store, edition
 
-        if voie == edition.VOIE_ABONNEMENT:
-            from core import abonnement_store
+        if not edition.est_complete(self.config):
+            raise RuntimeError("aucun abonnement actif : ALMA+ est inactive")
 
-            adresse = str(self.config.get("abonnement.relais_url", "") or "").strip()
-            if not adresse:
-                raise RuntimeError(
-                    "abonnement actif, mais aucun relais n'est configuré")
-            jeton = abonnement_store.jeton(adresse)
-            if not jeton:
-                raise RuntimeError(
-                    "impossible d'obtenir la preuve d'abonnement auprès du Store")
-            self._client = anthropic.Anthropic(api_key=jeton, base_url=adresse,
-                                               timeout=float(self.delai))
-            return self._client
+        adresse = str(self.config.get("abonnement.relais_url", "") or "").strip()
+        if not adresse:
+            raise RuntimeError("abonnement actif, mais aucun relais n'est configuré")
+        jeton = abonnement_store.jeton(adresse)
+        if not jeton:
+            raise RuntimeError(
+                "impossible d'obtenir la preuve d'abonnement auprès du Store")
 
-        raise RuntimeError("ni clé ni abonnement : l'édition complète est inactive")
+        self._client = anthropic.Anthropic(api_key=jeton, base_url=adresse,
+                                           timeout=float(self.delai))
+        return self._client
 
     def diagnostic(self) -> str:
         """Ce qui manque pour que ce provider fonctionne, ou une chaine vide."""
         from core import edition
 
-        if not edition.cle(self.config):
-            return "aucune clé d'API n'est enregistrée"
+        if not edition.est_complete(self.config):
+            return "aucun abonnement actif"
+        if not str(self.config.get("abonnement.relais_url", "") or "").strip():
+            return "aucun relais n'est configuré"
         try:
             import anthropic                  # noqa: F401
         except ImportError:
@@ -199,52 +190,3 @@ class ClaudeApiProvider:
 
         morceaux = [bloc.text for bloc in reponse.content if bloc.type == "text"]
         return "\n".join(morceaux).strip()
-
-
-# --------------------------------------------------------------------------
-# Verifier une cle avant de l accepter
-# --------------------------------------------------------------------------
-def verifier_cle(cle: str, delai: float = 15.0) -> tuple:
-    """
-    Cette cle fonctionne-t-elle ? Rend (ok, raison_fr, raison_en).
-
-    On interroge la LISTE DES MODELES, pas la conversation : c est une simple
-    lecture, elle ne consomme aucun jeton et ne coute donc rien, tout en
-    prouvant que la cle est valide et active. Envoyer un vrai message pour
-    verifier ferait payer l utilisateur pour le droit de s inscrire.
-
-    Accepter une cle sans la verifier serait pire que tout : elle serait
-    rangee, l edition passerait en complete, et le premier echec arriverait
-    plus tard, sur une vraie demande, sans que personne sache pourquoi.
-    """
-    cle = (cle or "").strip()
-    if not cle:
-        return False, "Aucune clé saisie.", "No key entered."
-    try:
-        import anthropic
-    except ImportError:
-        return (False,
-                "Le paquet « anthropic » n'est pas installé.",
-                "The 'anthropic' package isn't installed.")
-
-    try:
-        anthropic.Anthropic(api_key=cle, timeout=delai,
-                            max_retries=0).models.list(limit=1)
-    except anthropic.AuthenticationError:
-        return (False,
-                "Cette clé n'est pas reconnue. Vérifiez que vous l'avez copiée en entier.",
-                "That key wasn't recognised. Check you copied all of it.")
-    except anthropic.PermissionDeniedError:
-        return (False,
-                "Cette clé existe mais n'a pas les droits nécessaires.",
-                "That key exists but lacks the required permissions.")
-    except anthropic.APIConnectionError:
-        return (False,
-                "Impossible de joindre le service. Vérifiez votre connexion.",
-                "Couldn't reach the service. Check your connection.")
-    except Exception as exc:
-        # Volontairement sans la cle dans le message : une cle recopiee dans
-        # une erreur affichee a l ecran est une cle exposee.
-        return False, "Vérification impossible : " + str(exc), \
-            "Couldn't verify: " + str(exc)
-    return True, "", ""

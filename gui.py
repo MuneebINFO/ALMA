@@ -864,8 +864,8 @@ class AlmaApp:
         self.abonnement = None
         # Le popup du compte : menu, puis profil. Un seul a la fois.
         self.popup_compte = None
-        self._champ_cle = None
-        self._etat_cle = None
+        # Le message sous les deux formules : ce que l achat vient de donner.
+        self._etat_achat = None
         self._suite_installation = None
         self._recevoir_entendu = None
         self.boule = None          # bille de niveau du premier lancement
@@ -1393,10 +1393,11 @@ class AlmaApp:
         from core import edition
 
         anglais = self._anglais()
+        langue = "en" if anglais else "fr"
         if edition.est_complete(self.assistant.config):
-            return ("Complete" if anglais else "Complète"), ETATS["arme"][0]
-        # « Gratuit », pas « ALMA » : cette ligne repond a « a quoi ai-je
-        # droit », pas a « quelle application est-ce ».
+            return edition.nom(edition.COMPLETE, langue), ETATS["arme"][0]
+        # « Formule gratuite », pas « ALMA » : cette ligne repond a « a quoi
+        # ai-je droit », pas a « quelle application est-ce ».
         return ("Free plan" if anglais else "Formule gratuite"), ETATS["veille"][0]
 
     def basculer_compte(self) -> None:
@@ -1473,7 +1474,6 @@ class AlmaApp:
         anglais = self._anglais()
         config = self.assistant.config
         libelle_edition, accent = self._edition_affichee()
-        voie = edition.voie(config)
 
         lignes = [
             (("You" if anglais else "Vous"),
@@ -1487,15 +1487,6 @@ class AlmaApp:
              else "Français"),
             (("Edition" if anglais else "Édition"), libelle_edition),
         ]
-        if voie == edition.VOIE_CLE:
-            lignes.append((("Activated by" if anglais else "Activée par"),
-                           "clé d'API" if not anglais else "API key"))
-        elif voie == edition.VOIE_ABONNEMENT:
-            lignes.append((("Activated by" if anglais else "Activée par"),
-                           "Microsoft Store"))
-
-        # Le titre, les lignes, l astuce et le retour. Le premier calcul ne
-        # comptait que les lignes, et les deux derniers sortaient de la carte.
         carte = self._poser_popup(308, 172 + len(lignes) * 36)
         dedans = carte.interieur
 
@@ -1559,8 +1550,7 @@ class AlmaApp:
     def _fermer_abonnement(self) -> None:
         cadre = getattr(self, "abonnement", None)
         self.abonnement = None
-        self._champ_cle = None
-        self._etat_cle = None
+        self._etat_achat = None
         if cadre is not None:
             cadre.destroy()
         # L installation a la priorite : si elle tourne, la colonne reste
@@ -1582,16 +1572,12 @@ class AlmaApp:
     # dessus encore : chaque niveau est un peu plus clair que celui qui le
     # porte. Sans cela la modale et son contenu se confondent, et l oeil ne
     # sait plus ce qui est pose sur quoi.
-    #
-    # C est ce qui manquait au premier essai : les enfants etaient peints en
-    # FOND sur une carte en FOND_CARTE, et le champ de saisie ressortait en
-    # rectangle noir au milieu.
     MODALE_FOND = FOND_CARTE
     MODALE_CARTE = SURFACE
-    LARGEUR_CARTE_MODALE = 442
+    LARGEUR_CARTE_MODALE = 430
 
-    LARGEUR_MODALE = 944
-    HAUTEUR_MODALE = 856
+    LARGEUR_MODALE = 924
+    HAUTEUR_MODALE = 724
 
     def _dessiner_abonnement(self) -> None:
         """
@@ -1607,8 +1593,6 @@ class AlmaApp:
 
         for enfant in self.abonnement.winfo_children():
             enfant.destroy()
-        self._champ_cle = None
-        self._etat_cle = None
 
         anglais = self._anglais()
         complete = edition.est_complete(self.assistant.config)
@@ -1623,247 +1607,202 @@ class AlmaApp:
         fermer = tk.Label(cadre, text="✕", bg=fond, fg=TEXTE_DOUX,
                           cursor="hand2",
                           font=tkfont.Font(family="Segoe UI", size=13))
-        fermer.place(relx=1.0, x=-24, y=20, anchor="ne")
+        fermer.place(relx=1.0, x=-22, y=18, anchor="ne")
         fermer.bind("<Button-1>", lambda _e: self._fermer_abonnement())
 
-        tk.Label(cadre,
-                 text=("You're on ALMA Complete" if complete
-                       else "Upgrade to ALMA Complete") if anglais else
-                      ("Vous êtes sur ALMA complète" if complete
-                       else "Passer à ALMA complète"),
-                 font=tkfont.Font(family="Segoe UI", size=23), bg=fond,
-                 fg=TEXTE).pack(pady=(30, 0))
-        tk.Label(cadre,
-                 text=("Everything ALMA already does stays free."
-                       if anglais else
-                       "Tout ce qu'ALMA fait déjà reste gratuit."),
-                 font=tkfont.Font(family="Segoe UI", size=11), bg=fond,
-                 fg=TEXTE_DOUX).pack(pady=(7, 0))
-
         cartes = tk.Frame(cadre, bg=fond)
-        cartes.pack(pady=(22, 0))
+        cartes.pack(expand=True, padx=20, pady=22)
         for colonne in (0, 1):
-            cartes.columnconfigure(colonne, weight=1, uniform="edition",
+            cartes.columnconfigure(colonne, weight=1, uniform="formule",
                                    minsize=self.LARGEUR_CARTE_MODALE)
         self._carte_edition(cartes, libre=True, active=not complete, anglais=anglais)
         self._carte_edition(cartes, libre=False, active=complete, anglais=anglais)
 
-        self._pied_abonnement(cadre, complete, anglais)
-        self._exemples_abonnement(cadre, anglais)
+        self._etat_achat = tk.Label(cadre, text="", bg=fond, fg=TEXTE_DOUX,
+                                    wraplength=760, justify="center",
+                                    font=tkfont.Font(family="Segoe UI", size=10))
+        self._etat_achat.pack(pady=(0, 14))
 
-    def _exemples_abonnement(self, parent, anglais: bool) -> None:
-        """
-        Quelques phrases, pour montrer plutot que decrire.
-
-        Une liste de fonctionnalites se lit comme un argumentaire ; des
-        phrases qu on peut dire tout de suite se lisent comme un mode
-        d emploi. Et la colonne de gauche compte autant que celle de droite :
-        elle rappelle ce qui marche DEJA, sans rien payer.
-        """
-        fond = self.MODALE_FOND
-        tk.Frame(parent, bg=melanger(fond, TEXTE, 0.12),
-                 height=1).pack(fill="x", padx=56, pady=(20, 0))
-
-        colonnes = tk.Frame(parent, bg=fond)
-        colonnes.pack(pady=(16, 0))
-        # EXACTEMENT la geometrie des cartes du dessus : meme largeur, meme
-        # ecart. Les deux colonnes tombent alors dans le prolongement des
-        # deux formules, et le bas de la modale cesse de flotter.
-        for colonne in (0, 1):
-            colonnes.columnconfigure(colonne, weight=1, uniform="exemples",
-                                     minsize=self.LARGEUR_CARTE_MODALE)
-        for rang, (titre, accent, phrases) in enumerate((
-            (("Free, right now" if anglais else "Gratuit, tout de suite"),
-             ETATS["veille"][0], self.EXEMPLES_LIBRES[anglais]),
-            (("With the subscription" if anglais else "Avec l'abonnement"),
-             ETATS["arme"][0], self.EXEMPLES_COMPLETS[anglais]),
-        )):
-            bloc = tk.Frame(colonnes, bg=fond)
-            bloc.grid(row=0, column=rang, padx=9, sticky="nsew")
-            tk.Label(bloc, text=titre, bg=fond, fg=accent, anchor="w",
-                     font=tkfont.Font(family="Segoe UI", size=10)).pack(
-                         fill="x", padx=22, pady=(0, 7))
-            for phrase in phrases:
-                # Les guillemets suivent la langue : « » en francais,
-                # " " en anglais. Un texte anglais en guillemets francais
-                # signale un logiciel traduit a la hate.
-                cite = ("“" + phrase + "”" if anglais
-                        else "« " + phrase + " »")
-                tk.Label(bloc, text=cite, bg=fond,
-                         fg=TEXTE_DOUX, anchor="w",
-                         font=tkfont.Font(family="Segoe UI", size=10)).pack(
-                             fill="x", padx=22, pady=1)
-
-    # Des phrases REELLES, pas des categories. « Ouvre Chrome » se comprend
-    # sans explication ; « gestion d applications » ne se comprend pas du
-    # tout. Et chacune tient sur une ligne : une phrase qui se replie casse
-    # l alignement des deux colonnes.
-    EXEMPLES_LIBRES = {
-        False: ["ouvre Chrome", "monte le son", "mets la vidéo en pause",
-                "rappelle-moi dans dix minutes", "prends une photo"],
-        True: ["open Chrome", "turn the volume up", "pause the video",
-               "remind me in ten minutes", "take a photo"],
+    # ----------------------------------------------------------------------
+    # Ce que chaque formule apporte
+    # ----------------------------------------------------------------------
+    # Des CAPACITES, pas des phrases a prononcer. Une liste d exemples
+    # (« ouvre Chrome ») apprend a se servir de l application ; elle ne dit
+    # pas ce qu on achete. Sur une page de forfait, la question est « qu est
+    # ce que j obtiens », et elle se repond en capacites.
+    #
+    # Chaque libelle tient sur UNE ligne a la largeur de la carte : une
+    # ligne qui se replie decale toutes les suivantes, et les deux
+    # dernieres sortaient de la carte.
+    #
+    # Le glyphe en tete de ligne tient lieu d icone : Tkinter n en charge pas
+    # sans fichier, et un caractere bien choisi fait le meme travail sans
+    # ajouter un seul octet au paquet.
+    CAPACITES_LIBRES = {
+        False: [("⌘", "Toutes les commandes, voix ou clavier"),
+                ("◴", "Rappels, minuteurs et notes"),
+                ("▤", "Wikipédia, calculs, météo, traduction"),
+                ("◉", "Photos avec la caméra"),
+                ("⤓", "Fonctionne hors ligne, n'envoie rien")],
+        True: [("⌘", "Every command, by voice or keyboard"),
+               ("◴", "Reminders, timers and notes"),
+               ("▤", "Wikipedia, arithmetic, weather, translation"),
+               ("◉", "Photos with the camera"),
+               ("⤓", "Works offline, sends nothing")],
     }
-    EXEMPLES_COMPLETS = {
-        False: ["pourquoi le ciel est bleu", "qu'est-ce que je tiens",
-                "résume ce que je viens de lire",
-                "allume le truc pour me voir", "explique-moi cette erreur"],
-        True: ["why is the sky blue", "what am I holding",
-               "summarise what I just read",
-               "turn on the thing so you can see me", "explain this error"],
+    CAPACITES_COMPLETES = {
+        False: [("✦", "Répond à vos questions, sur tout sujet"),
+                ("◉", "Analyse ce que voit la caméra"),
+                ("❝", "Comprend vos formulations imprévues"),
+                ("↯", "Suit le fil sur plusieurs demandes"),
+                ("⟳", "Quota mensuel généreux, renouvelé"),
+                ("✓", "Les nouveautés d'ALMA+ en premier")],
+        True: [("✦", "Answers questions, on any subject"),
+               ("◉", "Analyses what the camera sees"),
+               ("❝", "Understands your wording, unplanned or not"),
+               ("↯", "Follows the thread across several requests"),
+               ("⟳", "A generous allowance, renewed monthly"),
+               ("✓", "New ALMA+ features first")],
     }
-
-    def _titre_edition(self, libre: bool, anglais: bool) -> str:
-        if libre:
-            return "ALMA"
-        return "ALMA Complete" if anglais else "ALMA complète"
 
     def _carte_edition(self, parent, libre: bool, active: bool, anglais: bool) -> None:
         """
-        Une des deux formules, avec ce qu elle contient.
+        Une formule : etiquette, titre, promesse, prix, geste, capacites.
 
-        Le bouton d achat vit DANS la carte payante, pas en dessous. C est la
-        que tous les comparatifs d abonnement le mettent, et pour une bonne
-        raison : le geste se trouve a cote de ce qu il achete, au lieu de
-        flotter sous les deux colonnes sans qu on sache a laquelle il se
-        rapporte.
+        C est l ordre des comparatifs d abonnement, et il n est pas arbitraire
+        -- on lit le nom, on comprend a quoi ca sert, on voit le prix, on
+        decide. Mettre la liste avant le prix fait lire une notice a
+        quelqu un qui cherche encore s il est concerne.
         """
+        from core import edition
+
         accent = ETATS["veille"][0] if libre else ETATS["arme"][0]
-        fond = melanger(self.MODALE_CARTE, accent, 0.10 if active else 0.0)
-        bord = accent if active else melanger(self.MODALE_FOND, TEXTE, 0.12)
+        fond = melanger(self.MODALE_CARTE, accent, 0.0 if libre else 0.07)
+        bord = melanger(self.MODALE_FOND, TEXTE, 0.10) if libre else accent
 
         carte = tk.Frame(parent, bg=fond, highlightbackground=bord,
                          highlightcolor=bord, highlightthickness=1, bd=0)
-        # `sticky` sur les quatre cotes : c est lui qui etire la carte la plus
-        # courte a la hauteur de l autre, au lieu de la laisser flotter.
         carte.grid(row=0, column=0 if libre else 1, padx=9, sticky="nsew")
+        dedans = tk.Frame(carte, bg=fond)
+        dedans.pack(fill="both", expand=True, padx=26, pady=24)
 
-        interieur = tk.Frame(carte, bg=fond)
-        interieur.pack(fill="both", expand=True, padx=22, pady=18)
-
-        entete = tk.Frame(interieur, bg=fond)
+        # -- l etiquette, et la pastille « recommande » ----------------------
+        entete = tk.Frame(dedans, bg=fond)
         entete.pack(fill="x")
-        tk.Label(entete, text=self._titre_edition(libre, anglais), bg=fond,
-                 fg=TEXTE, anchor="w",
-                 font=tkfont.Font(family="Segoe UI", size=17)).pack(side="left")
-        if active:
-            tk.Label(entete, text="✓ " + ("In use" if anglais else "En cours"),
-                     bg=fond, fg=accent, anchor="e",
-                     font=tkfont.Font(family="Segoe UI", size=10)).pack(
-                         side="right", pady=(5, 0))
-
-        if libre:
-            prix = "Free, always" if anglais else "Gratuit, pour toujours"
-        else:
-            prix = str(self.assistant.config.get(
-                "abonnement.prix_en" if anglais else "abonnement.prix_fr", ""))
-        tk.Label(interieur, text=prix, bg=fond, fg=accent, anchor="w",
-                 font=tkfont.Font(family="Segoe UI", size=13)).pack(
-                     fill="x", pady=(2, 0))
-
-        # Le geste, juste sous le prix -- dans la carte payante seulement.
+        tk.Label(entete,
+                 text=edition.nom(edition.LIBRE if libre else edition.COMPLETE,
+                                  "en" if anglais else "fr"),
+                 bg=fond, fg=TEXTE, anchor="w",
+                 font=tkfont.Font(family="Segoe UI", size=11,
+                                  weight="bold")).pack(side="left")
         if not libre and not active:
-            self._bouton_abonner(interieur, anglais, fond)
+            pastille = tk.Label(entete,
+                                text=" RECOMMANDÉ " if not anglais
+                                     else " RECOMMENDED ",
+                                bg=melanger(fond, accent, 0.30), fg=accent,
+                                font=tkfont.Font(family="Segoe UI", size=8,
+                                                 weight="bold"))
+            pastille.pack(side="right", ipady=2)
 
-        for ligne in self._contenu_edition(libre, anglais):
-            tk.Label(interieur, text="✓  " + ligne, bg=fond,
-                     fg=TEXTE if not libre else TEXTE_DOUX, anchor="w",
-                     wraplength=self.LARGEUR_CARTE_MODALE - 56,
-                     justify="left",
-                     font=tkfont.Font(family="Segoe UI", size=11)).pack(
-                         fill="x", pady=(8, 0))
+        # -- la promesse -----------------------------------------------------
+        tk.Label(dedans, text=self._promesse(libre, anglais), bg=fond, fg=TEXTE,
+                 anchor="w", font=tkfont.Font(family="Segoe UI", size=20)).pack(
+                     fill="x", pady=(14, 0))
+        tk.Label(dedans, text=self._sous_titre(libre, anglais), bg=fond,
+                 fg=TEXTE_DOUX, anchor="w", justify="left",
+                 wraplength=self.LARGEUR_CARTE_MODALE - 60, height=2,
+                 font=tkfont.Font(family="Segoe UI", size=10)).pack(
+                     fill="x", pady=(8, 0))
 
-    def _contenu_edition(self, libre: bool, anglais: bool) -> list:
-        """
-        Ce que chaque formule apporte.
+        # -- le prix : le chiffre en grand, l unite a cote -------------------
+        prix = tk.Frame(dedans, bg=fond)
+        prix.pack(fill="x", pady=(16, 0))
+        tk.Label(prix, text="€", bg=fond, fg=TEXTE,
+                 font=tkfont.Font(family="Segoe UI", size=11)).pack(
+                     side="left", anchor="n", pady=(6, 0))
+        tk.Label(prix, text="0" if libre else self._montant(anglais), bg=fond,
+                 fg=TEXTE,
+                 font=tkfont.Font(family="Segoe UI", size=28)).pack(side="left")
+        tk.Label(prix, text=" / month" if anglais else " / mois", bg=fond,
+                 fg=TEXTE_DOUX,
+                 font=tkfont.Font(family="Segoe UI", size=11)).pack(
+                     side="left", anchor="s", pady=(0, 8))
 
-        L edition libre est decrite en PREMIER et en entier, expres : ce n est
-        pas une version amputee, c est un assistant d automatisation complet.
-        La complete AJOUTE -- elle ne debloque pas.
-
-        Chaque ligne tient sur UNE ligne a la largeur de la carte : une puce
-        qui passe a la ligne decale toutes les suivantes.
-        """
-        if libre:
-            if anglais:
-                return ["Every command, by voice or keyboard",
-                        "Remembers the conversation",
-                        "Wikipedia, arithmetic, weather",
-                        "Takes photos with the camera",
-                        "Works offline, sends nothing"]
-            return ["Toutes les commandes, voix ou clavier",
-                    "Retient le fil de la conversation",
-                    "Wikipédia, calculs, météo, traduction",
-                    "Prend des photos avec la caméra",
-                    "Hors ligne, n'envoie rien"]
-        if anglais:
-            return ["Everything above, unchanged",
-                    "Answers open questions",
-                    "Looks at what the camera sees",
-                    "Understands unplanned wordings",
-                    "Monthly usage allowance"]
-        return ["Tout ce qui précède, à l'identique",
-                "Répond aux questions ouvertes",
-                "Regarde ce que voit la caméra",
-                "Comprend les formulations imprévues",
-                "Quota mensuel inclus"]
-
-    def _pied_abonnement(self, parent, complete: bool, anglais: bool) -> None:
-        """
-        Sous les deux cartes : la clé, ou de quoi se désabonner.
-
-        Discret exprès. Coller sa propre clé d API est un chemin d initié ;
-        le mettre au meme niveau que l abonnement embrouillerait les neuf
-        dixiemes des gens pour en servir un.
-        """
-        fond = self.MODALE_FOND
-        pied = tk.Frame(parent, bg=fond)
-        pied.pack(pady=(16, 0))
-
-        if complete:
-            tk.Label(pied,
-                     text=("Your key is stored, encrypted by Windows."
-                           if anglais else
-                           "Votre clé est enregistrée, chiffrée par Windows."),
+        # -- le geste --------------------------------------------------------
+        if active:
+            tk.Label(dedans,
+                     text="Your current plan" if anglais
+                          else "Votre formule actuelle",
                      bg=fond, fg=TEXTE_DOUX,
-                     font=tkfont.Font(family="Segoe UI", size=10)).pack()
-            retirer = tk.Label(
-                pied, text="Remove the key" if anglais else "Retirer la clé",
-                bg=fond, fg=ETATS["erreur"][0], cursor="hand2",
-                font=tkfont.Font(family="Segoe UI", size=10))
-            retirer.pack(pady=(8, 0))
-            retirer.bind("<Button-1>", lambda _e: self._retirer_cle())
-            return
+                     highlightbackground=melanger(fond, TEXTE, 0.14),
+                     highlightthickness=1,
+                     font=tkfont.Font(family="Segoe UI", size=11)).pack(
+                         fill="x", ipady=9, pady=(16, 0))
+        elif libre:
+            self._bouton_resilier(dedans, anglais, fond)
+        else:
+            self._bouton_abonner(dedans, anglais, fond)
 
-        ligne = tk.Frame(pied, bg=fond)
-        ligne.pack()
-        tk.Label(ligne,
-                 text=("Already have an Anthropic API key?"
-                       if anglais else
-                       "Vous avez déjà une clé d'API Anthropic ?"),
-                 bg=fond, fg=TEXTE_DOUX,
-                 font=tkfont.Font(family="Segoe UI", size=10)).pack(side="left",
-                                                                    padx=(0, 10))
-        # `show` : une cle ne s affiche pas en clair, pas meme a celui qui la
-        # tape -- un partage d ecran, une capture, et elle est dehors.
-        self._champ_cle = tk.Entry(
-            ligne, font=tkfont.Font(family="Consolas", size=10),
-            bg=self.MODALE_CARTE, fg=TEXTE, insertbackground=ETATS["arme"][0],
-            bd=0, relief="flat", width=26, show="*", highlightthickness=1,
-            highlightbackground=melanger(fond, TEXTE, 0.12),
-            highlightcolor=ETATS["arme"][0])
-        self._champ_cle.pack(side="left", ipady=5, ipadx=8)
-        self._champ_cle.bind("<Return>", lambda _e: self._activer_cle())
-        activer = tk.Label(ligne, text="Activate" if anglais else "Activer",
-                           bg=fond, fg=ETATS["arme"][0], cursor="hand2",
-                           font=tkfont.Font(family="Segoe UI", size=10))
-        activer.pack(side="left", padx=(10, 0))
-        activer.bind("<Button-1>", lambda _e: self._activer_cle())
+        # -- ce qu on obtient ------------------------------------------------
+        tk.Label(dedans,
+                 text=(("Start with the basics:" if anglais
+                        else "Pour commencer :") if libre else
+                       ("Everything in ALMA, and:" if anglais
+                        else "Tout ce qu'ALMA fait, et :")),
+                 bg=fond, fg=TEXTE, anchor="w",
+                 font=tkfont.Font(family="Segoe UI", size=10,
+                                  weight="bold")).pack(fill="x", pady=(22, 4))
 
-        self._etat_cle = tk.Label(pied, text="", bg=fond, fg=TEXTE_DOUX,
-                                  wraplength=620, justify="center",
-                                  font=tkfont.Font(family="Segoe UI", size=10))
-        self._etat_cle.pack(pady=(9, 0))
+        capacites = (self.CAPACITES_LIBRES if libre
+                     else self.CAPACITES_COMPLETES)[anglais]
+        for glyphe, texte in capacites:
+            ligne = tk.Frame(dedans, bg=fond)
+            ligne.pack(fill="x", pady=5)
+            tk.Label(ligne, text=glyphe, bg=fond,
+                     fg=TEXTE_DOUX if libre else accent, width=2,
+                     font=tkfont.Font(family="Segoe UI", size=11)).pack(
+                         side="left", anchor="n")
+            tk.Label(ligne, text=texte, bg=fond, fg=TEXTE, anchor="w",
+                     justify="left",
+                     wraplength=self.LARGEUR_CARTE_MODALE - 92,
+                     font=tkfont.Font(family="Segoe UI", size=10)).pack(
+                         side="left", fill="x")
+
+    def _promesse(self, libre: bool, anglais: bool) -> str:
+        if libre:
+            return "Votre automate" if not anglais else "Your automation"
+        return "Votre assistante" if not anglais else "Your assistant"
+
+    def _sous_titre(self, libre: bool, anglais: bool) -> str:
+        if libre:
+            return ("Piloter votre ordinateur à la voix, sans rien envoyer "
+                    "nulle part." if not anglais else
+                    "Drive your computer by voice, without sending anything "
+                    "anywhere.")
+        return ("Elle comprend ce que vous demandez, répond, et regarde ce "
+                "que vous lui montrez." if not anglais else
+                "She understands what you ask, answers, and looks at what "
+                "you show her.")
+
+    def _montant(self, anglais: bool) -> str:
+        """Le chiffre seul : le symbole et la periode sont poses a cote."""
+        brut = str(self.assistant.config.get(
+            "abonnement.prix_en" if anglais else "abonnement.prix_fr", ""))
+        for separateur in (" par ", " per ", " / ", "/"):
+            brut = brut.split(separateur)[0]
+        return brut.replace("€", "").replace("EUR", "").strip() or "6,99"
+
+    def _bouton_resilier(self, parent, anglais: bool, fond: str) -> None:
+        """Depuis la carte gratuite, quand on est abonne : redescendre."""
+        bouton = tk.Label(
+            parent, text="Cancel subscription" if anglais
+                         else "Résilier l'abonnement",
+            bg=fond, fg=TEXTE_DOUX, cursor="hand2",
+            highlightbackground=melanger(fond, TEXTE, 0.14),
+            highlightthickness=1,
+            font=tkfont.Font(family="Segoe UI", size=11))
+        bouton.pack(fill="x", ipady=9, pady=(16, 0))
+        bouton.bind("<Button-1>", lambda _e: self._resilier())
 
     def _bouton_abonner(self, parent, anglais: bool, fond: str = None) -> None:
         """
@@ -1892,21 +1831,60 @@ class AlmaApp:
             action = lambda: self._ouvrir_page_abonnement(url)
         else:
             tk.Label(parent,
-                     text=("Subscriptions are not open yet."
-                           if anglais else
-                           "L'abonnement n'est pas encore ouvert."),
-                     bg=fond, fg=TEXTE_DOUX, anchor="w",
-                     font=tkfont.Font(family="Segoe UI", size=10)).pack(
-                         fill="x", pady=(12, 2))
+                     text=("Subscriptions open soon." if anglais
+                           else "L'abonnement ouvre bientôt."),
+                     bg=melanger(fond, TEXTE, 0.06), fg=TEXTE_DOUX,
+                     font=tkfont.Font(family="Segoe UI", size=11)).pack(
+                         fill="x", ipady=9, pady=(16, 0))
             return
 
-        bouton = tk.Button(
-            parent, text="Subscribe" if anglais else "S'abonner",
+        tk.Button(
+            parent, text=("✦  Get ALMA+" if anglais else "✦  Passer à ALMA+"),
             command=action, bg=ETATS["arme"][0], fg=FOND,
             activebackground=melanger(ETATS["arme"][0], TEXTE, 0.2),
             activeforeground=FOND, bd=0, relief="flat", cursor="hand2",
-            font=tkfont.Font(family="Segoe UI", size=11), pady=8)
-        bouton.pack(fill="x", pady=(12, 2))
+            font=tkfont.Font(family="Segoe UI", size=11, weight="bold"),
+            pady=9).pack(fill="x", pady=(16, 0))
+
+    def _resilier(self) -> None:
+        """
+        La resiliation se fait chez Microsoft, pas ici.
+
+        C est lui qui encaisse : nous n avons ni le droit ni le moyen
+        d annuler a sa place, et pretendre le contraire laisserait quelqu un
+        croire qu il a resilie alors qu il sera preleve le mois suivant.
+        """
+        from core.win_utils import launch
+
+        launch("ms-windows-store://account/subscriptions")
+        anglais = self._anglais()
+        if self._etat_achat is not None:
+            self._etat_achat.configure(
+                text=("Subscriptions are managed in the Microsoft Store."
+                      if anglais else
+                      "Les abonnements se gèrent dans le Microsoft Store."),
+                fg=TEXTE_DOUX)
+
+    def _ouvrir_page_abonnement(self, url: str) -> None:
+        from core.win_utils import open_url
+
+        open_url(url)
+
+    def _revenir_au_graphique(self, quoi) -> None:
+        """
+        Repasse dans le thread graphique, ou renonce si la fenetre n est plus la.
+
+        L achat peut durer longtemps -- la boite de dialogue de Windows reste
+        ouverte tant que l utilisateur n a pas tranche. Pendant ce temps il
+        peut avoir quitte : `root.after` leve alors depuis le thread (« main
+        thread is not in main loop »), et l exception meurt dans son coin
+        sans que personne la voie. Renoncer est le bon comportement -- il n y
+        a plus rien a afficher.
+        """
+        try:
+            self.root.after(0, quoi)
+        except (tk.TclError, RuntimeError):
+            pass
 
     def _acheter_abonnement(self) -> None:
         """
@@ -1918,8 +1896,8 @@ class AlmaApp:
         lui demande de payer.
         """
         anglais = self._anglais()
-        if self._etat_cle is not None:
-            self._etat_cle.configure(
+        if self._etat_achat is not None:
+            self._etat_achat.configure(
                 text="Opening the Store…" if anglais else "Ouverture du Store…",
                 fg=TEXTE_DOUX)
         # Le handle de la fenetre : Windows en a besoin pour savoir devant
@@ -1938,90 +1916,82 @@ class AlmaApp:
         # La reponse gardee ne vaut plus rien : l abonnement vient de changer.
         edition.oublier_le_cache()
         if reussi:
-            self._revenir_au_graphique(self._succes_cle)
+            self._revenir_au_graphique(self._succes_achat)
             return
-        self._revenir_au_graphique(lambda: self._echec_cle(en if anglais else fr))
+        self._revenir_au_graphique(
+            lambda: self._echec_achat(en if anglais else fr))
+
+    def _echec_achat(self, raison: str) -> None:
+        """Dit pourquoi l achat n a pas abouti, sous les deux formules."""
+        if self._etat_achat is None:
+            return
+        try:
+            self._etat_achat.configure(text=raison, fg=ETATS["erreur"][0])
+        except tk.TclError:
+            pass                              # la modale a ete refermee entre-temps
+
+    def _succes_achat(self) -> None:
+        self.assistant.bruit("ok")
+        if getattr(self, "abonnement", None) is not None:
+            self._dessiner_abonnement()
+        if getattr(self, "bouton_compte", None) is not None:
+            self.bouton_compte.redessiner()
 
     def _ouvrir_page_abonnement(self, url: str) -> None:
         from core.win_utils import open_url
 
         open_url(url)
 
-    def _activer_cle(self, _evenement=None) -> None:
+    def _acheter_abonnement(self) -> None:
         """
-        Verifie la cle, PUIS la range. Dans cet ordre.
+        Ouvre la fenetre d achat de Windows, hors du thread graphique.
 
-        La verification part sur le reseau : elle se fait donc dans un thread,
-        sinon la fenetre gele le temps de l aller-retour et l on croit que
-        l application a plante.
+        Elle est MODALE et reste ouverte tant que l utilisateur n a pas
+        tranche : l appeler ici figerait la fenetre d Alma derriere, et
+        l utilisateur croirait l application plantee au moment precis ou on
+        lui demande de payer.
         """
-        if self._champ_cle is None:
-            return
-        cle = self._champ_cle.get().strip()
         anglais = self._anglais()
-        if not cle:
-            self._etat_cle.configure(
-                text="Paste your key first." if anglais
-                else "Collez d'abord votre clé.", fg=TEXTE_DOUX)
+        if self._etat_achat is not None:
+            self._etat_achat.configure(
+                text="Opening the Store…" if anglais else "Ouverture du Store…",
+                fg=TEXTE_DOUX)
+        # Le handle de la fenetre : Windows en a besoin pour savoir devant
+        # quoi s afficher, et l achat echoue sans lui.
+        fenetre = self.root.winfo_id()
+        threading.Thread(target=self._acheter_puis_rafraichir,
+                         args=(fenetre, anglais),
+                         name="alma-achat", daemon=True).start()
+
+    def _acheter_puis_rafraichir(self, fenetre: int, anglais: bool) -> None:
+        from core import abonnement_store, edition
+
+        store_id = str(self.assistant.config.get("abonnement.store_id", "")
+                       or "").strip()
+        reussi, fr, en = abonnement_store.acheter(store_id, fenetre)
+        # La reponse gardee ne vaut plus rien : l abonnement vient de changer.
+        edition.oublier_le_cache()
+        if reussi:
+            self._revenir_au_graphique(self._succes_achat)
             return
-        self._etat_cle.configure(text="Checking…" if anglais else "Vérification…",
-                                 fg=TEXTE_DOUX)
-        threading.Thread(target=self._verifier_puis_ranger, args=(cle, anglais),
-                         name="alma-verif-cle", daemon=True).start()
+        self._revenir_au_graphique(
+            lambda: self._echec_achat(en if anglais else fr))
 
-    def _revenir_au_graphique(self, quoi) -> None:
-        """
-        Repasse dans le thread graphique, ou renonce si la fenetre n est plus la.
-
-        La verification dure jusqu a quinze secondes. Pendant ce temps
-        l utilisateur peut avoir quitte : `root.after` leve alors depuis le
-        thread (« main thread is not in main loop »), et l exception meurt
-        dans son coin sans que personne la voie. Renoncer est le bon
-        comportement -- il n y a plus rien a afficher.
-        """
-        try:
-            self.root.after(0, quoi)
-        except (tk.TclError, RuntimeError):
-            pass
-
-    def _verifier_puis_ranger(self, cle: str, anglais: bool) -> None:
-        """Hors du thread graphique : le resultat revient par `after`."""
-        from core import edition
-        from core.providers.claude_api_provider import verifier_cle
-
-        ok, raison_fr, raison_en = verifier_cle(cle)
-        if not ok:
-            raison = raison_en if anglais else raison_fr
-            self._revenir_au_graphique(lambda: self._echec_cle(raison))
-            return
-        edition.poser_cle(self.assistant.config, cle)
-        # Regle 3 : applique ET retenu. `personnaliser` fait les deux moities
-        # et previent les objets deja construits.
-        self.assistant.personnaliser({"general.edition": edition.COMPLETE})
-        self._revenir_au_graphique(self._succes_cle)
-
-    def _echec_cle(self, raison: str) -> None:
-        if self._etat_cle is None:
+    def _echec_achat(self, raison: str) -> None:
+        """Dit pourquoi l achat n a pas abouti, sous les deux formules."""
+        if self._etat_achat is None:
             return
         try:
-            self._etat_cle.configure(text=raison, fg=ETATS["erreur"][0])
+            self._etat_achat.configure(text=raison, fg=ETATS["erreur"][0])
         except tk.TclError:
-            pass                              # le panneau a ete referme entre-temps
+            pass                              # la modale a ete refermee entre-temps
 
-    def _succes_cle(self) -> None:
+    def _succes_achat(self) -> None:
         self.assistant.bruit("ok")
         if getattr(self, "abonnement", None) is not None:
             self._dessiner_abonnement()
-
-    def _retirer_cle(self) -> None:
-        """Oublie la cle et revient en edition libre."""
-        from core import edition
-
-        edition.retirer_cle(self.assistant.config)
-        self.assistant.personnaliser({"general.edition": edition.LIBRE})
-        self.assistant.bruit("ok")
-        if getattr(self, "abonnement", None) is not None:
-            self._dessiner_abonnement()
+        if getattr(self, "bouton_compte", None) is not None:
+            self.bouton_compte.redessiner()
 
     def montrer_installation(self, quand_fini) -> None:
         """

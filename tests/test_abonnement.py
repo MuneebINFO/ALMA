@@ -1,27 +1,30 @@
 """
-L'onglet Abonnement : ce qu'il montre, et ce qu'il refuse de faire.
+Le compte, le profil et la modale d'abonnement.
 
 Deux choses s'y jouent qui valent des tests plutôt qu'une relecture.
 
-La CLÉ. Elle est vérifiée contre le vrai service avant d'être acceptée —
-donc jamais rangée si elle est mauvaise, et jamais affichée en clair. Ici
-la vérification est doublée : la suite n'appelle aucun réseau.
+**Aucune clé d'API n'est proposée, jamais.** Ce chemin a existé, il a été
+retiré, et la fin de ce fichier interdit son retour — pas seulement dans le
+code, mais dans le TEXTE affiché : suggérer à quelqu'un d'aller se procurer
+une clé chez un tiers est une décision de produit, et elle a été prise dans
+l'autre sens.
 
-Et le BOUTON D'ABONNEMENT. Tant qu'aucune page de paiement n'existe, il doit
-le dire au lieu d'en ouvrir une. Un bouton qui fait semblant d'encaisser
-coûte plus cher en confiance qu'il ne rapporte, et c'est exactement le genre
-de chose qui part en production sans que personne le remarque.
+**Le bouton d'abonnement ne fait pas semblant.** Tant qu'aucun moyen de
+paiement n'existe, il le dit au lieu d'en ouvrir un. Un bouton qui prétend
+encaisser coûte plus cher en confiance qu'il ne rapporte, et c'est
+exactement le genre de chose qui part en production sans que personne le
+remarque.
 """
 
 import queue
 
 import pytest
 
-from core import edition, secrets
+from core import abonnement_store, edition
 
 
 # --------------------------------------------------------------------------
-# De quoi exercer le panneau sans ouvrir la vraie fenêtre
+# De quoi exercer les panneaux sans ouvrir la vraie fenêtre
 # --------------------------------------------------------------------------
 def panneau_factice(tk_root, assistant):
     """Les widgets sont réels ; le reste de l'application ne l'est pas."""
@@ -38,32 +41,39 @@ def panneau_factice(tk_root, assistant):
     faux.colonne.pack(side="left", fill="both", expand=True)
     faux.installation = None
     faux.abonnement = None
-    faux._champ_cle = None
-    faux._etat_cle = None
+    faux.popup_compte = None
+    faux._etat_achat = None
     faux.evenements = queue.Queue()
     return faux
 
 
-def etiquettes(faux):
-    """Tous les textes affichés dans le panneau, à n'importe quelle profondeur."""
+def _textes(racine):
     trouves = []
 
     def descendre(widget):
         for enfant in widget.winfo_children():
-            if enfant.winfo_class() == "Label":
+            if enfant.winfo_class() in ("Label", "Button"):
                 trouves.append(enfant.cget("text"))
             descendre(enfant)
 
-    descendre(faux.abonnement)
+    descendre(racine)
     return trouves
+
+
+def etiquettes(faux):
+    return _textes(faux.abonnement)
 
 
 def texte_affiche(faux):
     return " ".join(etiquettes(faux)).lower()
 
 
+def textes_popup(faux):
+    return " ".join(_textes(faux.popup_compte)).lower()
+
+
 @pytest.fixture
-def panneau(tk_root, assistant):
+def modale(tk_root, assistant):
     faux = panneau_factice(tk_root, assistant)
     faux.basculer_abonnement()
     yield faux
@@ -72,408 +82,11 @@ def panneau(tk_root, assistant):
 
 
 @pytest.fixture
-def avec_cle(assistant, monkeypatch):
-    """Une machine où la clé est déjà posée."""
-    monkeypatch.setattr(secrets, "lire",
-                        lambda nom, cfg=None: "sk-ant-fausse-cle")
-    assistant.config.set("general.edition", "complete")
+def abonne(assistant, monkeypatch):
+    """Une machine dont l'abonnement est actif."""
+    monkeypatch.setattr(abonnement_store, "abonne", lambda store_id: True)
+    edition.oublier_le_cache()
     return assistant
-
-
-# --------------------------------------------------------------------------
-# Ce que le panneau montre
-# --------------------------------------------------------------------------
-def test_il_s_ouvre_et_se_referme(tk_root, assistant):
-    faux = panneau_factice(tk_root, assistant)
-
-    faux.basculer_abonnement()
-    assert faux.abonnement is not None
-
-    faux.basculer_abonnement()
-    assert faux.abonnement is None
-
-
-def test_les_deux_editions_sont_montrees(panneau):
-    affiche = texte_affiche(panneau)
-    assert "alma" in affiche
-    assert "gratuit" in affiche, affiche
-
-
-def test_l_edition_libre_est_decrite_en_entier(panneau):
-    """
-    Elle n'est pas une version amputée. Si le panneau ne listait que ce qui
-    manque, il présenterait un produit complet comme une démo bridée.
-    """
-    affiche = texte_affiche(panneau)
-    for promesse in ("commandes", "conversation", "hors ligne"):
-        assert promesse in affiche, (promesse, affiche)
-
-
-def test_sans_cle_c_est_l_edition_libre_qui_est_en_cours(panneau):
-    assert "en cours" in texte_affiche(panneau)
-
-
-def test_le_prix_affiche_vient_de_la_configuration(tk_root, assistant):
-    assistant.config.set("abonnement.prix_fr", "3,50 € par mois")
-    faux = panneau_factice(tk_root, assistant)
-    faux.basculer_abonnement()
-
-    assert "3,50 € par mois" in texte_affiche(faux)
-
-
-def test_en_anglais_tout_est_en_anglais(tk_root, assistant):
-    assistant.config.set("general.language", "en")
-    faux = panneau_factice(tk_root, assistant)
-    faux.basculer_abonnement()
-
-    affiche = texte_affiche(faux)
-    assert "subscription" in affiche
-    assert "free, always" in affiche
-    assert "gratuit" not in affiche, affiche
-
-
-# --------------------------------------------------------------------------
-# Le bouton d'abonnement : il ne fait pas semblant
-# --------------------------------------------------------------------------
-def test_sans_page_de_paiement_le_bouton_le_dit(panneau):
-    """
-    Le test qui compte. Tant que la page n'existe pas, aucun bouton ne doit
-    prétendre encaisser quoi que ce soit.
-    """
-    assert "pas encore ouvert" in texte_affiche(panneau)
-
-
-def test_aucune_page_n_est_ouverte_sans_url(tk_root, assistant, monkeypatch):
-    ouvertes = []
-    monkeypatch.setattr("gui.AlmaApp._ouvrir_page_abonnement",
-                        lambda self, url: ouvertes.append(url))
-
-    faux = panneau_factice(tk_root, assistant)
-    faux.basculer_abonnement()
-
-    assert ouvertes == []
-
-
-def test_avec_une_url_le_bouton_apparait(tk_root, assistant):
-    assistant.config.set("abonnement.url", "https://exemple.test/abonnement")
-    faux = panneau_factice(tk_root, assistant)
-    faux.basculer_abonnement()
-
-    assert "pas encore ouvert" not in texte_affiche(faux)
-
-
-# --------------------------------------------------------------------------
-# La clé : vérifiée avant d'être rangée
-# --------------------------------------------------------------------------
-def test_une_cle_refusee_n_est_pas_rangee(panneau, monkeypatch):
-    """
-    Accepter sans vérifier serait pire que tout : la clé serait rangée,
-    l'édition passerait en complète, et le premier échec arriverait plus
-    tard, sur une vraie demande, sans que personne sache pourquoi.
-    """
-    posees = []
-    monkeypatch.setattr("core.providers.claude_api_provider.verifier_cle",
-                        lambda cle, delai=15.0: (False, "Clé refusée.", "Key refused."))
-    monkeypatch.setattr(edition, "poser_cle",
-                        lambda cfg, valeur: posees.append(valeur))
-
-    panneau._champ_cle.insert(0, "sk-ant-mauvaise")
-    panneau._verifier_puis_ranger("sk-ant-mauvaise", anglais=False)
-
-    assert posees == [], "une clé refusée a été rangée"
-
-
-def test_une_cle_acceptee_est_rangee_et_appliquee(panneau, monkeypatch):
-    """Règle 3 : appliqué ET retenu. Les deux moitiés, ou rien."""
-    posees = []
-    personnalisees = []
-    monkeypatch.setattr("core.providers.claude_api_provider.verifier_cle",
-                        lambda cle, delai=15.0: (True, "", ""))
-    monkeypatch.setattr(edition, "poser_cle",
-                        lambda cfg, valeur: posees.append(valeur) or True)
-    panneau.assistant.personnaliser = lambda reglages: personnalisees.append(reglages)
-
-    panneau._verifier_puis_ranger("sk-ant-bonne", anglais=False)
-
-    assert posees == ["sk-ant-bonne"]
-    assert personnalisees == [{"general.edition": "complete"}]
-
-
-def test_un_champ_vide_ne_part_pas_sur_le_reseau(panneau, monkeypatch):
-    appels = []
-    monkeypatch.setattr("core.providers.claude_api_provider.verifier_cle",
-                        lambda cle, delai=15.0: appels.append(cle) or (True, "", ""))
-
-    panneau._activer_cle()
-
-    assert appels == [], "une vérification est partie pour un champ vide"
-
-
-def test_la_cle_ne_s_affiche_jamais_en_clair(panneau):
-    """
-    Une clé lisible à l'écran, c'est un partage d'écran ou une capture et
-    elle est dehors. Le champ la masque, comme un mot de passe.
-    """
-    assert panneau._champ_cle.cget("show") not in ("", None)
-
-
-def test_la_cle_n_apparait_pas_dans_les_etiquettes(panneau, monkeypatch):
-    monkeypatch.setattr("core.providers.claude_api_provider.verifier_cle",
-                        lambda cle, delai=15.0: (False, "Refusée.", "Refused."))
-
-    panneau._champ_cle.insert(0, "sk-ant-secrete-0123456789")
-    panneau._activer_cle()
-    panneau.root.update()
-
-    assert "sk-ant" not in texte_affiche(panneau)
-
-
-def test_le_message_d_echec_s_affiche(panneau):
-    panneau._echec_cle("Cette clé n'est pas reconnue.")
-
-    assert "pas reconnue" in texte_affiche(panneau)
-
-
-def test_un_echec_arrive_apres_fermeture_ne_leve_pas(tk_root, assistant):
-    """
-    La vérification part sur le réseau et peut mettre quinze secondes. Le
-    panneau, lui, peut avoir été refermé entre-temps : le thread revient
-    alors sur des widgets détruits.
-    """
-    faux = panneau_factice(tk_root, assistant)
-    faux.basculer_abonnement()
-    etiquette = faux._etat_cle
-    faux._fermer_abonnement()
-
-    faux._etat_cle = etiquette          # ce que le thread a encore sous la main
-    faux._echec_cle("Trop tard.")       # ne doit pas lever
-
-
-# --------------------------------------------------------------------------
-# Une fois abonné
-# --------------------------------------------------------------------------
-def test_avec_une_cle_l_edition_complete_est_en_cours(tk_root, avec_cle):
-    faux = panneau_factice(tk_root, avec_cle)
-    faux.basculer_abonnement()
-
-    affiche = texte_affiche(faux)
-    assert "chiffr" in affiche, affiche
-    assert "retirer la cl" in affiche, affiche
-
-
-def test_il_n_y_a_plus_de_champ_de_saisie_une_fois_abonne(tk_root, avec_cle):
-    faux = panneau_factice(tk_root, avec_cle)
-    faux.basculer_abonnement()
-
-    assert faux._champ_cle is None
-
-
-def test_retirer_la_cle_ramene_en_edition_libre(tk_root, avec_cle, monkeypatch):
-    oublis = []
-    personnalisees = []
-    monkeypatch.setattr(edition, "retirer_cle",
-                        lambda cfg: oublis.append(True) or True)
-    faux = panneau_factice(tk_root, avec_cle)
-    faux.basculer_abonnement()
-    faux.assistant.personnaliser = lambda reglages: personnalisees.append(reglages)
-
-    faux._retirer_cle()
-
-    assert oublis == [True]
-    assert personnalisees == [{"general.edition": "libre"}]
-
-
-def test_une_verification_qui_revient_apres_la_fermeture_de_la_fenetre(panneau,
-                                                                       monkeypatch):
-    """
-    La vérification dure jusqu'à quinze secondes. L'utilisateur peut avoir
-    quitté entre-temps : `root.after` lève alors depuis le thread, et
-    l'exception meurt dans son coin sans que personne la voie.
-    """
-    monkeypatch.setattr("core.providers.claude_api_provider.verifier_cle",
-                        lambda cle, delai=15.0: (False, "Refusée.", "Refused."))
-
-    class FenetrePartie:
-        @staticmethod
-        def after(_delai, _quoi):
-            raise RuntimeError("main thread is not in main loop")
-
-    panneau.root = FenetrePartie()
-
-    panneau._verifier_puis_ranger("sk-ant-peu-importe", anglais=False)
-
-
-def test_echap_referme_le_panneau_avant_d_endormir(panneau):
-    """
-    Sinon Échap endormirait ALMA en laissant l'onglet ouvert : on croirait
-    avoir fermé, et on aurait mis l'assistant en veille sans le vouloir.
-    """
-    sommeils = []
-    panneau.endormir = lambda: sommeils.append(True)
-    panneau.plein_ecran = False
-
-    panneau._sur_echap()
-
-    assert panneau.abonnement is None
-    assert sommeils == [], "ALMA a été endormie au lieu de fermer l'onglet"
-
-
-# --------------------------------------------------------------------------
-# Le bouton « S'abonner » branché sur le Store
-# --------------------------------------------------------------------------
-@pytest.fixture
-def store_present(assistant, monkeypatch):
-    """Une machine où le Store répond, avec un achat sous surveillance."""
-    from core import abonnement_store
-
-    achats = []
-    monkeypatch.setattr(abonnement_store, "disponible", lambda: True)
-    monkeypatch.setattr(
-        abonnement_store, "acheter",
-        lambda store_id, fenetre: achats.append((store_id, fenetre))
-        or (True, "C'est fait.", "All set."))
-    return achats
-
-
-def test_avec_le_store_le_bouton_s_abonner_apparait(tk_root, assistant,
-                                                    store_present):
-    faux = panneau_factice(tk_root, assistant)
-    faux.basculer_abonnement()
-
-    assert "pas encore ouvert" not in texte_affiche(faux)
-
-
-def test_l_achat_passe_par_le_store_avec_le_bon_identifiant(tk_root, assistant,
-                                                            store_present):
-    faux = panneau_factice(tk_root, assistant)
-    faux.basculer_abonnement()
-
-    faux._acheter_puis_rafraichir(fenetre=1234, anglais=False)
-
-    assert len(store_present) == 1
-    store_id, fenetre = store_present[0]
-    assert store_id == assistant.config.get("abonnement.store_id")
-    assert fenetre == 1234, "le handle de fenêtre n'est pas transmis"
-
-
-def test_un_achat_annule_le_dit_sans_rien_activer(tk_root, assistant,
-                                                  monkeypatch):
-    from core import abonnement_store, edition
-
-    monkeypatch.setattr(abonnement_store, "disponible", lambda: True)
-    monkeypatch.setattr(
-        abonnement_store, "acheter",
-        lambda store_id, fenetre: (False, "L'achat a été annulé.",
-                                   "The purchase was cancelled."))
-    faux = panneau_factice(tk_root, assistant)
-    faux.basculer_abonnement()
-
-    faux._acheter_puis_rafraichir(fenetre=1, anglais=False)
-    faux.root.update()
-
-    assert "annulé" in texte_affiche(faux)
-    assert edition.est_complete(assistant.config) is False
-
-
-def test_le_cache_est_oublie_apres_un_achat(tk_root, assistant, store_present,
-                                            monkeypatch):
-    """
-    Sans cela, ALMA continuerait de croire l'utilisateur non abonné pendant
-    trente secondes après qu'il vient de payer — la pire seconde possible
-    pour un doute.
-    """
-    from core import edition
-
-    oublis = []
-    monkeypatch.setattr(edition, "oublier_le_cache",
-                        lambda: oublis.append(True))
-    faux = panneau_factice(tk_root, assistant)
-    faux.basculer_abonnement()
-
-    faux._acheter_puis_rafraichir(fenetre=1, anglais=False)
-
-    assert oublis, "le cache d'abonnement n'a pas été invalidé"
-
-
-# --------------------------------------------------------------------------
-# Les deux voies vers l'édition complète
-# --------------------------------------------------------------------------
-def test_une_cle_envoie_droit_chez_anthropic(assistant, monkeypatch):
-    """Rien ne transite par le relais : c'est le compte de l'utilisateur."""
-    from core import edition, secrets
-    from core.providers.claude_api_provider import ClaudeApiProvider
-
-    monkeypatch.setattr(secrets, "lire", lambda nom, cfg=None: "sk-ant-a-lui")
-    assistant.config.set("general.edition", "complete")
-    assistant.config.set("abonnement.relais_url", "https://relais.test")
-
-    assert edition.voie(assistant.config) == edition.VOIE_CLE
-
-    construits = []
-    import anthropic
-    monkeypatch.setattr(anthropic, "Anthropic",
-                        lambda **k: construits.append(k) or object())
-
-    ClaudeApiProvider(assistant.config).client()
-
-    assert construits[0]["api_key"] == "sk-ant-a-lui"
-    assert "base_url" not in construits[0], "la clé de l'utilisateur est passée par le relais"
-
-
-def test_un_abonnement_passe_par_le_relais(assistant, monkeypatch):
-    """Et l'application n'a alors AUCUNE clé — seulement un jeton signé."""
-    from core import abonnement_store, edition
-    from core.providers.claude_api_provider import ClaudeApiProvider
-
-    monkeypatch.setattr(abonnement_store, "abonne", lambda store_id: True)
-    monkeypatch.setattr(abonnement_store, "jeton", lambda audience="": "jeton-signe")
-    edition.oublier_le_cache()
-    assistant.config.set("abonnement.relais_url", "https://relais.test")
-
-    assert edition.voie(assistant.config) == edition.VOIE_ABONNEMENT
-
-    construits = []
-    import anthropic
-    monkeypatch.setattr(anthropic, "Anthropic",
-                        lambda **k: construits.append(k) or object())
-
-    ClaudeApiProvider(assistant.config).client()
-
-    assert construits[0]["base_url"] == "https://relais.test"
-    assert construits[0]["api_key"] == "jeton-signe"
-    assert not construits[0]["api_key"].startswith("sk-ant")
-
-
-def test_un_abonnement_sans_relais_le_dit_clairement(assistant, monkeypatch):
-    """
-    Le cas qui arrivera pendant le déploiement : abonné, mais le relais n'est
-    pas encore en ligne. Il faut que le message le dise, pas qu'il ressemble
-    à un problème d'abonnement.
-    """
-    from core import abonnement_store, edition
-    from core.providers.claude_api_provider import ClaudeApiProvider
-
-    monkeypatch.setattr(abonnement_store, "abonne", lambda store_id: True)
-    edition.oublier_le_cache()
-    assistant.config.set("abonnement.relais_url", "")
-
-    with pytest.raises(RuntimeError, match="relais"):
-        ClaudeApiProvider(assistant.config).client()
-
-
-def test_la_cle_l_emporte_sur_l_abonnement(assistant, monkeypatch):
-    """
-    Quelqu'un qui a posé une clé l'a fait exprès, et elle ne coûte rien à
-    personne d'autre. La consulter est par ailleurs instantané.
-    """
-    from core import abonnement_store, edition, secrets
-
-    monkeypatch.setattr(secrets, "lire", lambda nom, cfg=None: "sk-ant-a-lui")
-    monkeypatch.setattr(abonnement_store, "abonne", lambda store_id: True)
-    edition.oublier_le_cache()
-    assistant.config.set("general.edition", "complete")
-
-    assert edition.voie(assistant.config) == edition.VOIE_CLE
 
 
 # --------------------------------------------------------------------------
@@ -481,22 +94,8 @@ def test_la_cle_l_emporte_sur_l_abonnement(assistant, monkeypatch):
 # --------------------------------------------------------------------------
 def menu(tk_root, assistant):
     faux = panneau_factice(tk_root, assistant)
-    faux.popup_compte = None
     faux.basculer_compte()
     return faux
-
-
-def textes_popup(faux):
-    trouves = []
-
-    def descendre(widget):
-        for enfant in widget.winfo_children():
-            if enfant.winfo_class() == "Label":
-                trouves.append(enfant.cget("text"))
-            descendre(enfant)
-
-    descendre(faux.popup_compte)
-    return " ".join(trouves).lower()
 
 
 def test_le_menu_s_ouvre_et_se_referme(tk_root, assistant):
@@ -508,9 +107,8 @@ def test_le_menu_s_ouvre_et_se_referme(tk_root, assistant):
 
 
 def test_le_menu_propose_profil_et_abonnement(tk_root, assistant):
-    faux = menu(tk_root, assistant)
+    affiche = textes_popup(menu(tk_root, assistant))
 
-    affiche = textes_popup(faux)
     assert "profil" in affiche, affiche
     assert "abonnement" in affiche, affiche
 
@@ -521,28 +119,24 @@ def test_la_pastille_annonce_la_formule_pas_le_nom_de_l_app(tk_root, assistant):
     doit nommer la FORMULE — c'est la seule information qu'on vient y
     chercher.
     """
-    faux = panneau_factice(tk_root, assistant)
-    libelle, _accent = faux._edition_affichee()
+    libelle, _accent = panneau_factice(tk_root, assistant)._edition_affichee()
 
     assert "gratuit" in libelle.lower(), libelle
 
 
-def test_la_pastille_change_avec_l_edition(tk_root, avec_cle):
-    faux = panneau_factice(tk_root, avec_cle)
-    libelle, _accent = faux._edition_affichee()
+def test_la_pastille_change_avec_l_abonnement(tk_root, abonne):
+    libelle, _accent = panneau_factice(tk_root, abonne)._edition_affichee()
 
-    assert "complète" in libelle.lower(), libelle
+    assert "alma+" in libelle.lower(), libelle
 
 
 def test_le_profil_montre_ce_qu_alma_a_retenu(tk_root, assistant):
     assistant.config.set("general.user_name", "Muneeb")
     faux = panneau_factice(tk_root, assistant)
-    faux.popup_compte = None
     faux._ouvrir_profil()
 
     affiche = textes_popup(faux)
     assert "muneeb" in affiche, affiche
-    assert "alma" in affiche, affiche
     assert "français" in affiche, affiche
 
 
@@ -553,7 +147,6 @@ def test_le_profil_dit_comment_changer_plutot_que_d_offrir_un_formulaire(
     la commande à qui l'ignore — un formulaire l'aurait cachée.
     """
     faux = panneau_factice(tk_root, assistant)
-    faux.popup_compte = None
     faux._ouvrir_profil()
 
     assert "appelle-moi" in textes_popup(faux)
@@ -569,42 +162,249 @@ def test_l_abonnement_depuis_le_menu_referme_le_menu(tk_root, assistant):
     assert faux.abonnement is not None
 
 
-def test_la_modale_montre_ce_que_le_gratuit_sait_deja_faire(tk_root, assistant):
+# --------------------------------------------------------------------------
+# La modale : un comparatif de formules
+# --------------------------------------------------------------------------
+def test_elle_s_ouvre_et_se_referme(tk_root, assistant):
+    faux = panneau_factice(tk_root, assistant)
+
+    faux.basculer_abonnement()
+    assert faux.abonnement is not None
+
+    faux.basculer_abonnement()
+    assert faux.abonnement is None
+
+
+def test_les_deux_formules_sont_montrees(modale):
+    affiche = texte_affiche(modale)
+
+    assert "alma+" in affiche, affiche
+    assert "pour commencer" in affiche, affiche
+    assert "tout ce qu'alma fait" in affiche, affiche
+
+
+def test_le_gratuit_est_decrit_en_entier(modale):
     """
-    La colonne de gauche compte autant que celle de droite : une page
-    d'abonnement qui ne parle que du payant donne l'impression que le
-    gratuit ne sert à rien.
+    Ce n'est pas une version amputée. Si la modale ne listait que ce qui
+    manque, elle présenterait un produit complet comme une démo bridée.
     """
+    affiche = texte_affiche(modale)
+
+    for promesse in ("commandes", "rappels", "hors ligne"):
+        assert promesse in affiche, (promesse, affiche)
+
+
+def test_les_capacites_sont_des_capacites_pas_des_phrases_a_dire(modale):
+    """
+    « Ouvre Chrome » apprend à se SERVIR de l'application ; ça ne dit pas ce
+    qu'on achète. Sur une page de forfait, la question est « qu'est-ce que
+    j'obtiens », et elle se répond en capacités.
+    """
+    affiche = texte_affiche(modale)
+
+    for exemple in ("« ouvre chrome »", "« monte le son »", "« prends une photo »"):
+        assert exemple not in affiche, exemple
+
+
+def test_la_formule_en_cours_ne_propose_pas_de_l_acheter(modale):
+    assert "votre formule actuelle" in texte_affiche(modale)
+
+
+def test_le_prix_affiche_vient_de_la_configuration(tk_root, assistant):
+    assistant.config.set("abonnement.prix_fr", "3,50 € par mois")
+    faux = panneau_factice(tk_root, assistant)
+    faux.basculer_abonnement()
+
+    assert "3,50" in texte_affiche(faux)
+
+
+def test_le_gratuit_affiche_zero(modale):
+    assert "0" in etiquettes(modale)
+
+
+def test_en_anglais_tout_est_en_anglais(tk_root, assistant):
+    assistant.config.set("general.language", "en")
     faux = panneau_factice(tk_root, assistant)
     faux.basculer_abonnement()
 
     affiche = texte_affiche(faux)
-    assert "ouvre chrome" in affiche, affiche
-    assert "prends une photo" in affiche, affiche
-    assert "gratuit, tout de suite" in affiche, affiche
+    assert "start with the basics" in affiche, affiche
+    assert "pour commencer" not in affiche, affiche
 
 
-def test_les_exemples_sont_des_phrases_dicibles(tk_root, assistant):
+def test_une_fois_abonne_la_modale_le_montre(tk_root, abonne):
+    faux = panneau_factice(tk_root, abonne)
+    faux.basculer_abonnement()
+
+    affiche = texte_affiche(faux)
+    assert "votre formule actuelle" in affiche
+    assert "résilier" in affiche, affiche
+
+
+# --------------------------------------------------------------------------
+# Le bouton d'abonnement : il ne fait pas semblant
+# --------------------------------------------------------------------------
+def test_sans_moyen_de_paiement_le_bouton_le_dit(modale):
     """
-    Des phrases réelles, pas des catégories. « Ouvre Chrome » se comprend
-    sans explication ; « gestion d'applications » ne se comprend pas du tout.
+    Le test qui compte. Tant qu'aucun moyen de paiement n'existe, rien ne
+    doit prétendre encaisser quoi que ce soit.
     """
-    faux = panneau_factice(tk_root, assistant)
-
-    for phrases in (faux.EXEMPLES_LIBRES[False], faux.EXEMPLES_COMPLETS[False]):
-        for phrase in phrases:
-            assert phrase == phrase.lower() or phrase[0].isupper() is False, phrase
-            assert " " in phrase, phrase
+    assert "ouvre bientôt" in texte_affiche(modale)
 
 
-def test_les_guillemets_suivent_la_langue(tk_root, assistant):
-    """Un texte anglais en guillemets français signale une traduction hâtive."""
+def test_aucune_page_n_est_ouverte_sans_url(tk_root, assistant, monkeypatch):
+    ouvertes = []
+    monkeypatch.setattr("gui.AlmaApp._ouvrir_page_abonnement",
+                        lambda self, url: ouvertes.append(url))
+
     faux = panneau_factice(tk_root, assistant)
     faux.basculer_abonnement()
-    assert "«" in " ".join(etiquettes(faux))
 
-    assistant.config.set("general.language", "en")
-    faux._dessiner_abonnement()
-    anglais = " ".join(etiquettes(faux))
-    assert "“" in anglais
-    assert "«" not in anglais, anglais
+    assert ouvertes == []
+
+
+def test_avec_le_store_le_bouton_apparait(tk_root, assistant, monkeypatch):
+    monkeypatch.setattr(abonnement_store, "disponible", lambda: True)
+    faux = panneau_factice(tk_root, assistant)
+    faux.basculer_abonnement()
+
+    affiche = texte_affiche(faux)
+    assert "ouvre bientôt" not in affiche
+    assert "alma+" in affiche
+
+
+def test_l_achat_passe_par_le_store_avec_le_bon_identifiant(tk_root, assistant,
+                                                            monkeypatch):
+    achats = []
+    monkeypatch.setattr(abonnement_store, "disponible", lambda: True)
+    monkeypatch.setattr(
+        abonnement_store, "acheter",
+        lambda store_id, fenetre: achats.append((store_id, fenetre))
+        or (True, "C'est fait.", "All set."))
+
+    faux = panneau_factice(tk_root, assistant)
+    faux.basculer_abonnement()
+    faux._acheter_puis_rafraichir(fenetre=1234, anglais=False)
+
+    assert len(achats) == 1
+    store_id, fenetre = achats[0]
+    assert store_id == assistant.config.get("abonnement.store_id")
+    assert fenetre == 1234, "le handle de fenêtre n'est pas transmis"
+
+
+def test_un_achat_annule_le_dit_sans_rien_activer(tk_root, assistant,
+                                                  monkeypatch):
+    monkeypatch.setattr(abonnement_store, "disponible", lambda: True)
+    monkeypatch.setattr(
+        abonnement_store, "acheter",
+        lambda store_id, fenetre: (False, "L'achat a été annulé.",
+                                   "The purchase was cancelled."))
+
+    faux = panneau_factice(tk_root, assistant)
+    faux.basculer_abonnement()
+    faux._acheter_puis_rafraichir(fenetre=1, anglais=False)
+    faux.root.update()
+
+    assert "annulé" in texte_affiche(faux)
+    assert edition.est_complete(assistant.config) is False
+
+
+def test_le_cache_est_oublie_apres_un_achat(tk_root, assistant, monkeypatch):
+    """
+    Sans cela, ALMA continuerait de croire l'utilisateur non abonné pendant
+    trente secondes après qu'il vient de payer — la pire seconde possible
+    pour un doute.
+    """
+    oublis = []
+    monkeypatch.setattr(abonnement_store, "disponible", lambda: True)
+    monkeypatch.setattr(abonnement_store, "acheter",
+                        lambda store_id, fenetre: (True, "fait", "done"))
+    monkeypatch.setattr(edition, "oublier_le_cache",
+                        lambda: oublis.append(True))
+
+    faux = panneau_factice(tk_root, assistant)
+    faux.basculer_abonnement()
+    faux._acheter_puis_rafraichir(fenetre=1, anglais=False)
+
+    assert oublis, "le cache d'abonnement n'a pas été invalidé"
+
+
+def test_un_echec_arrive_apres_fermeture_ne_leve_pas(tk_root, assistant):
+    """
+    L'achat peut mettre longtemps : la modale a pu être refermée entre-temps,
+    et le thread revient alors sur des widgets détruits.
+    """
+    faux = panneau_factice(tk_root, assistant)
+    faux.basculer_abonnement()
+    etiquette = faux._etat_achat
+    faux._fermer_abonnement()
+
+    faux._etat_achat = etiquette
+    faux._echec_achat("Trop tard.")        # ne doit pas lever
+
+
+def test_la_resiliation_renvoie_au_store(tk_root, abonne, monkeypatch):
+    """
+    C'est Microsoft qui encaisse : nous n'avons ni le droit ni le moyen
+    d'annuler à sa place, et prétendre le contraire laisserait quelqu'un
+    croire qu'il a résilié alors qu'il sera prélevé le mois suivant.
+    """
+    ouvertes = []
+    monkeypatch.setattr("core.win_utils.launch",
+                        lambda cible: ouvertes.append(cible) or (True, ""))
+
+    faux = panneau_factice(tk_root, abonne)
+    faux.basculer_abonnement()
+    faux._resilier()
+
+    assert ouvertes and "store" in ouvertes[0].lower(), ouvertes
+
+
+# --------------------------------------------------------------------------
+# Aucune clé d'API n'est proposée — ni même l'idée
+# --------------------------------------------------------------------------
+# Une décision de produit, pas un détail technique : il n'y a qu'une voie
+# vers ALMA+, l'abonnement. Proposer « ou bien procurez-vous une clé chez un
+# tiers » demande à quelqu'un de choisir entre deux choses qu'il ne sait pas
+# comparer, et en fait fuir la plupart.
+
+@pytest.mark.parametrize("ecran", ["abonnement", "menu", "profil"])
+def test_aucun_ecran_ne_parle_de_cle_d_api(tk_root, assistant, ecran):
+    faux = panneau_factice(tk_root, assistant)
+    if ecran == "abonnement":
+        faux.basculer_abonnement()
+        affiche = texte_affiche(faux)
+    else:
+        faux.basculer_compte() if ecran == "menu" else faux._ouvrir_profil()
+        affiche = textes_popup(faux)
+
+    for mot in ("clé d'api", "api key", "anthropic", "sk-ant", "clé"):
+        assert mot not in affiche, (ecran, mot, affiche)
+
+
+def test_la_fenetre_n_a_plus_aucun_champ_de_saisie_de_cle(tk_root, assistant):
+    import tkinter as tk
+
+    faux = panneau_factice(tk_root, assistant)
+    faux.basculer_abonnement()
+
+    def champs(widget):
+        trouves = []
+        for enfant in widget.winfo_children():
+            if isinstance(enfant, tk.Entry):
+                trouves.append(enfant)
+            trouves += champs(enfant)
+        return trouves
+
+    assert champs(faux.abonnement) == [], "un champ de saisie subsiste"
+
+
+def test_la_fenetre_n_offre_aucune_methode_pour_poser_une_cle():
+    from gui import AlmaApp
+
+    # « cle » tout court attrapait `_boucle_micro` : on vise les mots, pas
+    # les sous-chaines.
+    interdits = [nom for nom in dir(AlmaApp)
+                 if any(mot in nom.lower().split("_")
+                        for mot in ("cle", "cles", "key", "apikey"))]
+    assert interdits == [], interdits

@@ -35,9 +35,7 @@ IMPORTS_CACHES = [
     "core.providers.claude_api_provider",
     "anthropic",
     "core.edition",
-    "core.secrets",
     "core.camera",
-    "win32crypt",
     # L abonnement du Store. Verifie plutot que suppose : le paquet construit
     # ce matin ne contenait AUCUNE entree pour winsdk.windows.services.store.
     # Le crochet PyInstaller de winsdk ne ramasse que ce qui est atteignable,

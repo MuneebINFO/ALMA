@@ -11,10 +11,10 @@ travailler.
 
 ## Contraintes non négociables
 
-- **Deux éditions, et ce qui est livré est `libre`.** `general.edition` vaut
-  `"libre"` dans `config.py` : de l'automatisation, et rien d'autre. L'édition
-  `complete` ajoute un modèle pour ce qui dépasse les commandes — question
-  ouverte, analyse d'image — et suppose une clé que **l'utilisateur** fournit.
+- **Deux éditions — `libre` et `complete`, vendue sous le nom ALMA+ —
+  et ce qui est livré est `libre`.** `general.edition` vaut
+  `"libre"` dans `config.py` : de l'automatisation, et rien d'autre. ALMA+ ajoute un modèle pour ce qui dépasse les commandes — question
+  ouverte, analyse d'image — et s'obtient par **abonnement**, et par lui seul.
   Voir `core/edition.py`.
 
   La frontière n'est pas « simple contre compliqué ». Elle est : **existe-t-il
@@ -24,23 +24,28 @@ travailler.
   édition complète, ce que le routeur sait faire, il le fait. Un test le
   vérifie (`test_une_commande_connue_ne_passe_jamais_par_le_modele`).
 
-- **La clé vient de l'utilisateur, et de nulle part ailleurs.** Cette règle a
-  changé d'énoncé le jour où l'édition complète est apparue : elle disait
-  « aucune clé d'API n'existe ». Ce qu'elle protégeait, en revanche, n'a pas
-  bougé, et `tests/test_ai_fallback.py` le dit désormais en quatre points :
+- **Aucune clé d'API, nulle part — et pas même l'idée.** Il n'y a qu'une voie
+  vers `complete` : l'abonnement du Store (`core/abonnement_store.py`), qui
+  rend un jeton signé par Microsoft. L'application ne détient aucune clé ;
+  c'est le relais (`relais/`) qui en a une, sur le serveur.
 
-  1. ce qui est livré est `libre` — rien ne sort tant que rien n'est fourni ;
-  2. **aucune clé n'est lue dans l'environnement** (`ANTHROPIC_API_KEY` et
-     consorts sont ignorées, exprès : une clé qui traîne ne doit pas faire
-     basculer Alma à l'insu de son propriétaire) ;
-  3. aucune clé ne s'écrit en clair — le coffre chiffre par DPAPI
-     (`core/secrets.py`), et `CATALOGUE` ne peut pas contenir de clé ;
-  4. la liste des providers reste close.
+  Cette règle a changé d'énoncé **trois fois**, et il faut le savoir avant de
+  la relire : « aucune clé n'existe », puis « seulement celle que
+  l'utilisateur a fournie », et enfin celle-ci, quand le chemin « collez votre
+  clé » a été retiré du produit — proposer « abonnez-vous, ou bien
+  procurez-vous une clé chez un tiers » fait choisir entre deux choses
+  incomparables, et en fait fuir la plupart.
 
-  **En test, le coffre est neutralisé** par `aucune_trace_sur_la_machine` : sans
-  cela la suite lirait la vraie clé de qui la lance et passerait de vrais appels
-  facturés. Seul `tests/test_secrets.py` remet les vraies fonctions, dirigées
-  vers un fichier temporaire.
+  Ce qu'elle protège, lui, n'a jamais bougé, et les tests le disent en quatre
+  points (`tests/test_edition.py`) :
+
+  1. ce qui est livré est `libre` — rien ne sort sans abonnement ;
+  2. **aucune clé n'est lue dans l'environnement** ;
+  3. aucun module ne range de clé — `core/secrets.py` a été supprimé, et un
+     test vérifie qu'il ne revient pas ;
+  4. **aucun écran ne parle de clé d'API**, pas même pour la suggérer
+     (`tests/test_abonnement.py`).
+
 - **Ne jamais agir sur l'écran où l'utilisateur travaille** sans qu'il l'ait
   demandé. Les commandes sont scopées par écran : voir `fenetre_visee`,
   `trouver_onglet`, `agir_sur_ecran`.

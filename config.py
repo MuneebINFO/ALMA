@@ -144,10 +144,6 @@ DEFAULTS: dict = {
         # et le dossier d installation n est pas toujours accessible en
         # ecriture une fois l application installee depuis le Store.
         "photos": "%USERPROFILE%/Pictures/ALMA",
-        # Le coffre : la cle d API, chiffree par Windows. A part des
-        # preferences exprès -- on sauvegarde volontiers un fichier de
-        # reglages, beaucoup moins volontiers une cle facturable.
-        "secrets": "data/secrets.json",
         "music": "",
         # Ce qu Alma a retenu de vous (voir core/preferences.py). Ecrit par
         # les commandes de personnalisation, pas a la main.

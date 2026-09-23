@@ -213,18 +213,24 @@ def test_une_edition_complete_annoncee_sans_cle_retombe_en_libre(config):
 
 def test_aucune_cle_n_est_lue_dans_l_environnement(monkeypatch, config):
     """
-    Alma ne se sert QUE de ce qu'on lui a confié. Une clé qui traîne dans
-    l'environnement — celle d'un autre outil, celle d'un développeur — ne doit
-    pas la faire basculer en édition complète à l'insu de son propriétaire.
+    ALMA ne se sert QUE de l'abonnement. Une clé qui traîne dans
+    l'environnement — celle d'un autre outil, celle d'un développeur — ne
+    doit rien activer.
+
+    Cette promesse a changé d'énoncé DEUX fois. D'abord « aucune clé
+    n'existe » ; puis « seule celle que l'utilisateur a fournie » ; et enfin
+    celle-ci, quand le chemin « collez votre clé » a été retiré du produit.
+    Ce qu'elle protège, lui, n'a jamais bougé.
     """
     from core import edition
 
     for variable in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
                      "CLAUDE_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY"):
-        monkeypatch.setenv(variable, "sk-ant-ceci-ne-doit-pas-etre-lu")
+        monkeypatch.setenv(variable, "sk-ant-ceci-ne-doit-rien-activer")
+    edition.oublier_le_cache()
 
-    assert edition.cle(config) == ""
     assert edition.est_complete(config) is False
+    assert isinstance(get_provider(config), NullProvider)
 
 
 def test_aucune_cle_ne_s_ecrit_en_clair(config):

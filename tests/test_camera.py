@@ -155,17 +155,15 @@ def test_sans_aucun_appareil_on_ne_rend_rien():
 @pytest.fixture
 def edition_complete(assistant, monkeypatch):
     """
-    Une machine où l'utilisateur a posé sa clé, avec un modèle factice.
+    Une machine abonnée, avec un modèle factice.
 
-    C'est `assistant.config` qu'il faut régler, pas le fixture `config` :
-    l'assistant de test construit volontairement la sienne, isolée, pour
-    qu'un test qui renomme Alma ne renomme pas celle de qui lance la suite.
+    L'abonnement est la SEULE voie vers ALMA+ : le chemin « clé d'API » a
+    été retiré entièrement du produit.
     """
-    from core import ai_fallback, secrets
+    from core import abonnement_store, ai_fallback, edition
 
-    monkeypatch.setattr(secrets, "lire",
-                        lambda nom, cfg=None: "sk-ant-fausse-cle")
-    assistant.config.set("general.edition", "complete")
+    monkeypatch.setattr(abonnement_store, "abonne", lambda store_id: True)
+    edition.oublier_le_cache()
 
     vues = []
 
@@ -278,10 +276,10 @@ def test_une_camera_muette_ne_fait_rien_partir(assistant, edition_complete,
 
 def test_un_modele_en_panne_le_dit(assistant, monkeypatch):
     """Une erreur réseau doit s'entendre, pas remonter en exception."""
-    from core import ai_fallback, secrets
+    from core import abonnement_store, ai_fallback, edition
 
-    monkeypatch.setattr(secrets, "lire", lambda nom, cfg=None: "sk-ant-fausse-cle")
-    assistant.config.set("general.edition", "complete")
+    monkeypatch.setattr(abonnement_store, "abonne", lambda store_id: True)
+    edition.oublier_le_cache()
 
     class ModeleEnPanne:
         name = "claude_api"
