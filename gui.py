@@ -32,6 +32,7 @@ import queue
 import random
 import sys
 import threading
+import time
 import tkinter as tk
 from tkinter import font as tkfont
 
@@ -54,6 +55,12 @@ MARGE_ORBE = 0.94
 # nombre d images et intervalle entre chacune.
 PAS_ENTREE = 20
 PERIODE_ENTREE_MS = 16      # ~ 320 ms au total
+
+# Au bout de combien de secondes de silence ABSOLU (niveau strictement nul,
+# pas « faible ») on previent que le micro n entend rien. Assez long pour
+# qu un demarrage tranquille ne declenche rien, assez court pour que
+# quelqu un qui essaie de parler comprenne avant d abandonner.
+SILENCE_SUSPECT_S = 20.0
 
 PAS_HISTORIQUE = 16
 PERIODE_HISTORIQUE_MS = 14  # ~ 220 ms au total
@@ -2097,7 +2104,41 @@ class AlmaApp:
 
     # -- micro ----------------------------------------------------------------
     def demarrer_ecoute(self) -> None:
-        """Prepare le micro et lance l ecoute continue."""
+        """
+        Prepare le micro et lance l ecoute continue.
+
+        LA VERIFICATION D AUTORISATION PASSE EN PREMIER, et elle n est pas
+        decorative. Windows peut refuser le micro a une application
+        empaquetee ; PortAudio rend alors du SILENCE et non une erreur.
+        `available` reste vrai, le flux s ouvre, l orbe tourne -- et aucune
+        voix n arrive jamais.
+
+        C est ce qu a vu la certification du Store : « Unusable Feature:
+        Voice commands », sur une machine neuve, connexion etablie. Rien
+        n etait casse. Simplement, personne ne disait a l utilisateur que
+        Windows avait coupe le micro.
+        """
+        from core import permissions
+
+        # « A demander » veut dire que Windows n a jamais pose la question :
+        # on la lui fait poser, c est lui qui affiche l invite.
+        if permissions.etat(permissions.MICRO) == permissions.A_DEMANDER:
+            permissions.demander(permissions.MICRO)
+
+        souci = permissions.explication(permissions.MICRO,
+                                        "en" if self._anglais() else "fr")
+        if souci:
+            chemin = ("Settings > Privacy & security > Microphone."
+                      if self._anglais() else
+                      "Paramètres > Confidentialité > Microphone.")
+            reessayer = ("Then press M to try again."
+                         if self._anglais() else
+                         "Appuyez ensuite sur M pour réessayer.")
+            self.evenements.put(("erreur", souci + " " + chemin + " " + reessayer))
+            self.evenements.put(("statut", ("erreur", "Micro bloqué par Windows")))
+            self.evenements.put(("voyant", (ETATS["erreur"][0], "micro refusé")))
+            return
+
         if self.stt is None:
             from core.stt import SpeechToText
 
@@ -2139,7 +2180,34 @@ class AlmaApp:
         """
         from core import wake
 
+        # LE FILET. Un micro autorise par Windows peut rester muet pour
+        # d autres raisons : coupe materiellement, volume a zero, mauvais
+        # peripherique par defaut, pilote muet. Toutes se ressemblent -- le
+        # flux s ouvre, la lecture reussit, et il n y a que du silence.
+        #
+        # La certification du Store a refuse ALMA pour « Unusable Feature:
+        # Voice commands » sans qu aucun message n apparaisse. La
+        # verification d autorisation traite la cause la plus probable ;
+        # ceci traite TOUTES LES AUTRES d un seul coup, en mesurant ce qui
+        # arrive vraiment plutot qu en devinant pourquoi rien n arrive.
+        entendu = {"quelque_chose": False, "prevenu": False}
+        depuis = time.monotonic()
+
         def sur_niveau(niveau: float, etat_audio: str) -> None:
+            if niveau > 0.0:
+                entendu["quelque_chose"] = True
+            elif (not entendu["quelque_chose"] and not entendu["prevenu"]
+                    and time.monotonic() - depuis > SILENCE_SUSPECT_S):
+                # Une seule fois : repeter ferait du bruit par-dessus un
+                # probleme qu on vient deja de signaler.
+                entendu["prevenu"] = True
+                anglais = self._anglais()
+                self.evenements.put(("erreur",
+                    "I hear absolutely nothing. Check that the right "
+                    "microphone is selected and not muted, then press M."
+                    if anglais else
+                    "Je n'entends absolument rien. Vérifiez que le bon micro "
+                    "est sélectionné et qu'il n'est pas coupé, puis appuyez sur M."))
             if etat_audio == "calibration":
                 etat = "calibration"
             elif etat_audio == "parole":

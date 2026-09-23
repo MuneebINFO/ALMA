@@ -287,6 +287,31 @@ def verifier_applications() -> None:
         note("Liste du système indisponible : les applis du Store seront manquées")
 
 
+def verifier_autorisations() -> None:
+    """
+    Ce que Windows autorise. La verification qui manquait.
+
+    Le Store a refuse une soumission pour « Unusable Feature: Voice
+    commands » : Windows coupait le micro, PortAudio rendait du silence, et
+    rien ne le disait. Un diagnostic qui ne regarde pas ici passe a cote de
+    la panne la plus facile a corriger.
+    """
+    from core import permissions
+
+    titre("Autorisations Windows")
+    for capacite, libelle in ((permissions.MICRO, "Micro"),
+                              (permissions.CAMERA, "Caméra")):
+        etat = permissions.etat(capacite)
+        if etat == permissions.AUTORISE:
+            ok(libelle + " : autorisé")
+        elif etat == permissions.INCONNU:
+            note(libelle + " : non applicable hors paquet (lancé depuis les sources)")
+        elif etat == permissions.A_DEMANDER:
+            note(libelle + " : Windows n'a pas encore posé la question")
+        else:
+            manque(libelle + " : " + permissions.explication(capacite))
+
+
 def verifier_edition(config) -> None:
     """L information principale : ce qu Alma a le droit de faire ici."""
     from core import edition
@@ -383,6 +408,7 @@ def main() -> int:
         (verifier_ecrans, ()),
         (verifier_navigateur, ()),
         (verifier_applications, ()),
+        (verifier_autorisations, ()),
         (verifier_edition, (config,)),
         (verifier_ia, (config,)),
     ):

@@ -78,20 +78,44 @@ def test_la_photo_est_confirmee_en_anglais(assistant):
     assert "saved" in reponse.text.lower(), reponse.text
 
 
-def test_une_camera_muette_le_dit_dans_les_deux_langues(assistant, monkeypatch):
+def test_une_camera_refusee_par_windows_le_dit(assistant, monkeypatch):
     """
-    Le cas le plus fréquent en vrai : la caméra existe, mais Windows en
-    refuse l'accès. `capturer` rend alors des octets vides sans lever.
+    Windows sait POURQUOI, et le dire évite un quart d'heure perdu : envoyer
+    quelqu'un fouiller les réglages de confidentialité quand la caméra est
+    simplement prise par Zoom est une fausse piste coûteuse.
+    """
+    from core import permissions
+
+    monkeypatch.setattr(camera, "capturer", lambda identifiant="": b"")
+    monkeypatch.setattr(
+        permissions, "explication",
+        lambda capacite, langue="fr": ("Windows bloque la caméra."
+                                       if langue != "en"
+                                       else "Windows is blocking the camera."))
+
+    fr = assistant.handle("prends une photo")
+    assert not fr.ok, fr.text
+    assert "bloque" in fr.text.lower(), fr.text
+
+    en = assistant.handle("take a photo")
+    assert "blocking" in en.text.lower(), en.text
+
+
+def test_une_camera_autorisee_mais_muette_cherche_ailleurs(assistant, monkeypatch):
+    """
+    Autorisation accordée et pourtant rien : ce n'est PAS un problème de
+    réglages, et le message ne doit pas y renvoyer. Le fixture laisse tout
+    autorisé, ce qui est le cas nominal.
     """
     monkeypatch.setattr(camera, "capturer", lambda identifiant="": b"")
 
     fr = assistant.handle("prends une photo")
     assert not fr.ok, fr.text
-    assert "confidentialité" in fr.text.lower(), fr.text
+    assert "autre application" in fr.text.lower(), fr.text
+    assert "confidentialité" not in fr.text.lower(),         "on envoie l'utilisateur dans les réglages sans raison"
 
     en = assistant.handle("take a photo")
-    assert not en.ok, en.text
-    assert "privacy" in en.text.lower(), en.text
+    assert "another application" in en.text.lower(), en.text
 
 
 def test_un_disque_plein_ne_ment_pas(assistant, monkeypatch):

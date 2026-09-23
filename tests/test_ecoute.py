@@ -231,10 +231,21 @@ def test_linterface_arrete_bien_laction_en_cours():
 
     racine = Path(__file__).resolve().parent.parent
     source = (racine / "gui.py").read_text(encoding="utf-8")
-    debut = source.index("def sur_niveau(")
-    corps = source[debut:debut + 1200]
+
+    # La fonction ENTIÈRE, pas une fenêtre de N caractères. La version
+    # précédente s'arrêtait à 1200 caractères après `def sur_niveau(`, et
+    # elle est tombée le jour où du code a été ajouté AU-DESSUS du câblage :
+    # elle annonçait « la parole n'est plus coupée » alors qu'elle l'était
+    # toujours. Un garde-fou qui accuse à tort coûte plus cher que pas de
+    # garde-fou du tout.
+    debut = source.index("    def _boucle_micro(")
+    fin = source.index("\n    def ", debut + 10)
+    corps = source[debut:fin]
+
+    assert "def sur_niveau(" in corps, "le rappel de niveau a disparu"
     assert "interrompre_parole()" in corps, "la parole n'est plus coupée"
-    assert "self.assistant.interrompre()" in corps, "l'action en cours n'est plus arrêtée"
+    assert "self.assistant.interrompre()" in corps, (
+        "l'action en cours n'est plus arrêtée")
 
 
 def test_arreter_un_defilement_ne_referme_pas_la_session(assistant):

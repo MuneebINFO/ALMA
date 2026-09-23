@@ -36,6 +36,28 @@ def _camera_branchee(ctx: CommandContext) -> bool:
     return camera.disponible()
 
 
+def _pourquoi_pas_de_camera(ctx: CommandContext) -> Response:
+    """
+    Dire ce qui bloque VRAIMENT, plutot que de le supposer.
+
+    L ancien message renvoyait toujours aux reglages de confidentialite, ce
+    qui etait une devinette : la camera pouvait aussi etre prise par une
+    autre application, ou debranchee. Windows, lui, sait repondre -- et
+    envoyer quelqu un fouiller les bons reglages quand le probleme est
+    ailleurs fait perdre un quart d heure pour rien.
+    """
+    from core import permissions
+
+    souci = permissions.explication(permissions.CAMERA, ctx.lang)
+    if souci:
+        return ctx.erreur(souci, souci)
+    return ctx.erreur(
+        "Je n'arrive pas à utiliser la caméra. Elle est peut-être utilisée "
+        "par une autre application.",
+        "I can't use the camera. Another application may be using it.",
+    )
+
+
 @command(
     name="camera_photo",
     patterns=[
@@ -61,12 +83,7 @@ def camera_photo(ctx: CommandContext) -> Response:
         # Pas de camera, pilote absent, ou acces refuse dans les reglages de
         # confidentialite de Windows -- le cas le plus frequent, et celui
         # qu on ne peut pas distinguer d ici.
-        return ctx.erreur(
-            "Je n'arrive pas à utiliser la caméra. "
-            "Vérifiez qu'elle est autorisée dans les paramètres de confidentialité.",
-            "I can't use the camera. "
-            "Check that it's allowed in your privacy settings.",
-        )
+        return _pourquoi_pas_de_camera(ctx)
 
     dossier = ctx.config.resolve_path("photos", "photos")
     ok, detail = camera.enregistrer(image, dossier)
@@ -112,12 +129,7 @@ def _regarder(ctx: CommandContext, questions: dict) -> Response:
 
     image = camera.capturer()
     if not image:
-        return ctx.erreur(
-            "Je n'arrive pas à utiliser la caméra. "
-            "Vérifiez qu'elle est autorisée dans les paramètres de confidentialité.",
-            "I can't use the camera. "
-            "Check that it's allowed in your privacy settings.",
-        )
+        return _pourquoi_pas_de_camera(ctx)
 
     provider = ai_fallback.get_provider(ctx.config)
     regarder = getattr(provider, "analyser_image", None)

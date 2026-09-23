@@ -47,6 +47,11 @@ IMPORTS_CACHES = [
     "core.winrt_utils",
     "winsdk.windows.services.store",
     "winsdk._winrt",
+    # Les autorisations Windows. Meme piege que les precedents : importe a la
+    # demande, invisible pour PyInstaller, et c est precisement le code qui
+    # doit fonctionner sur la machine d un TESTEUR du Store.
+    "core.permissions",
+    "winsdk.windows.security.authorization.appcapabilityaccess",
     "core.wake",
     "core.desktop",
     "core.browser_tabs",

@@ -123,6 +123,22 @@ def aucune_trace_sur_la_machine(monkeypatch):
     monkeypatch.setattr(secrets, "poser", lambda nom, valeur, config=None: True)
     monkeypatch.setattr(secrets, "oublier", lambda nom, config=None: True)
 
+    # -- les AUTORISATIONS WINDOWS -------------------------------------------
+    # Regle 5. L etat depend de ce que le proprietaire de la machine a coche
+    # dans ses reglages de confidentialite : sans doublure, la suite passerait
+    # chez lui et tomberait chez un autre.
+    #
+    # Tout autorise par defaut, ce qui est le cas nominal. Un test qui veut
+    # un refus le pose lui-meme.
+    from core import permissions
+
+    monkeypatch.setattr(permissions, "etat", lambda capacite: permissions.AUTORISE)
+    monkeypatch.setattr(permissions, "explication",
+                        lambda capacite, langue="fr": "")
+    monkeypatch.setattr(permissions, "demander",
+                        lambda capacite: permissions.AUTORISE)
+    monkeypatch.setattr(permissions, "ouvrir_les_reglages", lambda capacite: True)
+
     # -- l ABONNEMENT DU STORE ----------------------------------------------
     # Regle 5. `abonne()` interroge le Store par WinRT : la reponse depend de
     # ce que le proprietaire de la machine a achete, et l appel coute une
