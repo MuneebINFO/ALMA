@@ -331,3 +331,94 @@ def test_on_ne_previent_qu_une_fois(tk_root, assistant, monkeypatch):
     textes = [str(c) for _g, c in evenements(faux)]
     plaintes = [t for t in textes if "absolument rien" in t]
     assert len(plaintes) == 1, plaintes
+
+
+def test_le_message_atteint_l_ECRAN_pas_seulement_le_journal(tk_root, assistant,
+                                                              monkeypatch):
+    """
+    LE test qui manquait, et son absence a coûté cher.
+
+    Les tests plus haut vérifient que l'événement « erreur » PART. Aucun ne
+    vérifiait que quelqu'un le VOIT — et le jour où le bouton d'historique a
+    été retiré de l'écran, le message est parti dans un panneau que plus
+    personne ne pouvait ouvrir. Le paquet installé montrait alors l'orbe qui
+    tourne et rien d'autre : exactement la panne muette que ce message
+    servait à éviter, et exactement ce que la certification avait refusé.
+
+    Une erreur doit atterrir sur une étiquette VISIBLE de la fenêtre.
+    """
+    import tkinter as tk
+
+    from gui import ETATS
+
+    faux = panneau_factice(tk_root, assistant)
+    faux.etiquette_entendu = tk.Label(faux.corps, text="")
+    faux.journalise = []
+    faux.journaliser = lambda qui, texte, tag="assistant": \
+        faux.journalise.append(texte)
+
+    faux.evenements.put(("erreur", "Windows bloque le micro pour ALMA."))
+    faux._traiter_evenements(boucler=False)
+
+    assert faux.etiquette_entendu.cget("text") == "Windows bloque le micro pour ALMA.", \
+        "l'erreur n'atteint pas l'écran"
+    assert faux.etiquette_entendu.cget("fg") == ETATS["erreur"][0]
+
+
+def test_une_erreur_affichee_s_efface_quand_la_suite_arrive(tk_root, assistant):
+    """
+    Sinon elle reste à l'écran par-dessus une situation qui n'a plus rien à
+    voir — et on cherche un problème réglé depuis longtemps.
+    """
+    import tkinter as tk
+
+    from gui import TEXTE
+
+    faux = panneau_factice(tk_root, assistant)
+    faux.etiquette_entendu = tk.Label(faux.corps, text="")
+    faux.journaliser = lambda *a, **k: None
+
+    faux.evenements.put(("erreur", "Micro bloqué."))
+    faux._traiter_evenements(boucler=False)
+    faux.evenements.put(("entendu", "quelle heure est-il"))
+    faux._traiter_evenements(boucler=False)
+
+    assert "heure" in faux.etiquette_entendu.cget("text")
+    assert faux.etiquette_entendu.cget("fg") == TEXTE
+
+
+# La zone d'affichage sous l'orbe réserve DEUX lignes. Le message complet doit
+# y tenir : la première version en faisait trois, et la dernière passait sous
+# la barre du bas — vu sur le paquet installé, pas en test.
+LONGUEUR_MAX_MESSAGE = 110
+
+
+@pytest.mark.parametrize("refus", [
+    permissions.REFUSE_UTILISATEUR,
+    permissions.REFUSE_SYSTEME,
+    permissions.NON_DECLARE,
+])
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_le_message_tient_dans_la_place_reservee(vraies_fonctions, monkeypatch,
+                                                 refus, langue):
+    monkeypatch.setattr(permissions, "etat", lambda capacite: refus)
+
+    suite = ("Settings > Privacy > Microphone, then press M." if langue == "en"
+             else "Paramètres > Confidentialité > Microphone, puis M.")
+    complet = permissions.explication(permissions.MICRO, langue) + " " + suite
+
+    assert len(complet) <= LONGUEUR_MAX_MESSAGE, (len(complet), complet)
+
+
+def test_le_diagnostic_ne_repete_pas_le_chemin(vraies_fonctions, monkeypatch):
+    """
+    L'explication DIAGNOSTIQUE ; le chemin vers les réglages est ajouté par
+    qui affiche. Les deux ensemble disaient la même chose deux fois.
+    """
+    monkeypatch.setattr(permissions, "etat",
+                        lambda capacite: permissions.REFUSE_UTILISATEUR)
+
+    message = permissions.explication(permissions.MICRO)
+
+    assert "Paramètres" not in message, message
+    assert "confidentialité" not in message.lower(), message

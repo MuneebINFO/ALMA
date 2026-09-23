@@ -1230,8 +1230,15 @@ class AlmaApp:
         self.etiquette_statut.configure(text=detail or libelle, fg=couleur)
 
     # -- boucle d evenements --------------------------------------------------
-    def _traiter_evenements(self) -> None:
-        """Tkinter n est pas thread-safe : seule cette boucle touche a l interface."""
+    def _traiter_evenements(self, boucler: bool = True) -> None:
+        """
+        Tkinter n est pas thread-safe : seule cette boucle touche a l interface.
+
+        `boucler=False` vide la file UNE fois et rend la main, sans se
+        reprogrammer. C est ce qui permet a un test de verifier ce qui arrive
+        a l ecran -- et il en fallait un : les evenements etaient verifies au
+        DEPART, jamais a l arrivee.
+        """
         try:
             while True:
                 type_evenement, charge = self.evenements.get_nowait()
@@ -1244,7 +1251,8 @@ class AlmaApp:
                     self.definir_statut(*charge)
                 elif type_evenement == "entendu":
                     self.etiquette_entendu.configure(
-                        text=("« " + charge + " »") if charge else ""
+                        text=("« " + charge + " »") if charge else "",
+                        fg=TEXTE,
                     )
                 elif type_evenement == "voyant":
                     couleur, texte = charge
@@ -1253,7 +1261,17 @@ class AlmaApp:
                     qui, texte = charge
                     self.journaliser(qui, texte, "moi" if qui == "Vous" else "assistant")
                 elif type_evenement == "erreur":
+                    # A L ECRAN, pas seulement dans le journal.
+                    #
+                    # L historique a quitte la fenetre le jour ou son bouton a
+                    # ete retire -- et les erreurs, qui n allaient que la, sont
+                    # devenues invisibles avec lui. Le message « Windows bloque
+                    # le micro » partait donc dans un panneau que plus personne
+                    # ne pouvait ouvrir : exactement la panne muette que ce
+                    # message servait a eviter.
                     self.journaliser(self.nom, charge, "erreur")
+                    self.etiquette_entendu.configure(text=charge,
+                                                     fg=ETATS["erreur"][0])
                 elif type_evenement == "installation_niveau":
                     boule = getattr(self, "boule", None)
                     if boule is not None:
@@ -1271,6 +1289,8 @@ class AlmaApp:
                     return
         except queue.Empty:
             pass
+        if not boucler:
+            return
         self._suivre_fenetre_utilisateur()
         self._rafraichir_compte_a_rebours()
         self.root.after(40, self._traiter_evenements)
@@ -2489,13 +2509,12 @@ class AlmaApp:
         souci = permissions.explication(permissions.MICRO,
                                         "en" if self._anglais() else "fr")
         if souci:
-            chemin = ("Settings > Privacy & security > Microphone."
-                      if self._anglais() else
-                      "Paramètres > Confidentialité > Microphone.")
-            reessayer = ("Then press M to try again."
-                         if self._anglais() else
-                         "Appuyez ensuite sur M pour réessayer.")
-            self.evenements.put(("erreur", souci + " " + chemin + " " + reessayer))
+            # Le tout doit tenir en DEUX lignes : c est la hauteur reservee
+            # sous l orbe, et la troisieme passerait sous la barre du bas.
+            suite = ("Settings > Privacy > Microphone, then press M."
+                     if self._anglais() else
+                     "Paramètres > Confidentialité > Microphone, puis M.")
+            self.evenements.put(("erreur", souci + " " + suite))
             self.evenements.put(("statut", ("erreur", "Micro bloqué par Windows")))
             self.evenements.put(("voyant", (ETATS["erreur"][0], "micro refusé")))
             return

@@ -54,22 +54,26 @@ REGLAGES = {
     CAMERA: "ms-settings:privacy-webcam",
 }
 
-# Ce qu on dit, et ce qu il y a a faire. Bilingue (regle 2), et chaque phrase
-# nomme le geste : « autorisez Alma » n est pas « rallumez le micro pour
-# toutes les applications ».
+# Ce qu on dit. COURT : ce texte s affiche sous l orbe, dans une zone de deux
+# lignes. La premiere version disait « autorisez-la dans les parametres de
+# confidentialite » PUIS l appelant ajoutait « Parametres > Confidentialite >
+# Microphone » -- la meme chose deux fois, trois lignes au total, et la
+# derniere passait sous la barre du bas. Ici le diagnostic ; le CHEMIN est
+# ajoute par qui affiche.
+#
+# Bilingue (regle 2), et chaque etat nomme un geste different : « Windows
+# bloque le micro pour ALMA » n appelle pas la meme action que « le micro est
+# coupe pour toutes les applications ».
 _EXPLICATIONS = {
     (MICRO, REFUSE_UTILISATEUR): (
-        "Windows bloque le micro pour ALMA. Autorisez-la dans les paramètres "
-        "de confidentialité.",
-        "Windows is blocking the microphone for ALMA. Allow it in your privacy "
-        "settings."),
+        "Windows bloque le micro pour ALMA.",
+        "Windows is blocking the microphone for ALMA."),
     (MICRO, REFUSE_SYSTEME): (
-        "L'accès au micro est coupé pour toutes les applications de cet "
-        "ordinateur.",
-        "Microphone access is turned off for every app on this computer."),
+        "Le micro est coupé pour toutes les applications.",
+        "The microphone is off for every app."),
     (MICRO, NON_DECLARE): (
-        "ALMA n'a pas déclaré le micro : cette installation est incomplète.",
-        "ALMA didn't declare the microphone: this install is incomplete."),
+        "ALMA n'a pas déclaré le micro : installation incomplète.",
+        "ALMA didn't declare the microphone: incomplete install."),
     (CAMERA, REFUSE_UTILISATEUR): (
         "Windows bloque la caméra pour ALMA. Autorisez-la dans les paramètres "
         "de confidentialité.",
@@ -80,8 +84,8 @@ _EXPLICATIONS = {
         "ordinateur.",
         "Camera access is turned off for every app on this computer."),
     (CAMERA, NON_DECLARE): (
-        "ALMA n'a pas déclaré la caméra : cette installation est incomplète.",
-        "ALMA didn't declare the camera: this install is incomplete."),
+        "ALMA n'a pas déclaré la caméra : installation incomplète.",
+        "ALMA didn't declare the camera: incomplete install."),
 }
 
 
