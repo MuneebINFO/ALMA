@@ -156,7 +156,11 @@ if ($Sideload) {
         Write-Host "  Add-AppxPackage -Path `"$MsixSortie`"" -ForegroundColor Yellow
     }
 
-    Write-Host "Pour desinstaller ensuite : Get-AppxPackage *ALMA* | Remove-AppxPackage" -ForegroundColor DarkGray
+    # Le NOM EXACT, pas un motif. Le paquet s appelle ici « A.L.M.A » : un
+    # « *ALMA* » ne le trouve pas, a cause des points, et l on croit alors
+    # que rien n est installe alors que tout l est.
+    Write-Host "Pour desinstaller ensuite :" -ForegroundColor DarkGray
+    Write-Host "  Get-AppxPackage $($Identite.package_name) | Remove-AppxPackage" -ForegroundColor DarkGray
 }
 else {
     Write-Host "Ajoutez -Sideload pour tester l'installation sur cette machine avant" `
