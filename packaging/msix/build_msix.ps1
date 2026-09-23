@@ -126,9 +126,37 @@ if ($Sideload) {
     & $SignTool sign /fd SHA256 /f $CheminPfx /p "alma-test" $MsixSortie
     if ($LASTEXITCODE -ne 0) { throw "signtool a echoue." }
 
-    Write-Host "Pour que Windows fasse confiance a ce paquet de TEST, faites confiance " `
-        "une fois au certificat (Windows le proposera a l'installation), puis :" -ForegroundColor Yellow
-    Write-Host "  Add-AppxPackage -Path `"$MsixSortie`"" -ForegroundColor Yellow
+    # Le certificat doit etre APPROUVE, sinon Add-AppxPackage refuse le
+    # paquet -- et il ne propose rien : il echoue, avec un message qui parle
+    # de chaine de certification et n explique pas quoi faire. Ce script
+    # affichait le contraire, et envoyait donc chercher une boite de dialogue
+    # qui n apparait jamais.
+    #
+    # L approbation va dans TrustedPeople de la MACHINE, ce qui demande des
+    # droits d administrateur. On tente, et si l on ne les a pas, on donne la
+    # commande exacte plutot qu un conseil vague.
+    $CheminCer = Join-Path $MsixDir "test-signing.cer"
+    Export-Certificate -Cert $Cert -FilePath $CheminCer -Type CERT | Out-Null
+
+    $Administrateur = ([Security.Principal.WindowsPrincipal] `
+        [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+            [Security.Principal.WindowsBuiltInRole]::Administrator)
+
+    if ($Administrateur) {
+        Import-Certificate -FilePath $CheminCer `
+            -CertStoreLocation "Cert:\LocalMachine\TrustedPeople" | Out-Null
+        Write-Host "Certificat de test approuve sur cette machine." -ForegroundColor Green
+        Write-Host "Installez maintenant :" -ForegroundColor Yellow
+        Write-Host "  Add-AppxPackage -Path `"$MsixSortie`"" -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "Le certificat de test doit etre approuve, et cela demande " `
+            "un PowerShell ADMINISTRATEUR. Deux commandes, dans cet ordre :" -ForegroundColor Yellow
+        Write-Host "  Import-Certificate -FilePath `"$CheminCer`" -CertStoreLocation Cert:\LocalMachine\TrustedPeople" -ForegroundColor Yellow
+        Write-Host "  Add-AppxPackage -Path `"$MsixSortie`"" -ForegroundColor Yellow
+    }
+
+    Write-Host "Pour desinstaller ensuite : Get-AppxPackage *ALMA* | Remove-AppxPackage" -ForegroundColor DarkGray
 }
 else {
     Write-Host "Ajoutez -Sideload pour tester l'installation sur cette machine avant" `

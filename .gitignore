@@ -34,6 +34,7 @@ packaging/msix/identity.local.json
 packaging/msix/PackageLayout/
 packaging/msix/*.msix
 packaging/msix/*.pfx
+packaging/msix/*.cer
 
 # Raccourci Windows : il contient des chemins absolus propres a chaque
 # machine, il doit etre regenere avec « python creer_raccourci.py ».
