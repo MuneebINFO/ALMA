@@ -69,6 +69,10 @@ class Question:
     # rien ; « tu m entends, Jarvis ? » rend la phrase, dont on extrait le nom.
     phrase_fr: str = ""
     phrase_en: str = ""
+    # Une etape d AUTORISATIONS ne demande rien a l utilisateur : elle lui
+    # montre ce que Windows bloque, et l emmene la ou ca se debloque. Porte
+    # les capacites a verifier (voir core/permissions.py).
+    autorisations: tuple = field(default_factory=tuple)
 
     def phrase(self, langue: str, nom: str) -> str:
         modele = self.phrase_en if langue == "en" else self.phrase_fr
@@ -82,11 +86,32 @@ class Question:
 
     @property
     def libre(self) -> bool:
-        return not self.choix and not self.ecoute
+        return not self.choix and not self.ecoute and not self.autorisations
 
     @property
     def ecoute(self) -> bool:
         return bool(self.echo_de)
+
+
+def questions_utiles(questions=None) -> list:
+    """
+    Les etapes qui ont VRAIMENT quelque chose a demander.
+
+    L etape des autorisations disparait quand tout est deja accorde. Montrer
+    une page « voici ce dont j ai besoin » suivie de deux coches vertes fait
+    perdre un geste a tout le monde pour n aider personne -- et allonge une
+    installation qu on veut courte.
+    """
+    from core import permissions
+
+    utiles = []
+    for question in (questions if questions is not None else QUESTIONS):
+        if question.autorisations and all(
+                permissions.utilisable(capacite)
+                for capacite in question.autorisations):
+            continue
+        utiles.append(question)
+    return utiles
 
 
 QUESTIONS = (
@@ -109,6 +134,17 @@ QUESTIONS = (
             Choix("en", "English", "English"),
         ),
         defaut="fr",
+    ),
+    Question(
+        cle="autorisations",
+        # AVANT les etapes qui font parler : celles-la ont besoin du micro, et
+        # buter dessus sans comprendre pourquoi est la pire facon de
+        # decouvrir qu il est bloque.
+        autorisations=("microphone", "webcam"),
+        titre_fr="Deux autorisations, et c'est réglé.",
+        titre_en="Two permissions, and we're set.",
+        aide_fr="Windows les garde fermées tant que vous ne les ouvrez pas.",
+        aide_en="Windows keeps these closed until you open them.",
     ),
     Question(
         cle="nom_utilisateur",
@@ -313,8 +349,17 @@ def poser_en_texte(assistant, lire, ecrire) -> None:
     panneau graphique, lui, pose exactement les memes questions autrement
     (voir gui.py) -- les deux chemins partagent QUESTIONS et `repondre`,
     jamais deux listes a tenir a jour.
+
+    Une seule etape ne s y pose pas : celle des autorisations, qui n a de
+    sens qu avec un bouton a cliquer.
     """
     for question in QUESTIONS:
+        if question.autorisations:
+            # Une etape d autorisations se REGLE d un clic, pas d une saisie :
+            # elle emmene dans les reglages de Windows. Au clavier il n y a
+            # rien a emmener, et le mode texte n ouvre de toute facon pas le
+            # micro. `doctor.py` dit l etat a qui le demande.
+            continue
         # Relue a chaque tour : la premiere question change la langue, et les
         # suivantes doivent se poser dans celle qui vient d etre choisie.
         langue = str(assistant.config.get("general.language", "fr"))[:2]

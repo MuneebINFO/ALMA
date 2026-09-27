@@ -422,3 +422,112 @@ def test_le_diagnostic_ne_repete_pas_le_chemin(vraies_fonctions, monkeypatch):
 
     assert "Paramètres" not in message, message
     assert "confidentialité" not in message.lower(), message
+
+
+# --------------------------------------------------------------------------
+# L'étape du premier lancement : emmener, pas seulement dire
+# --------------------------------------------------------------------------
+# Une application qui annonce « il faut autoriser le micro » sans emmener
+# nulle part laisse chercher dans six menus, et la plupart abandonnent.
+
+def test_l_etape_disparait_quand_tout_est_deja_accorde(monkeypatch):
+    """
+    Une page « voici ce dont j'ai besoin » suivie de deux coches vertes fait
+    perdre un geste à tout le monde pour n'aider personne.
+    """
+    from core import premier_lancement
+
+    monkeypatch.setattr(permissions, "etat",
+                        lambda capacite: permissions.AUTORISE)
+
+    cles = [q.cle for q in premier_lancement.questions_utiles()]
+
+    assert "autorisations" not in cles, cles
+
+
+def test_l_etape_apparait_des_qu_une_chose_est_bloquee(monkeypatch):
+    from core import premier_lancement
+
+    monkeypatch.setattr(permissions, "utilisable",
+                        lambda capacite: capacite != permissions.MICRO)
+
+    cles = [q.cle for q in premier_lancement.questions_utiles()]
+
+    assert "autorisations" in cles, cles
+
+
+def test_l_etape_precede_celles_qui_ont_besoin_du_micro(monkeypatch):
+    """
+    Buter sur « dites-le à voix haute » sans comprendre pourquoi rien ne se
+    passe est la pire façon de découvrir que le micro est bloqué.
+    """
+    from core import premier_lancement
+
+    monkeypatch.setattr(permissions, "utilisable", lambda capacite: False)
+    cles = [q.cle for q in premier_lancement.questions_utiles()]
+
+    assert cles.index("autorisations") < cles.index("ecoute_nom_utilisateur")
+
+
+def test_le_mode_texte_saute_cette_etape(assistant, monkeypatch):
+    """
+    Elle se règle d'un clic vers les réglages de Windows. Au clavier il n'y a
+    rien où emmener, et le mode texte n'ouvre de toute façon pas le micro.
+    """
+    from core import premier_lancement
+
+    monkeypatch.setattr(permissions, "utilisable", lambda capacite: False)
+    demandees = []
+
+    def lire(_invite):
+        return ""
+
+    def ecrire(texte):
+        demandees.append(texte)
+
+    premier_lancement.poser_en_texte(assistant, lire, ecrire)
+
+    affiche = " ".join(demandees).lower()
+    assert "autorisation" not in affiche, affiche
+
+
+def test_chaque_capacite_dit_a_quoi_elle_sert(tk_root, assistant):
+    """
+    « Capacité microphone » ne veut rien dire ; « pour vous entendre quand
+    vous m'appelez » se comprend sans explication.
+    """
+    from gui import AlmaApp
+
+    for capacite in (permissions.MICRO, permissions.CAMERA):
+        for langue in (0, 1):
+            raison = AlmaApp.RAISONS[capacite][langue]
+            assert raison and not raison.endswith("."), raison
+            assert capacite not in raison.lower(), raison
+
+
+def test_le_geste_depend_de_l_etat(tk_root, assistant, monkeypatch):
+    """
+    « Jamais demandé » fait poser la question par Windows. Un refus déjà
+    exprimé, lui, ne se rattrape pas par une invite — Windows ne la réaffiche
+    plus — alors on ouvre les réglages. Les confondre ne produit rien.
+    """
+    from gui import AlmaApp
+
+    demandes, reglages = [], []
+    monkeypatch.setattr(permissions, "demander",
+                        lambda capacite: demandes.append(capacite))
+    monkeypatch.setattr(permissions, "ouvrir_les_reglages",
+                        lambda capacite: reglages.append(capacite))
+
+    faux = panneau_factice(tk_root, assistant)
+    faux._rafraichir_autorisations = lambda: None
+
+    monkeypatch.setattr(permissions, "etat",
+                        lambda capacite: permissions.A_DEMANDER)
+    faux._agir_autorisation(permissions.MICRO)
+    assert demandes == [permissions.MICRO] and reglages == []
+
+    monkeypatch.setattr(permissions, "etat",
+                        lambda capacite: permissions.REFUSE_UTILISATEUR)
+    faux._agir_autorisation(permissions.CAMERA)
+    assert reglages == [permissions.CAMERA]

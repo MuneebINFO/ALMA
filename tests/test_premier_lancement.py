@@ -36,7 +36,10 @@ def poser(assistant, reponses, entendu=None):
     decisions = iter(reponses)
     entendu = entendu or {}
     affiche = []
-    restantes = [q.cle for q in pl.QUESTIONS]
+    # Les étapes RÉELLEMENT posées au clavier. Celle des autorisations n'en
+    # est pas : elle se règle d'un clic vers les réglages de Windows, et le
+    # mode texte n'a rien où emmener.
+    restantes = [q.cle for q in pl.QUESTIONS if not q.autorisations]
 
     def lire(_invite):
         cle = restantes.pop(0)
@@ -210,15 +213,17 @@ def test_tout_oublier_repose_les_questions(assistant, monkeypatch):
 # --------------------------------------------------------------------------
 def test_l_interface_ne_tient_pas_une_deuxieme_liste():
     """
-    Deux listes de questions divergeraient. Le panneau graphique lit
-    `premier_lancement.QUESTIONS`, comme le mode texte.
+    Deux listes de questions divergeraient. Le panneau graphique lit celle de
+    `premier_lancement`, comme le mode texte — via `questions_utiles`, qui
+    écarte les étapes n'ayant rien à régler sur cette machine.
     """
     from pathlib import Path
 
     source = (Path(__file__).resolve().parent.parent / "gui.py").read_text(
         encoding="utf-8")
-    assert "premier_lancement.QUESTIONS" in source
+    assert "premier_lancement.questions_utiles" in source
     assert "premier_lancement.repondre" in source
+    assert "Question(" not in source,         "l'interface déclare ses propres questions au lieu de lire la liste"
 
 
 def test_l_ecoute_ne_demarre_qu_apres_les_questions():

@@ -873,6 +873,7 @@ class AlmaApp:
         self._cartes = []          # cartes de reponse, pour le clavier
         self._vise = 0             # celle que le clavier designe
         self._cadre_question = None
+        self._lignes_autorisations = []     # etape des autorisations Windows
         self._ecoute_installation = None   # drapeau de l etape en cours
         self._prises_installation = 0
         self._travaux_ecoute = None        # travaux postes au service
@@ -2025,7 +2026,9 @@ class AlmaApp:
         from core import premier_lancement
 
         self._suite_installation = quand_fini
-        self._questions = list(premier_lancement.QUESTIONS)
+        # `questions_utiles` et non `QUESTIONS` : l etape des autorisations
+        # disparait quand tout est deja accorde.
+        self._questions = premier_lancement.questions_utiles()
         self._index_question = 0
         self._travaux_ecoute = queue.Queue()
         self._fin_ecoute = threading.Event()
@@ -2069,7 +2072,9 @@ class AlmaApp:
 
         corps = tk.Frame(cadre, bg=FOND)
         corps.pack(pady=(34, 0))
-        if question.ecoute:
+        if question.autorisations:
+            self._poser_question_autorisations(question, corps, anglais, accent)
+        elif question.ecoute:
             self._poser_question_ecoutee(question, corps, cadre, anglais)
         elif question.libre:
             self._poser_question_libre(question, corps, anglais, accent)
@@ -2093,6 +2098,9 @@ class AlmaApp:
         self._glisser_question(cadre)
 
     def _ranger_question(self) -> None:
+        # Les lignes d autorisation disparaissent avec le cadre : sans cela
+        # leur rafraichissement continuerait a viser des widgets detruits.
+        self._lignes_autorisations = []
         """Eteint ce qui vit encore avant de redessiner."""
         if self.boule is not None:
             self.boule.arreter()
@@ -2135,6 +2143,130 @@ class AlmaApp:
                 couleur = BORDURE
             toile.create_line(x, 2, x + largeur, 2, fill=couleur, width=3,
                               capstyle="round")
+
+    # A quoi sert chaque autorisation, dit du point de vue de l utilisateur.
+    # « Capacite microphone » ne veut rien dire ; « pour vous entendre quand
+    # vous m appelez » se comprend sans expliquer.
+    RAISONS = {
+        "microphone": ("Pour vous entendre quand vous m'appelez",
+                       "So I can hear you when you call me"),
+        "webcam": ("Pour regarder ce que vous me montrez",
+                   "So I can look at what you show me"),
+    }
+    NOMS_CAPACITES = {
+        "microphone": ("Micro", "Microphone"),
+        "webcam": ("Caméra", "Camera"),
+    }
+
+    def _poser_question_autorisations(self, question, corps, anglais: bool,
+                                      accent: str) -> None:
+        """
+        Ce que Windows bloque, et le chemin pour l ouvrir.
+
+        On ne se contente pas de le DIRE : chaque ligne porte le geste. Une
+        application qui annonce « il faut autoriser le micro » sans emmener
+        nulle part laisse chercher dans six menus, et la plupart abandonnent.
+
+        Deux gestes selon l etat, et ils ne sont pas interchangeables :
+        Windows n a jamais pose la question -- on la lui fait poser, c est SON
+        invite qui s affiche ; ou il a deja recu un non -- il ne redemandera
+        plus rien, et il faut aller dans les reglages.
+        """
+        self._lignes_autorisations = []
+        for capacite in question.autorisations:
+            ligne = self._ligne_autorisation(corps, capacite, anglais, accent)
+            self._lignes_autorisations.append((capacite, ligne))
+
+        continuer = CarteChoix(
+            corps, "Continue" if anglais else "Continuer",
+            lambda: self._repondre(""), accent)
+        continuer.pack(pady=(18, 0))
+        self._cartes.append(continuer)
+        continuer.viser(True)
+
+        self._rafraichir_autorisations()
+
+    def _ligne_autorisation(self, parent, capacite: str, anglais: bool,
+                            accent: str) -> dict:
+        """Une capacite : son nom, a quoi elle sert, son etat, et le geste."""
+        cadre = tk.Frame(parent, bg=FOND_CARTE, highlightbackground=BORDURE,
+                         highlightthickness=1, bd=0, width=580, height=86)
+        cadre.pack(pady=5)
+        cadre.pack_propagate(False)
+        dedans = tk.Frame(cadre, bg=FOND_CARTE)
+        dedans.pack(fill="both", expand=True, padx=18, pady=12)
+
+        # Le GESTE d abord, et la colonne de gauche ensuite : posee la
+        # premiere avec `expand`, elle prenait toute la largeur et le geste
+        # sortait de la carte.
+        geste = tk.Label(dedans, text="", bg=FOND_CARTE, fg=accent,
+                         cursor="hand2",
+                         font=tkfont.Font(family="Segoe UI", size=11))
+        geste.pack(side="right", padx=(14, 0))
+        geste.bind("<Button-1>", lambda _e, c=capacite: self._agir_autorisation(c))
+
+        gauche = tk.Frame(dedans, bg=FOND_CARTE)
+        gauche.pack(side="left", fill="x", expand=True)
+        nom = self.NOMS_CAPACITES[capacite][1 if anglais else 0]
+        tk.Label(gauche, text=nom, bg=FOND_CARTE, fg=TEXTE, anchor="w",
+                 font=tkfont.Font(family="Segoe UI", size=13)).pack(fill="x")
+        tk.Label(gauche, text=self.RAISONS[capacite][1 if anglais else 0],
+                 bg=FOND_CARTE, fg=TEXTE_DOUX, anchor="w",
+                 font=tkfont.Font(family="Segoe UI", size=10)).pack(fill="x")
+
+        return {"cadre": cadre, "geste": geste}
+
+    def _agir_autorisation(self, capacite: str) -> None:
+        """
+        Le geste que l etat appelle.
+
+        « Jamais demande » fait poser la question par Windows lui-meme. Un
+        refus deja exprime, lui, ne se rattrape pas par une invite -- Windows
+        ne la reaffiche plus -- alors on ouvre la page des reglages.
+        """
+        from core import permissions
+
+        if permissions.etat(capacite) == permissions.A_DEMANDER:
+            permissions.demander(capacite)
+        else:
+            permissions.ouvrir_les_reglages(capacite)
+        self._rafraichir_autorisations()
+
+    def _rafraichir_autorisations(self) -> None:
+        """
+        Relit l etat et remet les lignes a jour, deux fois par seconde.
+
+        Sans cela il faudrait revenir cliquer sur quelque chose apres etre
+        alle dans les reglages -- et on ne sait pas sur quoi. Ici, on autorise
+        dans Windows, on revient, et c est deja vert.
+        """
+        from core import permissions
+
+        lignes = getattr(self, "_lignes_autorisations", None)
+        if not lignes:
+            return
+        anglais = self._anglais()
+        vivant = False
+        for capacite, ligne in lignes:
+            try:
+                etat = permissions.etat(capacite)
+                if etat == permissions.AUTORISE or etat == permissions.INCONNU:
+                    ligne["geste"].configure(
+                        text="✓ " + ("Allowed" if anglais else "Autorisé"),
+                        fg=ETATS["arme"][0], cursor="")
+                elif etat == permissions.A_DEMANDER:
+                    ligne["geste"].configure(
+                        text="Allow" if anglais else "Autoriser",
+                        fg=ETATS["veille"][0], cursor="hand2")
+                else:
+                    ligne["geste"].configure(
+                        text="Settings ›" if anglais else "Réglages ›",
+                        fg=ETATS["erreur"][0], cursor="hand2")
+                vivant = True
+            except tk.TclError:
+                return                       # l etape a ete quittee
+        if vivant:
+            self.root.after(500, self._rafraichir_autorisations)
 
     def _poser_question_fermee(self, question, corps, langue: str,
                                accent: str) -> None:

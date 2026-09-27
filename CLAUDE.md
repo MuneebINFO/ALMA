@@ -248,11 +248,12 @@ Ils ont tous déjà coûté un bug.
 | `core/stt.py` | micro, seuil de détection adaptatif |
 | `core/annonces.py` | les phrases d'attente (« je cherche ») |
 | `core/edition.py` | libre / complète, et la frontière entre les deux |
-| `core/secrets.py` | le coffre : la clé d'API, chiffrée par Windows |
+| `core/permissions.py` | ce que Windows autorise : micro, caméra |
+| `core/abonnement_store.py` | l'abonnement vendu par le Store |
 | `core/camera.py` | prendre une image, sans dépendance nouvelle |
 | `core/sons.py` | les quatre bruitages |
 | `core/preferences.py` | catalogue des réglages, magasin `data/preferences.json` |
-| `core/premier_lancement.py` | les quatre questions de l'installation |
+| `core/premier_lancement.py` | les étapes de l'installation, `questions_utiles` |
 | `commands/*.py` | les commandes, une famille par fichier |
 | `commandes.json` | la spécification parlée, vérifiée par un test |
 | `config.py` | valeurs par défaut, fusion `config.yaml` puis préférences |
